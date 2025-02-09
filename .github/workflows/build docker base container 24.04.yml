@@ -130,6 +130,7 @@ jobs:
             kgustafs/signalk-server-base:arm32-24.04
 
   housekeeping:
+    needs: create-and-push-manifest
     runs-on: ubuntu-latest
     
     steps:	
