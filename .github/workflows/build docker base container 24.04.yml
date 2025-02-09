@@ -128,3 +128,36 @@ jobs:
             kgustafs/signalk-server-base:amd64-24.04			
             kgustafs/signalk-server-base:arm64-24.04
             kgustafs/signalk-server-base:arm32-24.04
+
+  housekeeping:
+    runs-on: ubuntu-latest
+    
+    steps:	
+      - name: Delete Docker Hub Tag
+        env:
+          IMAGE_NAME: "kgustafs/signalk-server-base"
+          TAG1: "amd64-24.04"
+          TAG2: "arm64-24.04"
+          TAG3: "arm32-24.04"
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+          TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
+            -d '{"username": "${{ secrets.DOCKER_HUB_USERNAME }}", "password": "${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}"}' \
+            https://hub.docker.com/v2/users/login/ | jq -r .token)
+          curl -X DELETE \
+            -H "Authorization: JWT $TOKEN" \
+            "https://hub.docker.com/v2/repositories/$IMAGE_NAME/tags/$TAG1/"
+          curl -X DELETE \
+            -H "Authorization: JWT $TOKEN" \
+            "https://hub.docker.com/v2/repositories/$IMAGE_NAME/tags/$TAG2/"
+          curl -X DELETE \
+            -H "Authorization: JWT $TOKEN" \
+            "https://hub.docker.com/v2/repositories/$IMAGE_NAME/tags/$TAG3/"
+            
+      - name: Remove Docker Image from GHCR
+        uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          packages: signalk-server-base
+          delete-untagged: true
+          delete-tags: amd64-24.04, arm64-24.04, arm32-24.04
+          token: ${{ secrets.GHCR_TOKEN_NEW }}
