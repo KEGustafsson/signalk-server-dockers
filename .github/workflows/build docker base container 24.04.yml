@@ -160,5 +160,5 @@ jobs:
         with:
           packages: signalk-server-base
           delete-untagged: true
-          delete-tags: amd64-24.04, arm64-24.04, arm32-24.04
+          delete-tags: amd64-24.04,arm64-24.04,arm32-24.04
           token: ${{ secrets.GHCR_TOKEN_NEW }}
