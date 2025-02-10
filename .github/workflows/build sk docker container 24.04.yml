@@ -183,15 +183,15 @@ jobs:
         run: |
           if [[ "${{ steps.vars.outputs.tag }}" == *beta* ]]; then
             tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
+            tags="$tags -t ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
           else
             tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-24.04"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:latest-24.04"
+            tags="$tags -t ${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}"
+            tags="$tags -t ${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}"
+            tags="$tags -t ${{ steps.vars.outputs.ghcr }}:latest-24.04"
+            tags="$tags -t ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
+            tags="$tags -t ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}"
+            tags="$tags -t ${{ steps.vars.outputs.hub }}:latest-24.04"
           fi
           echo "tags=$tags" >> $GITHUB_OUTPUT
       - name: Save docker tags to artifact
@@ -314,7 +314,10 @@ jobs:
         with:
           name: docker_tags
       - name: Set docker tags
-        run: docker_tags=$(cat docker_tags.txt | tr ',' '\n')
+        id: set-tags
+        run: |
+          tags=$(cat docker_tags.txt)
+          echo "tags=$tags" >> $GITHUB_OUTPUT
       - name: Login to ghcr.io
         uses: docker/login-action@v3
         with:
@@ -330,7 +333,7 @@ jobs:
         uses: int128/docker-manifest-create-action@v2
         with:
           tags: |
-            $docker_tags
+            ${{ steps.set-tags.outputs.tags }}
           sources: |
             ghcr.io/kegustafsson/signalk-server:amd64-24.04
             ghcr.io/kegustafsson/signalk-server:arm64-24.04
