@@ -182,16 +182,16 @@ jobs:
         id: set-tags
         run: |
           if [[ "${{ steps.vars.outputs.tag }}" == *beta* ]]; then
-            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}"
-            tags="$tags -t ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
+            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}
+          ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
           else
-            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}"
-            tags="$tags -t ${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}"
-            tags="$tags -t ${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}"
-            tags="$tags -t ${{ steps.vars.outputs.ghcr }}:latest-24.04"
-            tags="$tags -t ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
-            tags="$tags -t ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}"
-            tags="$tags -t ${{ steps.vars.outputs.hub }}:latest-24.04"
+            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}
+          ${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}
+          ${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}
+          ${{ steps.vars.outputs.ghcr }}:latest-24.04
+          ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}
+          ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}
+          ${{ steps.vars.outputs.hub }}:latest-24.04"
           fi
           echo "tags=$tags" >> $GITHUB_OUTPUT
       - name: Save docker tags to artifact
