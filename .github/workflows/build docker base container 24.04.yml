@@ -35,6 +35,19 @@ jobs:
             ghcr.io/kegustafsson/signalk-server-base:arm64-24.04
             kgustafs/signalk-server-base:arm64-24.04
 
+      - name: Modify Dockerfile_rel_24.04 for testing
+        run: |
+          sed -i 's/:latest/:arm64-24.04/g' ./docker/Dockerfile_rel_24.04
+
+      - name: Build Signal K test docker for amr64
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile_rel_24.04
+          platforms: linux/arm64
+          build-args: |
+            TAG=latest
+
   build-arm32:
     runs-on: ubuntu-24.04-arm
 
@@ -63,9 +76,22 @@ jobs:
           platforms: linux/arm/v7
           push: true
           tags: |
-            ghcr.io/kegustafsson/signalk-server-base:arm32-24.04
-            kgustafs/signalk-server-base:arm32-24.04
-            
+            ghcr.io/kegustafsson/signalk-server-base:armv7-24.04
+            kgustafs/signalk-server-base:armv7-24.04
+  
+      - name: Modify Dockerfile_rel_24.04 for testing
+        run: |
+          sed -i 's/:latest/:armv7-24.04/g' ./docker/Dockerfile_rel_24.04
+
+      - name: Build Signal K test docker for amrv7
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile_rel_24.04
+          platforms: linux/arm/v7
+          build-args: |
+            TAG=latest
+
   build-amd64:
     runs-on: ubuntu-latest
 
@@ -96,6 +122,19 @@ jobs:
           tags: |
             ghcr.io/kegustafsson/signalk-server-base:amd64-24.04
             kgustafs/signalk-server-base:amd64-24.04
+            
+      - name: Modify Dockerfile_rel_24.04 for testing
+        run: |
+          sed -i 's/:latest/:amd4-24.04/g' ./docker/Dockerfile_rel_24.04
+
+      - name: Build Signal K test docker for amd64
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile_rel_24.04
+          platforms: linux/amd64
+          build-args: |
+            TAG=latest
 
   create-and-push-manifest:
     needs: [build-arm64, build-arm32, build-amd64]
@@ -124,10 +163,10 @@ jobs:
           sources: |
             ghcr.io/kegustafsson/signalk-server-base:amd64-24.04
             ghcr.io/kegustafsson/signalk-server-base:arm64-24.04
-            ghcr.io/kegustafsson/signalk-server-base:arm32-24.04
+            ghcr.io/kegustafsson/signalk-server-base:armv7-24.04
             kgustafs/signalk-server-base:amd64-24.04			
             kgustafs/signalk-server-base:arm64-24.04
-            kgustafs/signalk-server-base:arm32-24.04
+            kgustafs/signalk-server-base:armv7-24.04
 
   housekeeping:
     needs: create-and-push-manifest
@@ -139,7 +178,7 @@ jobs:
           IMAGE_NAME: "kgustafs/signalk-server-base"
           TAG1: "amd64-24.04"
           TAG2: "arm64-24.04"
-          TAG3: "arm32-24.04"
+          TAG3: "armv7-24.04"
         run: |
           sudo apt-get update && sudo apt-get install -y jq
           TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
@@ -160,5 +199,5 @@ jobs:
         with:
           packages: signalk-server-base
           delete-untagged: true
-          delete-tags: amd64-24.04,arm64-24.04,arm32-24.04
+          delete-tags: amd64-24.04,arm64-24.04,armv7-24.04
           token: ${{ secrets.GHCR_TOKEN_NEW }}
