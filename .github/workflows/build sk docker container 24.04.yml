@@ -332,11 +332,17 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      - name: Replace commas with line breaks and create multi-arch manifest
+        id: replace_tags
+        run: |
+          tags=$(echo "${{ steps.set-tags.outputs.tags }}" | sed 's/,/\n/g')
+          echo "tags=$tags" >> $GITHUB_OUTPUT
+          
       - name: Create and push multi-arch manifest to GHCR and Docker Hub
         uses: int128/docker-manifest-create-action@v2
         with:
-          tags: |
-            ${{ steps.set-tags.outputs.tags }} | sed 's/,/\n/g'
+          tags: ${{ steps.replace-tags.outputs.tags }}
           sources: |
             ghcr.io/kegustafsson/signalk-server:amd64-24.04
             ghcr.io/kegustafsson/signalk-server:arm64-24.04
