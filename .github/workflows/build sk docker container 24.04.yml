@@ -396,4 +396,4 @@ jobs:
           echo "TAG=$tag" >> $GITHUB_OUTPUT
       - name: Slack notification
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"New Signal K image available, ${{ steps.vars.outputs.TAG }}"}' https://hooks.slack.com/services/${{ secrets.SLACK }}
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"Manually triggered image ready, ${{ steps.vars.outputs.TAG }}"}' https://hooks.slack.com/services/${{ secrets.SLACK }}
