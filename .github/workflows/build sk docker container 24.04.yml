@@ -183,16 +183,23 @@ jobs:
         run: |
           if [[ "${{ steps.vars.outputs.tag }}" == *beta* ]]; then
             tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
+            tags="${tags}
+            ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
           else
             tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-24.04"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:latest-24.04"
-          fi
+            tags="${tags}
+            ${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}"
+            tags="${tags}
+            ${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}"
+            tags="${tags}
+            ${{ steps.vars.outputs.ghcr }}:latest-24.04"
+            tags="${tags}
+            ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
+            tags="${tags}
+            ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}"
+            tags="${tags}
+            ${{ steps.vars.outputs.hub }}:latest-24.04"
+          fi        
           echo "tags=$tags" >> $GITHUB_OUTPUT
       - name: Save docker tags to artifact
         run: echo ${{ steps.set-tags.outputs.tags }} > docker_tags.txt
@@ -317,10 +324,7 @@ jobs:
         id: set-tags
         run: |
           tags=$(cat docker_tags.txt)
-          echo "$tags"
           echo "tags=$tags" >> $GITHUB_OUTPUT
-      - name: Replace commas with line breaks
-        run: echo "${{ steps.set-tags.outputs.tags }}" | sed 's/,/\n/g'
       - name: Login to ghcr.io
         uses: docker/login-action@v3
         with:
@@ -332,17 +336,11 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-
-      - name: Replace commas with line breaks and create multi-arch manifest
-        id: replace_tags
-        run: |
-          tags=$(echo "${{ steps.set-tags.outputs.tags }}" | sed 's/,/\n/g')
-          echo "tags=$tags" >> $GITHUB_OUTPUT
-          
       - name: Create and push multi-arch manifest to GHCR and Docker Hub
         uses: int128/docker-manifest-create-action@v2
         with:
-          tags: ${{ steps.replace-tags.outputs.tags }}
+          tags: |
+            ${{ steps.set-tags.outputs.tags }}
           sources: |
             ghcr.io/kegustafsson/signalk-server:amd64-24.04
             ghcr.io/kegustafsson/signalk-server:arm64-24.04
