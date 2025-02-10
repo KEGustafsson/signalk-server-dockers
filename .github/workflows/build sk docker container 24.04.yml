@@ -183,23 +183,16 @@ jobs:
         run: |
           if [[ "${{ steps.vars.outputs.tag }}" == *beta* ]]; then
             tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}"
-            tags="${tags}
-            ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
+            tags="${tags}"$'\n'"${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
           else
             tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}"
-            tags="${tags}
-            ${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}"
-            tags="${tags}
-            ${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}"
-            tags="${tags}
-            ${{ steps.vars.outputs.ghcr }}:latest-24.04"
-            tags="${tags}
-            ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
-            tags="${tags}
-            ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}"
-            tags="${tags}
-            ${{ steps.vars.outputs.hub }}:latest-24.04"
-          fi        
+            tags="${tags}"$'\n'"${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}"
+            tags="${tags}"$'\n'"${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}"
+            tags="${tags}"$'\n'"${{ steps.vars.outputs.ghcr }}:latest-24.04"
+            tags="${tags}"$'\n'"${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
+            tags="${tags}"$'\n'"${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}"
+            tags="${tags}"$'\n'"${{ steps.vars.outputs.hub }}:latest-24.04"
+          fi       
           echo "tags=$tags" >> $GITHUB_OUTPUT
       - name: Save docker tags to artifact
         run: echo ${{ steps.set-tags.outputs.tags }} > docker_tags.txt
