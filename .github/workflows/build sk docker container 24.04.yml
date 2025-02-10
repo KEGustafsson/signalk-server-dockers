@@ -316,7 +316,7 @@ jobs:
       - name: Set tag for manifest
         id: set-tags
         run: |
-          sed -i 's/,/\n-t /g' docker_tags.txt
+          sed -i 's/,/\n/g' docker_tags.txt
           tags=$(cat docker_tags.txt)
           echo "tags=$tags" >> $GITHUB_OUTPUT
       - name: Login to ghcr.io
