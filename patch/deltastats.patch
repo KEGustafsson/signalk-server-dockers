@@ -1,0 +1,32 @@
+diff --git a/src/deltastats.ts b/src/deltastats.ts
+index 1933380..a7d6877 100644
+--- a/src/deltastats.ts
++++ b/src/deltastats.ts
+@@ -16,6 +16,7 @@
+ */
+ 
+ import { isUndefined, values } from 'lodash'
++import os from 'os'
+ import { EventEmitter } from 'node:events'
+ 
+ const STATS_UPDATE_INTERVAL_SECONDS = 5
+@@ -66,6 +67,7 @@ export function startDeltaStatistics(
+ 
+   return setInterval(() => {
+     updateProviderPeriodStats(app)
++    const loadAverage = os.loadavg()
+     const anyApp = app as any
+     app.emit('serverevent', {
+       type: 'SERVERSTATISTICS',
+@@ -77,7 +79,10 @@ export function startDeltaStatistics(
+         numberOfAvailablePaths: anyApp.streambundle.getAvailablePaths().length,
+         wsClients: anyApp.interfaces.ws ? anyApp.interfaces.ws.numClients() : 0,
+         providerStatistics: app.providerStatistics,
+-        uptime: process.uptime()
++        uptime: process.uptime(),
++        loadAvg1m: loadAverage[0].toFixed(2),
++        loadAvg5m: loadAverage[1].toFixed(2),
++        loadAvg15m: loadAverage[2].toFixed(2)
+       }
+     })
+     app.lastIntervalDeltaCount = app.deltaCount
