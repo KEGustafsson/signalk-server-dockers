@@ -336,7 +336,7 @@ jobs:
         uses: int128/docker-manifest-create-action@v2
         with:
           tags: |
-            ${{ steps.set-tags.outputs.tags }}
+            ${{ steps.set-tags.outputs.tags }} | sed 's/,/\n/g'
           sources: |
             ghcr.io/kegustafsson/signalk-server:amd64-24.04
             ghcr.io/kegustafsson/signalk-server:arm64-24.04
