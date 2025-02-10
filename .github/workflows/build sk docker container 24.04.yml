@@ -189,9 +189,11 @@ jobs:
             tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-24.04"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest"
             tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
             tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}"
             tags="$tags,${{ steps.vars.outputs.hub }}:latest-24.04"
+            tags="$tags,${{ steps.vars.outputs.hub }}:latest"
           fi
           echo "tags=$tags" >> $GITHUB_OUTPUT
       - name: Save docker tags to artifact
