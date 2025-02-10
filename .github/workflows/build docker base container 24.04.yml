@@ -37,7 +37,7 @@ jobs:
 
       - name: Modify Dockerfile_rel_24.04 for testing
         run: |
-          sed -i 's/:latest/:arm64-24.04/g' ./docker/Dockerfile_rel_24.04
+          sed -i 's/:latest-24.04/:arm64-24.04/g' ./docker/Dockerfile_rel_24.04
 
       - name: Build Signal K test docker for amr64
         uses: docker/build-push-action@v5
@@ -48,7 +48,7 @@ jobs:
           build-args: |
             TAG=latest
 
-  build-arm32:
+  build-armv7:
     runs-on: ubuntu-24.04-arm
 
     steps:
@@ -81,7 +81,7 @@ jobs:
   
       - name: Modify Dockerfile_rel_24.04 for testing
         run: |
-          sed -i 's/:latest/:armv7-24.04/g' ./docker/Dockerfile_rel_24.04
+          sed -i 's/:latest-24.04/:armv7-24.04/g' ./docker/Dockerfile_rel_24.04
 
       - name: Build Signal K test docker for amrv7
         uses: docker/build-push-action@v5
@@ -125,7 +125,7 @@ jobs:
             
       - name: Modify Dockerfile_rel_24.04 for testing
         run: |
-          sed -i 's/:latest/:amd4-24.04/g' ./docker/Dockerfile_rel_24.04
+          sed -i 's/:latest-24.04/:amd64-24.04/g' ./docker/Dockerfile_rel_24.04
 
       - name: Build Signal K test docker for amd64
         uses: docker/build-push-action@v5
@@ -137,7 +137,7 @@ jobs:
             TAG=latest
 
   create-and-push-manifest:
-    needs: [build-arm64, build-arm32, build-amd64]
+    needs: [build-arm64, build-armv7, build-amd64]
     runs-on: ubuntu-latest
 
     steps:	
