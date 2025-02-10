@@ -308,6 +308,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       - uses: actions/download-artifact@v4
         with:
           name: docker_tags
@@ -331,8 +333,6 @@ jobs:
         uses: int128/docker-manifest-create-action@v2
         with:
           tags: |
-            ghcr.io/kegustafsson/signalk-server:latest-24.04
-            kgustafs/signalk-server:latest-24.04
             ${{ steps.set-tags.outputs.tags }}
           sources: |
             ghcr.io/kegustafsson/signalk-server:amd64-24.04
