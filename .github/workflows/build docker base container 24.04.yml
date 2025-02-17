@@ -203,3 +203,11 @@ jobs:
           delete-untagged: true
           delete-tags: amd64-24.04,arm64-24.04,armv7-24.04
           token: ${{ secrets.GHCR_TOKEN_NEW }}
+
+  slack:
+    runs-on: ubuntu-latest
+    needs: housekeeping
+    steps:
+      - name: Slack notification
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"Ubuntu 24.04 base image built"}' https://hooks.slack.com/services/${{ secrets.SLACK }}
