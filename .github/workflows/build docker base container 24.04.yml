@@ -41,7 +41,7 @@ jobs:
         run: |
           sed -i 's/:latest-24.04/:arm-24.04/g' ./docker/Dockerfile_rel_24.04
 
-      - name: Build Signal K test docker for amr
+      - name: Build Signal K test docker for arm
         uses: docker/build-push-action@v5
         with:
           context: .
