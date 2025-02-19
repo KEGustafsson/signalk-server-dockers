@@ -10,8 +10,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     strategy:
       matrix:
-        dockerfile_base: [./docker/Dockerfile_base_22.04, ./docker/Dockerfile_base_24.04]
-        dockerfile_rel: [./docker/Dockerfile_rel_22.04, ./docker/Dockerfile_rel_24.04]
+        os: [22.04, 24.04]
 
     steps:
       - uses: actions/checkout@v4
@@ -34,23 +33,23 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ${{ matrix.dockerfile_base }}
+          file: ./docker/Dockerfile_base_${{ matrix.os }}
           platforms: linux/arm64,linux/arm/v7
           push: true
           tags: |
-            ghcr.io/kegustafsson/signalk-server-base:arm
-            kgustafs/signalk-server-base:arm
+            ghcr.io/kegustafsson/signalk-server-base:arm-${{ matrix.os }}
+            kgustafs/signalk-server-base:arm-${{ matrix.os }}
 
       - name: Modify Dockerfile_rel for testing
         run: |
-          sed -i 's/:latest-22.04/:arm/g' ./docker/Dockerfile_rel_22.04
-          sed -i 's/:latest-24.04/:arm/g' ./docker/Dockerfile_rel_24.04
+          sed -i 's/:latest-22.04/:arm-22.04/g' ./docker/Dockerfile_rel_22.04
+          sed -i 's/:latest-24.04/:arm-24.04/g' ./docker/Dockerfile_rel_24.04
 
       - name: Build Signal K test docker for arm
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ${{ matrix.dockerfile_rel }}
+          file: ./docker/Dockerfile_rel_${{ matrix.os }} 
           platforms: linux/arm64,linux/arm/v7
           build-args: |
             TAG=latest
@@ -59,8 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        dockerfile_base: [./docker/Dockerfile_base_22.04, ./docker/Dockerfile_base_24.04]
-        dockerfile_rel: [./docker/Dockerfile_rel_22.04, ./docker/Dockerfile_rel_24.04]
+        os: [22.04, 24.04]
 
     steps:
       - uses: actions/checkout@v4
@@ -83,23 +81,23 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ${{ matrix.dockerfile_base }}
+          file: ./docker/Dockerfile_base_${{ matrix.os }}
           platforms: linux/amd64
           push: true
           tags: |
-            ghcr.io/kegustafsson/signalk-server-base:amd
-            kgustafs/signalk-server-base:amd
+            ghcr.io/kegustafsson/signalk-server-base:amd-${{ matrix.os }}
+            kgustafs/signalk-server-base:amd-${{ matrix.os }}
             
       - name: Modify Dockerfile_rel for testing
         run: |
-          sed -i 's/:latest-22.04/:amd/g' ./docker/Dockerfile_rel_22.04
-          sed -i 's/:latest-24.04/:amd/g' ./docker/Dockerfile_rel_24.04
+          sed -i 's/:latest-22.04/:amd-22.04/g' ./docker/Dockerfile_rel_22.04
+          sed -i 's/:latest-24.04/:amd-24.04/g' ./docker/Dockerfile_rel_24.04
 
       - name: Build Signal K test docker for amd
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ${{ matrix.dockerfile_rel }}
+          file: ./docker/Dockerfile_rel_${{ matrix.os }}
           platforms: linux/amd64
           build-args: |
             TAG=latest
@@ -107,6 +105,9 @@ jobs:
   create-and-push-manifest:
     needs: [build-arm, build-amd]
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [22.04, 24.04]
 
     steps:	
       - name: Login to ghcr.io
@@ -126,24 +127,27 @@ jobs:
         uses: int128/docker-manifest-create-action@v2
         with:
           tags: |
-            ghcr.io/kegustafsson/signalk-server-base:latest-24.04
-            kgustafs/signalk-server-base:latest-24.04
+            ghcr.io/kegustafsson/signalk-server-base:latest-${{ matrix.os }}
+            kgustafs/signalk-server-base:latest-${{ matrix.os }}
           sources: |
-            ghcr.io/kegustafsson/signalk-server-base:amd
-            ghcr.io/kegustafsson/signalk-server-base:arm
-            kgustafs/signalk-server-base:amd
-            kgustafs/signalk-server-base:arm
+            ghcr.io/kegustafsson/signalk-server-base:amd-${{ matrix.os }}
+            ghcr.io/kegustafsson/signalk-server-base:arm-${{ matrix.os }}
+            kgustafs/signalk-server-base:amd-${{ matrix.os }}
+            kgustafs/signalk-server-base:arm-${{ matrix.os }}
 
   housekeeping:
     needs: create-and-push-manifest
     runs-on: ubuntu-latest
-    
+    strategy:
+      matrix:
+        os: [22.04, 24.04]
+
     steps:	
       - name: Delete Docker Hub Tag
         env:
           IMAGE_NAME: "kgustafs/signalk-server-base"
-          TAG1: "amd"
-          TAG2: "arm"
+          TAG1: "amd-${{ matrix.os }}"
+          TAG2: "arm-${{ matrix.os }}"
         run: |
           sudo apt-get update && sudo apt-get install -y jq
           TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
@@ -161,7 +165,7 @@ jobs:
         with:
           packages: signalk-server-base
           delete-untagged: true
-          delete-tags: amd,arm
+          delete-tags: amd-${{ matrix.os }},arm-${{ matrix.os }}
           token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   slack:
