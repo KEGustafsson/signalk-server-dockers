@@ -2,7 +2,7 @@ name: SignalK Docker Build - Based 22.04 - Semantic Versions every 24 hours
 
 on:
   schedule:
-    - cron: "0 3 * * *"
+    - cron: "30 0 * * *"
   workflow_dispatch:
 
 jobs:
