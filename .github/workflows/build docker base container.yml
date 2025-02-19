@@ -1,4 +1,4 @@
-name: Build Docker base container, amd and arm parallel
+name: Build Docker base images
 
 on:
   schedule:
