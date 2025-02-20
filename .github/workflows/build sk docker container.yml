@@ -161,6 +161,9 @@ jobs:
   build_docker_tags:
     needs: [signalk-server]
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [22.04, 24.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -182,25 +185,27 @@ jobs:
         id: set-tags
         run: |
           if [[ "${{ steps.vars.outputs.tag }}" == *beta* ]]; then
-            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
+            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
           else
-            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MINOR }}"
+            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:latest-${{ matrix.os }}"
           fi
           echo "tags=$tags" >> $GITHUB_OUTPUT
       - name: Save docker tags to artifact
-        run: echo ${{ steps.set-tags.outputs.tags }} > docker_tags.txt
+        run: echo ${{ steps.set-tags.outputs.tags }} > docker_tags_${{ matrix.os }}.txt
       - name: Upload tag
         uses: actions/upload-artifact@v4
         with:
           retention-days: 1
-          name: docker_tags
-          path: docker_tags.txt
+          name: docker_tags_${{ matrix.os }}
+          path: docker_tags_${{ matrix.os }}.txt
 
   build_arm:
     needs: [build_docker_tags]
@@ -293,11 +298,11 @@ jobs:
         uses: docker/setup-buildx-action@v3
       - uses: actions/download-artifact@v4
         with:
-          name: docker_tags
+          name: docker_tags_${{ matrix.os }}
       - name: Set multi-line output
         id: set_images
         run: |
-          tags=$(cat docker_tags.txt | sed 's/,/\n/g')
+          tags=$(cat docker_tags_${{ matrix.os }}.txt | sed 's/,/\n/g')
           {
             echo 'IMAGES<<EOF'
             printf "%s\n" "$tags"
@@ -319,8 +324,6 @@ jobs:
         with:
           tags: |
             ${{ steps.set_images.outputs.IMAGES }}
-            ghcr.io/kegustafsson/signalk-server:latest-${{ matrix.os }}
-            kgustafs/signalk-server:latest-${{ matrix.os }}
           sources: |
             ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }}
             ghcr.io/kegustafsson/signalk-server:arm-${{ matrix.os }}
