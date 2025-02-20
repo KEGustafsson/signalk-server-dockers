@@ -52,8 +52,9 @@ jobs:
 
       - name: Modify Dockerfile_rel for testing
         run: |
-          sed -i 's/:latest-22.04/:arm-22.04/g' ./docker/Dockerfile_rel_22.04
-          sed -i 's/:latest-24.04/:arm-24.04/g' ./docker/Dockerfile_rel_24.04
+          for version in 22.04 24.04; do
+            sed -i "s/:latest-$version/:arm-$version/g" ./docker/Dockerfile_rel_$version
+          done
 
       - name: Build Signal K test docker for arm
         uses: docker/build-push-action@v5
@@ -109,11 +110,12 @@ jobs:
           tags: |
             ghcr.io/kegustafsson/signalk-server-base:amd-${{ matrix.os }}
             kgustafs/signalk-server-base:amd-${{ matrix.os }}
-            
+
       - name: Modify Dockerfile_rel for testing
         run: |
-          sed -i 's/:latest-22.04/:amd-22.04/g' ./docker/Dockerfile_rel_22.04
-          sed -i 's/:latest-24.04/:amd-24.04/g' ./docker/Dockerfile_rel_24.04
+          for version in 22.04 24.04; do
+            sed -i "s/:latest-$version/:amd-$version/g" ./docker/Dockerfile_rel_$version
+          done
 
       - name: Build Signal K test docker for amd
         uses: docker/build-push-action@v5
@@ -176,18 +178,11 @@ jobs:
           TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
             -d '{"username": "${{ secrets.DOCKER_HUB_USERNAME }}", "password": "${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}"}' \
             https://hub.docker.com/v2/users/login/ | jq -r .token)
-          curl -X DELETE \
-            -H "Authorization: JWT $TOKEN" \
-            "https://hub.docker.com/v2/repositories/$IMAGE_NAME/tags/$TAG1/"
-          curl -X DELETE \
-            -H "Authorization: JWT $TOKEN" \
-            "https://hub.docker.com/v2/repositories/$IMAGE_NAME/tags/$TAG2/"
-          curl -X DELETE \
-            -H "Authorization: JWT $TOKEN" \
-            "https://hub.docker.com/v2/repositories/$IMAGE_NAME/tags/$TAG3/"
-          curl -X DELETE \
-            -H "Authorization: JWT $TOKEN" \
-            "https://hub.docker.com/v2/repositories/$IMAGE_NAME/tags/$TAG4/"
+          for TAG in $TAG1 $TAG2 $TAG3 $TAG4; do
+            curl -X DELETE \
+              -H "Authorization: JWT $TOKEN" \
+              "https://hub.docker.com/v2/repositories/$IMAGE_NAME/tags/$TAG/"
+          done
             
       - name: Remove Docker Image from GHCR
         uses: dataaxiom/ghcr-cleanup-action@v1
