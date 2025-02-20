@@ -186,16 +186,16 @@ jobs:
         run: |
           if [[ "${{ steps.vars.outputs.tag }}" == *beta* ]]; then
             tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
+            //tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
           else
             tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.os }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:latest-${{ matrix.os }}"
+            //tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
+            //tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }}"
+            //tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }}"
+            //tags="$tags,${{ steps.vars.outputs.hub }}:latest-${{ matrix.os }}"
           fi
           echo "tags=$tags" >> $GITHUB_OUTPUT
       - name: Save docker tags to artifact
