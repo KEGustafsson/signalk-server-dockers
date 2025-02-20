@@ -188,13 +188,9 @@ jobs:
             tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-24.04"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest"
             tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}"
             tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}"
             tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MINOR }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:latest-24.04"
-            tags="$tags,${{ steps.vars.outputs.hub }}:latest"
           fi
           echo "tags=$tags" >> $GITHUB_OUTPUT
       - name: Save docker tags to artifact
@@ -206,7 +202,7 @@ jobs:
           name: docker_tags
           path: docker_tags.txt
 
-  build_docker_image_arm:
+  build_arm:
     needs: [build_docker_tags]
     runs-on: ubuntu-24.04-arm
     strategy:
@@ -245,7 +241,7 @@ jobs:
             ghcr.io/kegustafsson/signalk-server:arm-${{ matrix.os }}
             kgustafs/signalk-server:arm-${{ matrix.os }}
 
-  build_docker_image_amd:
+  build_amd:
     needs: [build_docker_tags]
     runs-on: ubuntu-latest
     strategy:
@@ -285,7 +281,7 @@ jobs:
             kgustafs/signalk-server:amd-${{ matrix.os }}
 
   create-and-push-manifest:
-    needs: [build_docker_image_arm, build_docker_image_amd]
+    needs: [build_arm, build_amd]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -323,6 +319,8 @@ jobs:
         with:
           tags: |
             ${{ steps.set_images.outputs.IMAGES }}
+            ghcr.io/kegustafsson/signalk-server:latest-${{ matrix.os }}
+            kgustafs/signalk-server:latest-${{ matrix.os }}
           sources: |
             ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }}
             ghcr.io/kegustafsson/signalk-server:arm-${{ matrix.os }}
