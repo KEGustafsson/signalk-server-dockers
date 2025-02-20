@@ -50,15 +50,13 @@ jobs:
 
       - name: Modify Dockerfile_rel for testing
         run: |
-          for version in 22.04 24.04; do
-            sed -i "s/:latest-$version/:arm-$version/g" ./docker/Dockerfile_rel_$version
-          done
+          sed -i "s/:latest/:arm-${{ matrix.os }}/g" ./docker/Dockerfile_rel
 
       - name: Build Signal K test docker for arm
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./docker/Dockerfile_rel_${{ matrix.os }} 
+          file: ./docker/Dockerfile_rel
           platforms: linux/arm64,linux/arm/v7
           build-args: |
             TAG=latest
@@ -109,15 +107,13 @@ jobs:
 
       - name: Modify Dockerfile_rel for testing
         run: |
-          for version in 22.04 24.04; do
-            sed -i "s/:latest-$version/:amd-$version/g" ./docker/Dockerfile_rel_$version
-          done
+          sed -i "s/:latest/:amd-${{ matrix.os }}/g" ./docker/Dockerfile_rel
 
       - name: Build Signal K test docker for amd
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./docker/Dockerfile_rel_${{ matrix.os }}
+          file: ./docker/Dockerfile_rel
           platforms: linux/amd64
           build-args: |
             TAG=latest
