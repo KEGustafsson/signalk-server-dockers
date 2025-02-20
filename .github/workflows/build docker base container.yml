@@ -30,12 +30,10 @@ jobs:
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
       - name: Cache Docker layers
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ matrix.os }}-${{ github.run_id }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
+          key: ${{ runner.os }}-buildx-${{ matrix.os }}-arm
 
       - name: Build baseimages
         uses: docker/build-push-action@v5
@@ -91,12 +89,10 @@ jobs:
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
       - name: Cache Docker layers
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ matrix.os }}-${{ github.run_id }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
+          key: ${{ runner.os }}-buildx-${{ matrix.os }}-amd
 
       - name: Build baseimages
         uses: docker/build-push-action@v5
