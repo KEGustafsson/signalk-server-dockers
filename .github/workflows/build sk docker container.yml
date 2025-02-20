@@ -314,11 +314,11 @@ jobs:
           registry: ghcr.io
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+#      - name: Login to Docker Hub
+#        uses: docker/login-action@v3
+#        with:
+#          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+#          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
       - name: Create and push multi-arch manifest to GHCR and Docker Hub
         uses: int128/docker-manifest-create-action@v2
         with:
@@ -327,8 +327,8 @@ jobs:
           sources: |
             ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }}
             ghcr.io/kegustafsson/signalk-server:arm-${{ matrix.os }}
-            kgustafs/signalk-server:amd-${{ matrix.os }}
-            kgustafs/signalk-server:arm-${{ matrix.os }}
+#            kgustafs/signalk-server:amd-${{ matrix.os }}
+#            kgustafs/signalk-server:arm-${{ matrix.os }}
 
   housekeeping:
     needs: create-and-push-manifest
