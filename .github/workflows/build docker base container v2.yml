@@ -66,6 +66,7 @@ jobs:
     strategy:
       matrix:
         os: [22.04, 24.04]
+        arch: [amd, arm]
 
     steps:
       - name: Login to ghcr.io
@@ -88,29 +89,25 @@ jobs:
             ghcr.io/kegustafsson/signalk-server-base:latest-${{ matrix.os }}
             kgustafs/signalk-server-base:latest-${{ matrix.os }}
           sources: |
-            ghcr.io/kegustafsson/signalk-server-base:amd-${{ matrix.os }}
-            ghcr.io/kegustafsson/signalk-server-base:arm-${{ matrix.os }}
-            kgustafs/signalk-server-base:amd-${{ matrix.os }}
-            kgustafs/signalk-server-base:arm-${{ matrix.os }}
+            ghcr.io/kegustafsson/signalk-server-base:${{ matrix.arch }}-${{ matrix.os }}
+            kgustafs/signalk-server-base:${{ matrix.arch }}-${{ matrix.os }}
 
   housekeeping:
     needs: create-and-push-manifest
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [22.04, 24.04]
+        arch: [amd, arm]
 
     steps:
       - name: Delete Docker Hub Tag
-        env:
-          IMAGE_NAME: "kgustafs/signalk-server-base"
-          TAG1: "amd-22.04"
-          TAG2: "arm-22.04"
-          TAG3: "amd-24.04"
-          TAG4: "arm-24.04"
         run: |
           sudo apt-get update && sudo apt-get install -y jq
           TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
             -d '{"username": "${{ secrets.DOCKER_HUB_USERNAME }}", "password": "${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}"}' \
             https://hub.docker.com/v2/users/login/ | jq -r .token)
-          for TAG in $TAG1 $TAG2 $TAG3 $TAG4; do
+          for TAG in ${{ matrix.arch }}-${{ matrix.os }}; do
             curl -X DELETE \
               -H "Authorization: JWT $TOKEN" \
               "https://hub.docker.com/v2/repositories/$IMAGE_NAME/tags/$TAG/"
@@ -121,7 +118,7 @@ jobs:
         with:
           packages: signalk-server-base
           delete-untagged: true
-          delete-tags: amd-22.04,arm-22.04,amd-24.04,arm-24.04
+          delete-tags: ${{ matrix.arch }}-${{ matrix.os }}
           token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   slack:
