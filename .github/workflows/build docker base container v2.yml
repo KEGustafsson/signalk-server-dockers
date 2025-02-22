@@ -13,14 +13,11 @@ jobs:
         vm: [ubuntu-latest, ubuntu-24.04-arm]
         include:
           - vm: ubuntu-latest
-            arch: amd64
+            arch: amd
             platform: linux/amd64
           - vm: ubuntu-24.04-arm
-            arch: arm64
-            platform: linux/arm64
-          - vm: ubuntu-24.04-arm
-            arch: armv7
-            platform: linux/arm/v7
+            arch: arm
+            platform: linux/arm64,linux/arm/v7
     runs-on: ${{ matrix.vm }}
     steps:
       - uses: actions/checkout@v4
@@ -91,12 +88,10 @@ jobs:
             ghcr.io/kegustafsson/signalk-server-base:latest-${{ matrix.os }}
             kgustafs/signalk-server-base:latest-${{ matrix.os }}
           sources: |
-            ghcr.io/kegustafsson/signalk-server-base:amd64-${{ matrix.os }}
-            ghcr.io/kegustafsson/signalk-server-base:arm64-${{ matrix.os }}
-            ghcr.io/kegustafsson/signalk-server-base:armv7-${{ matrix.os }}
-            kgustafs/signalk-server-base:amd64-${{ matrix.os }}
-            kgustafs/signalk-server-base:arm64-${{ matrix.os }}
-            kgustafs/signalk-server-base:armv7-${{ matrix.os }}
+            ghcr.io/kegustafsson/signalk-server-base:amd-${{ matrix.os }}
+            ghcr.io/kegustafsson/signalk-server-base:arm-${{ matrix.os }}
+            kgustafs/signalk-server-base:amd-${{ matrix.os }}
+            kgustafs/signalk-server-base:arm-${{ matrix.os }}
 
   housekeeping:
     needs: create-and-push-manifest
@@ -106,18 +101,16 @@ jobs:
       - name: Delete Docker Hub Tag
         env:
           IMAGE_NAME: "kgustafs/signalk-server-base"
-          TAG1: "amd64-22.04"
-          TAG2: "arm64-22.04"
-          TAG3: "armv7-22.04"
-          TAG4: "amd64-24.04"
-          TAG5: "arm64-24.04"
-          TAG6: "armv7-24.04"
+          TAG1: "amd-22.04"
+          TAG2: "arm-22.04"
+          TAG3: "amd-24.04"
+          TAG4: "arm-24.04"
         run: |
           sudo apt-get update && sudo apt-get install -y jq
           TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
             -d '{"username": "${{ secrets.DOCKER_HUB_USERNAME }}", "password": "${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}"}' \
             https://hub.docker.com/v2/users/login/ | jq -r .token)
-          for TAG in $TAG1 $TAG2 $TAG3 $TAG4 $TAG5 $TAG6; do
+          for TAG in $TAG1 $TAG2 $TAG3 $TAG4; do
             curl -X DELETE \
               -H "Authorization: JWT $TOKEN" \
               "https://hub.docker.com/v2/repositories/$IMAGE_NAME/tags/$TAG/"
@@ -128,7 +121,7 @@ jobs:
         with:
           packages: signalk-server-base
           delete-untagged: true
-          delete-tags: amd64-22.04,arm64-22.04,armv7-22.04,amd64-24.04,arm64-24.04,armv7-24.04
+          delete-tags: amd-22.04,arm-22.04,amd-24.04,arm-24.04
           token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   slack:
