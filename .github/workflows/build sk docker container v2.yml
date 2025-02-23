@@ -260,6 +260,9 @@ jobs:
     strategy:
       matrix:
         os: [22.04, 24.04]
+        include:
+          - os: 24.04
+            tag: latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -293,6 +296,8 @@ jobs:
         with:
           tags: |
             ${{ steps.set_images.outputs.IMAGES }}
+            ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }}
+            kgustafs/signalk-server:${{ matrix.tag }}
           sources: |
             ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }}
             ghcr.io/kegustafsson/signalk-server:arm-${{ matrix.os }}
