@@ -185,17 +185,17 @@ jobs:
         id: set-tags
         run: |
           if [[ "${{ steps.vars.outputs.tag }}" == *beta* ]]; then
-            tags="--tag ${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }} \"
-            tags="$tags,--tag ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }} \"
+            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
           else
-            tags="--tag ${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }} \"
-            tags="$tags,--tag ${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }} \"
-            tags="$tags,--tag ${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }} \"
-            tags="$tags,--tag ${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.os }} \"
-            tags="$tags,--tag ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }} \"
-            tags="$tags,--tag ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }} \"
-            tags="$tags,--tag ${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }} \"
-            tags="$tags,--tag ${{ steps.vars.outputs.hub }}:latest-${{ matrix.os }} \"
+            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:latest-${{ matrix.os }}"
           fi
           echo "tags=$tags" >> $GITHUB_OUTPUT
       - name: Save docker tags to artifact
@@ -276,7 +276,7 @@ jobs:
       - name: Set multi-line output
         id: set_images
         run: |
-          tags=$(cat docker_tags_${{ matrix.os }}.txt | sed 's/,/\n/g')
+          tags=$(cat docker_tags_${{ matrix.os }}.txt | sed 's/,/\n/g' | sed 's/^/--tag /' | sed 's/$/ \\/')
           {
             echo 'IMAGES<<EOF'
             printf "%s\n" "$tags"
@@ -296,7 +296,7 @@ jobs:
       - name: Create and push multi-arch manifest to GHCR and Docker Hub
         run: |
           docker buildx imagetools create \
-            ${{ steps.set_images.outputs.IMAGES }} \
+            ${{ steps.set_images.outputs.IMAGES }}
             --tag ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }} \
             --tag kgustafs/signalk-server:${{ matrix.tag }} \
             ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }} \
