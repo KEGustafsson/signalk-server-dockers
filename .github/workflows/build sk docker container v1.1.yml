@@ -1,4 +1,4 @@
-name: SignalK Docker Build
+name: SignalK Docker Build v1.1
 
 on:
   workflow_dispatch:
@@ -270,7 +270,7 @@ jobs:
       - name: Set multi-line output
         id: set_images
         run: |
-          tags=$(cat docker_tags_${{ matrix.os }}.txt | sed 's/,/\n/g')
+          tags=$(cat docker_tags_${{ matrix.os }}.txt | sed 's/,/\n/g' | sed 's/^/--tag /' | sed 's/$/ \\/')
           {
             echo 'IMAGES<<EOF'
             printf "%s\n" "$tags"
@@ -288,14 +288,12 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
       - name: Create and push multi-arch manifest to GHCR and Docker Hub
-        uses: int128/docker-manifest-create-action@v2
-        with:
-          tags: |
+        run: |
+          docker buildx imagetools create \
             ${{ steps.set_images.outputs.IMAGES }}
-            ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }}
-            kgustafs/signalk-server:${{ matrix.tag }}
-          sources: |
-            ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }}
+            --tag ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }} \
+            --tag kgustafs/signalk-server:${{ matrix.tag }} \
+            ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }} \
             ghcr.io/kegustafsson/signalk-server:arm-${{ matrix.os }}
 
   housekeeping:
