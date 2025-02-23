@@ -13,7 +13,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-node-
       - name: Node setup
@@ -44,7 +44,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-node-
       - name: Node setup
@@ -75,7 +75,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-node-
       - name: Node setup
@@ -113,7 +113,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-node-
       - name: Node setup
@@ -275,7 +275,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
-          key: buildx-${{ runner.os }}-${{ matrix.os }}-${{ matrix.arch }}
+          key: buildx-${{ runner.os }}-${{ matrix.os }}-${{ matrix.arch }}-${{ github.run_id }}
           restore-keys: |
             buildx-${{ runner.os }}-${{ matrix.os }}-${{ matrix.arch }}
             buildx-${{ runner.os }}-${{ matrix.os }}-
