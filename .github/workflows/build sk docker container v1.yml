@@ -300,9 +300,7 @@ jobs:
             --tag ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }} \
             --tag kgustafs/signalk-server:${{ matrix.tag }} \
             ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }} \
-            ghcr.io/kegustafsson/signalk-server:arm-${{ matrix.os }} \
-            kgustafs/signalk-server:amd-${{ matrix.os }} \
-            kgustafs/signalk-server:arm-${{ matrix.os }}
+            ghcr.io/kegustafsson/signalk-server:arm-${{ matrix.os }}
 
   housekeeping:
     needs: create-and-push-manifest
