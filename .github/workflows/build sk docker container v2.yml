@@ -263,6 +263,8 @@ jobs:
         include:
           - os: 24.04
             tag: latest
+          - os: 22.04
+            tag: latest-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
