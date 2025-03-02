@@ -42,7 +42,9 @@ jobs:
 
       - name: Modify Dockerfile_rel for testing
         run: |
-          sed -i "s/:latest/:${{ matrix.arch }}-${{ matrix.os }}/g" ./docker/Dockerfile_rel
+          sed -i \
+            "s|:latest|:${{ matrix.arch }}-${{ matrix.os }}|g" \
+            ./docker/Dockerfile_rel  
 
       - name: Build Signal K test docker
         uses: docker/build-push-action@v5
