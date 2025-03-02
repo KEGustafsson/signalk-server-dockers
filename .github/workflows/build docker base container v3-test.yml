@@ -1,0 +1,46 @@
+name: Build Docker base images v3-test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-images:
+    strategy:
+      matrix:
+        os: [22.04, 24.04]
+        vm: [ubuntu-latest, ubuntu-24.04-arm]
+        include:
+          - vm: ubuntu-latest
+            arch: amd
+            platform: linux/amd64
+          - vm: ubuntu-24.04-arm
+            arch: arm
+            platform: linux/arm64,linux/arm/v7
+    runs-on: ${{ matrix.vm }}
+    services:
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
+    steps:
+      - name: Wait for local registry to be available
+        run: |
+          until curl -s http://localhost:5000/v2/; do
+            echo "Waiting for local registry to be available..."
+            sleep 2
+          done
+          echo "Local registry is available."
+
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build baseimages
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile_base_${{ matrix.os }}
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: |
+            localhost:5000/signalk-server-base:${{ matrix.arch }}-${{ matrix.os }}
+
