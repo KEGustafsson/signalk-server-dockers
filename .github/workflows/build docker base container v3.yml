@@ -10,9 +10,25 @@ jobs:
       - name: Set up local registry
         run: |
           docker run -d -p 5000:5000 --name registry registry:2
+      - name: Verify local registry
+        run: |
+          until curl -s http://localhost:5000/v2/; do
+            echo "Waiting for local registry to be available..."
+            sleep 2
+          done
+
+  setup-local-registry-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify local registry
+        run: |
+          until curl -s http://localhost:5000/v2/; do
+            echo "Waiting for local registry to be available..."
+            sleep 2
+          done
 
   build-images:
-    needs: setup-local-registry
+    needs: setup-local-registry-test
     strategy:
       matrix:
         os: [22.04, 24.04]
