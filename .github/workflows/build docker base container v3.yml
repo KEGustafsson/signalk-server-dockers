@@ -18,6 +18,7 @@ jobs:
           done
 
   setup-local-registry-test:
+    needs: setup-local-registry
     runs-on: ubuntu-latest
     steps:
       - name: Verify local registry
