@@ -316,7 +316,7 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           tags: |
-            ghcr.io/kegustafsson/signalk-server:${{ matrix.arch }}-${{ matrix.os }}
+            ghcr.io/kegustafsson/signalk-server:${{ matrix.arch }}-${{ matrix.os }}-${{ github.run_id }}
 
   create-and-push-manifest:
     needs: [build_docker_tags, build-images]
@@ -365,8 +365,8 @@ jobs:
             ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }}
             kgustafs/signalk-server:${{ matrix.tag }}
           sources: |
-            ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }}
-            ghcr.io/kegustafsson/signalk-server:arm-${{ matrix.os }}
+            ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }}-${{ github.run_id }}
+            ghcr.io/kegustafsson/signalk-server:arm-${{ matrix.os }}-${{ github.run_id }}
 
   housekeeping:
     needs: create-and-push-manifest
@@ -379,7 +379,7 @@ jobs:
         with:
           packages: signalk-server
           delete-untagged: true
-          delete-tags: amd-22.04,arm-22.04,amd-24.04,arm-24.04
+          delete-tags: amd-22.04-${{ github.run_id }},arm-22.04-${{ github.run_id }},amd-24.04-${{ github.run_id }},arm-24.04-${{ github.run_id }}
           token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   slack:
