@@ -27,9 +27,12 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && npm config set fetch-retries 5 \
   && npm config set fetch-retry-mintimeout 60000 \
   && npm config set fetch-retry-maxtimeout 120000 \
+  && npm config set registry "https://registry.npmjs.org/" \
+  && npm config set @backup:registry "https://registry.yarnpkg.com/" \
   && npm cache clean -f \
   && npm install npm@latest -g \
   && npm install pm2 -g \
   && npm install yarn -g \
   && sudo setcap cap_net_raw+eip $(eval readlink -f `which node`) \
   && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+  
