@@ -17,34 +17,18 @@ jobs:
         run: |
           EXTERNAL_REPO="SignalK/signalk-server"
           tags=$(curl -s "https://api.github.com/repos/$EXTERNAL_REPO/tags" | jq -r '.[].name')
-          echo "Fetched tags: $tags"
-          if [ $? -ne 0 ] || [ -z "$tags" ]; then
-            echo "Failed to fetch tags or no tags found."
-            exit 0
-          fi
           latest_v_tag=$(echo "$tags" | grep '^v' | head -n 1)
-          echo "Latest v* tag: $latest_v_tag"
           if [ -z "$latest_v_tag" ]; then
-            echo "No tags starting with 'v' found."
-            exit 0
+            echo "No valid v* tags found."; exit 0
           fi
           tag_details=$(curl -s "https://api.github.com/repos/$EXTERNAL_REPO/git/refs/tags/$latest_v_tag")
-          echo "Tag details: $tag_details"
           commit_sha=$(echo "$tag_details" | jq -r '.object.sha')
-          commit_date=$(echo "$tag_details" | jq -r '.object.url' | xargs -I {} curl -s {} | jq -r '.tagger.date')
-          echo "Commit SHA: $commit_sha"
-          echo "Tag date: $commit_date"
-          if [ -z "$commit_sha" ] || [ "$commit_sha" == "null" ]; then
-            echo "Failed to fetch commit SHA for tag."
-            exit 1
-          fi
-          if [ -z "$commit_date" ] || [ "$commit_date" == "null" ]; then
-            echo "Failed to fetch tag date."
-            exit 1
+          commit_date=$(curl -s $(echo "$tag_details" | jq -r '.object.url') | jq -r '.tagger.date')
+          if [ -z "$commit_sha" ] || [ "$commit_sha" == "null" ] || [ -z "$commit_date" ] || [ "$commit_date" == "null" ]; then
+            echo "Failed to fetch commit details."; exit 1
           fi
           current_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          echo "Action runtime date and time: $current_time"
-          echo "Tag date and time: $commit_date"
+          time_24h_ago=$(date -u -d "$current_time - 24 hours" +"%Y-%m-%dT%H:%M:%SZ")
           commit_epoch=$(date -u -d "$commit_date" +%s)
           current_epoch=$(date -u -d "$current_time" +%s)
           time_diff_seconds=$((current_epoch - commit_epoch))
@@ -53,15 +37,14 @@ jobs:
           minutes=$(( (time_diff_seconds % 3600) / 60 ))
           seconds=$((time_diff_seconds % 60))
           echo "Time difference: ${days}d ${hours}h ${minutes}m ${seconds}s"
-          time_24h_ago=$(date -u -d "$current_time - 24 hours" +"%Y-%m-%dT%H:%M:%SZ")
-          echo "Time 24 hours ago: $time_24h_ago"
+          echo "Commit Date: $commit_date"
+          echo "Current Time: $current_time"
           if [[ "$commit_date" > "$time_24h_ago" ]]; then
             echo "New v* tag $latest_v_tag found in the last 24 hours."
             echo "proceed=true" >> $GITHUB_OUTPUT
           else
             echo "No new v* tags found in the last 24 hours."
             echo "proceed=false" >> $GITHUB_OUTPUT
-            exit 0
           fi
 
   react-jsonschema-form-bs4:
