@@ -44,6 +44,7 @@ jobs:
             echo "proceed=true" >> $GITHUB_OUTPUT
           else
             echo "No new v* tags found in the last 24 hours."
+            echo "Latest v* tag is $latest_v_tag"
             echo "proceed=false" >> $GITHUB_OUTPUT
           fi
 
