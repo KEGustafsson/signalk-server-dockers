@@ -1,4 +1,4 @@
-name: SignalK Docker Build 24h
+name: SignalK Docker Build 24h v2
 
 on:
   schedule:
@@ -12,17 +12,13 @@ jobs:
       proceed: ${{ steps.check.outputs.proceed }}
     
     steps:
-      - name: Install jq (Prerequisite)
-        run: |
-          sudo apt-get update
-          sudo apt-get -y install --no-install-recommends jq
       - name: Fetch and compare tags
         id: check
         run: |
           EXTERNAL_REPO="SignalK/signalk-server"
-          tags=$(curl -s "https://api.github.com/repos/$EXTERNAL_REPO/tags" | jq -r '.[].name')
+          tags=$(curl -s "https://api.github.com/repos/$EXTERNAL_REPO/tags" | grep -oP '"name": "\K(.*?)(?=")')
           echo "Fetched tags: $tags"
-          if [ $? -ne 0 ] || [ -z "$tags" ]; then
+          if [ -z "$tags" ]; then
             echo "Failed to fetch tags or no tags found."
             exit 0
           fi
@@ -34,8 +30,8 @@ jobs:
           fi
           tag_details=$(curl -s "https://api.github.com/repos/$EXTERNAL_REPO/git/refs/tags/$latest_v_tag")
           echo "Tag details: $tag_details"
-          commit_sha=$(echo "$tag_details" | jq -r '.object.sha')
-          commit_date=$(echo "$tag_details" | jq -r '.object.url' | xargs -I {} curl -s {} | jq -r '.tagger.date')
+          commit_sha=$(echo "$tag_details" | grep -oP '"sha": "\K(.*?)(?=")')
+          commit_date=$(curl -s "$(echo "$tag_details" | grep -oP '"url": "\K(.*?)(?=")')" | grep -oP '"date": "\K(.*?)(?=")')
           echo "Commit SHA: $commit_sha"
           echo "Tag date: $commit_date"
           if [ -z "$commit_sha" ] || [ "$commit_sha" == "null" ]; then
@@ -67,6 +63,7 @@ jobs:
             echo "proceed=false" >> $GITHUB_OUTPUT
             exit 0
           fi
+
 
   react-jsonschema-form-bs4:
     needs: [check-new-v-tags]
