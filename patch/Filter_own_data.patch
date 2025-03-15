@@ -1,0 +1,49 @@
+From 7289a7eb2f02927487890b4747012236a77ef879 Mon Sep 17 00:00:00 2001
+From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
+Date: Sat, 15 Mar 2025 07:48:12 +0200
+Subject: [PATCH] feat: add filtering logic for specific path values in
+ StreamBundle
+
+---
+ src/streambundle.js | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/src/streambundle.js b/src/streambundle.js
+index fa391208f..7e6c57b84 100644
+--- a/src/streambundle.js
++++ b/src/streambundle.js
+@@ -32,11 +32,33 @@ function StreamBundle(app, selfId) {
+   this.selfMetaBus = new Bacon.Bus()
+ }
+ 
++function shouldFilter(pathValue, availablePaths) {
++  const filteredPaths = [
++    '',
++    'name',
++    'mmsi',
++    'design.aisShipType',
++    'design.beam',
++    'design.length',
++    'sensors.gps.fromBow',
++    'sensors.gps.fromCenter'
++  ]
++  if (filteredPaths.includes(pathValue.path) && availablePaths[pathValue.path]) {
++    return true
++  }
++}
++
+ StreamBundle.prototype.pushDelta = function (delta) {
+   var that = this
+   function processIems(update, items, isMeta) {
+     if (items) {
+       items.forEach((pathValue) => {
++        if (
++          delta.context === that.selfContext &&
++          shouldFilter(pathValue, that.availableSelfPaths)
++        ) {
++          return
++        }
+         that.push(pathValue.path, {
+           path: pathValue.path,
+           value: pathValue.valu
+           e,
