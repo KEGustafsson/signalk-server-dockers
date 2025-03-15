@@ -96,7 +96,7 @@ jobs:
         id: git
         run: |
           # git clone https://github.com/SignalK/signalk-server.git
-          git clone -b filter_own https://github.com/KEGustafsson/signalk-server.git
+          git clone -b filter_own_data https://github.com/KEGustafsson/signalk-server.git
           cd signalk-server
           git fetch --tags
           tag=$(git describe --tags `git rev-list --tags --max-count=1`)
