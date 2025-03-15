@@ -45,5 +45,4 @@ index fa391208f..7e6c57b84 100644
 +        }
          that.push(pathValue.path, {
            path: pathValue.path,
-           value: pathValue.valu
-           e,
+           value: pathValue.value,
