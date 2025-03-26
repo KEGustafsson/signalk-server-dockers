@@ -10,8 +10,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
   && groupadd -r i2c -g 990 \
   && groupadd -r spi -g 989 \
   && usermod -a -G dialout,i2c,spi,netdev,docker node \
-  && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
-  && rm -rf /var/lib/apt/lists/*
+  && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 COPY avahi/avahi-dbus.conf /etc/dbus-1/system.d/avahi-dbus.conf
 COPY bluez/bluezuser.conf /etc/dbus-1/system.d/bluezuser.conf
@@ -34,5 +33,6 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && npm install pm2 -g \
   && npm install yarn -g \
   && sudo setcap cap_net_raw+eip $(eval readlink -f `which node`) \
+  && sudo setcap cap_sys_time+ep /bin/date \
   && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
   
