@@ -8,8 +8,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
   && groupadd -r docker -g 998 \
   && groupadd -r i2c -g 997 \
   && groupadd -r spi -g 999 \
-  && usermod -a -G dialout,i2c,spi,netdev,docker node \
-  && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+  && usermod -a -G dialout,i2c,spi,netdev,docker node #\
+#  && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 COPY avahi/avahi-dbus.conf /etc/dbus-1/system.d/avahi-dbus.conf
 COPY bluez/bluezuser.conf /etc/dbus-1/system.d/bluezuser.conf
