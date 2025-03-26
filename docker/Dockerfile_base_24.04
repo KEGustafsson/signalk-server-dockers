@@ -10,7 +10,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
   && groupadd -r i2c -g 990 \
   && groupadd -r spi -g 989 \
   && usermod -a -G dialout,i2c,spi,netdev,docker node \
-#  && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+  && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
   && chmod u+s /usr/bin/date
 
 COPY avahi/avahi-dbus.conf /etc/dbus-1/system.d/avahi-dbus.conf
