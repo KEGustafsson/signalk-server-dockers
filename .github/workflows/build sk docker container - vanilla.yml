@@ -1,89 +1,10 @@
-name: SignalK Docker Build - test
+name: SignalK Docker Build - vanilla
 
 on:
   workflow_dispatch:
 
 jobs:
-  react-jsonschema-form-bs4:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Node setup
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.x'
-      - name: react-jsonschema-form-bs4
-        run: |
-          git clone https://github.com/KEGustafsson/react-jsonschema-form-bs4.git
-          cd react-jsonschema-form-bs4
-          rm -f package-lock.json
-          npm i
-          npm pack
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          retention-days: 1
-          name: react-jsonschema-form-bs4
-          path: |
-            ./react-jsonschema-form-bs4/*.tgz
-
-  specification:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Node setup
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.x'
-      - name: specification
-        run: |
-          git clone https://github.com/SignalK/specification.git
-          cd specification
-          npm i
-          npm pack
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          retention-days: 1
-          name: specification
-          path: |
-            ./specification/*.tgz
-
-  nmea0183-signalk:
-    needs: [specification]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Node setup
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.x'
-      - uses: actions/download-artifact@v4
-        with:
-          name: specification
-      - name: nmea0183-signalk
-        run: |
-          git clone https://github.com/SignalK/nmea0183-signalk.git
-          cd nmea0183-signalk
-          mv ../*.tgz .
-          npm i --save *.tgz
-          rm -rf node_modules
-          rm -f package-lock.json
-          rm -f *.tgz
-          npm pack
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          retention-days: 1
-          name: nmea0183-signalk
-          path: |
-            ./nmea0183-signalk/*.tgz
-
   signalk-server:
-    needs: [nmea0183-signalk, react-jsonschema-form-bs4]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -102,37 +23,21 @@ jobs:
           tag=$(git describe --tags `git rev-list --tags --max-count=1`)
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "Extracted tag: $tag"
-          if [ -d "./../patch" ] && [ "$(ls -A ./../patch/*.patch 2>/dev/null)" ]; then
-            git apply ./../patch/*.patch
-          else
-            echo "No patches to apply"
-          fi
-      - uses: actions/download-artifact@v4
-        with:
-          name: react-jsonschema-form-bs4
-      - name: server-admin-ui patch 
-        run: |
-          cd signalk-server/packages/server-admin-ui
-          mv ./../../../*.tgz .
-          npm i --save-dev *.tgz
-          rm -rf node_modules
-          rm -f package-lock.json
-      - uses: actions/download-artifact@v4
-        with:
-          name: nmea0183-signalk
-      - uses: actions/download-artifact@v4
-        with:
-          name: specification
       - name: signalk-server build
         run: |
           cd signalk-server
-          mv ./../*.tgz .
           rm -f package-lock.json
           rm -rf node_modules
           npm install --package-lock-only
           npm ci && npm cache clean --force
-          npm run build:all
+          npm run build --workspaces --if-present
           npm pack --workspaces
+          ls -la *.tgz
+          cat package.json
+          jq '.workspaces=[]' package.json > _package.json && mv _package.json package.json
+          npm i --save *.tgz
+          cat package.json
+          npm run build
           rm typedoc-signalk-theme*.tgz # This is only needed as a dev dependency
           npm pack
       - name: Save tag to artifact
@@ -231,12 +136,12 @@ jobs:
         run: |
           sed -i \
             "s|:latest|:latest-${{ matrix.os }}|g" \
-            ./docker/Dockerfile-new
+            ./docker/Dockerfile
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./docker/Dockerfile-new
+          file: ./docker/Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
           tags: |
