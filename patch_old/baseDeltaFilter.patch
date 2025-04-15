@@ -288,10 +288,10 @@ index 00000000..401fc60a
 +export type { PathValuePair, InputData };
 \ No newline at end of file
 diff --git a/src/index.ts b/src/index.ts
-index 9efe4122..47a08a28 100644
+index 5ce5a82c..b4c31905 100644
 --- a/src/index.ts
 +++ b/src/index.ts
-@@ -66,6 +66,7 @@ import { WithProviderStatistics } from './deltastats'
+@@ -70,6 +70,7 @@ import { WithProviderStatistics } from './deltastats'
  import { pipedProviders } from './pipedproviders'
  import { EventsActorId, WithWrappedEmitter, wrapEmitter } from './events'
  import { Zones } from './zones'
@@ -299,15 +299,15 @@ index 9efe4122..47a08a28 100644
  const debug = createDebug('signalk-server')
 
  import { StreamBundle } from './streambundle'
-@@ -264,6 +265,7 @@ class Server {
+@@ -273,6 +274,7 @@ class Server {
      }
      app.activateSourcePriorities()
 
 +    let pathsToRemove: any = []
      app.handleMessage = (
        providerId: string,
-       data: Partial<Delta>,
-@@ -293,6 +295,18 @@ class Server {
+       data: any,
+@@ -302,6 +304,18 @@ class Server {
            if (!update.timestamp || app.config.overrideTimestampWithNow) {
              update.timestamp = now.toISOString() as Timestamp
            }
