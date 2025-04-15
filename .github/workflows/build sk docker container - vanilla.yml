@@ -34,8 +34,10 @@ jobs:
           npm run build --workspaces --if-present
           npm pack --workspaces
           ls -la *.tgz
+          cat package.json
           jq '.workspaces=[]' package.json > _package.json && mv _package.json package.json
           npm i --save *.tgz
+          cat package.json
           npm run build
           rm typedoc-signalk-theme*.tgz # This is only needed as a dev dependency
           npm pack
