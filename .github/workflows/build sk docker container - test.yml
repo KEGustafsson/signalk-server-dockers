@@ -131,13 +131,8 @@ jobs:
           rm -rf node_modules
           npm install --package-lock-only
           npm ci && npm cache clean --force
-          npm run build --workspaces --if-present
-          for dir in packages/*; do
-            pushd $dir && npm pack && mv *.tgz ../../ && popd
-          done
-          jq '.workspaces=[]' package.json > _package.json && mv _package.json package.json
-          npm i --save *.tgz
-          npm run build
+          npm run build:all
+          npm pack --workspaces
           rm typedoc-signalk-theme*.tgz # This is only needed as a dev dependency
           npm pack
       - name: Save tag to artifact
@@ -236,12 +231,12 @@ jobs:
         run: |
           sed -i \
             "s|:latest|:latest-${{ matrix.os }}|g" \
-            ./docker/Dockerfile
+            ./docker/Dockerfile-new
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./docker/Dockerfile
+          file: ./docker/Dockerfile-new
           platforms: ${{ matrix.platform }}
           push: true
           tags: |
