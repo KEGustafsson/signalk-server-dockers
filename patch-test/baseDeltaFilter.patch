@@ -288,7 +288,7 @@ index 00000000..401fc60a
 +export type { PathValuePair, InputData };
 \ No newline at end of file
 diff --git a/src/index.ts b/src/index.ts
-index 9efe4122..47a08a28 100644
+index 9efe4122..bc1eeaee 100644
 --- a/src/index.ts
 +++ b/src/index.ts
 @@ -66,6 +66,7 @@ import { WithProviderStatistics } from './deltastats'
@@ -316,9 +316,9 @@ index 9efe4122..47a08a28 100644
 +                pathsToRemove = extractPathValuePairs(update)
 +                //console.log('Extracted paths:', pathsToRemove);
 +            } else if (pathsToRemove) {
-+                data.updates = data.updates.map((update: any) =>
-+                    filterUpdates(update, pathsToRemove)
-+                ).filter(Boolean);
++                data.updates = (data.updates ?? [])
++                    .map((update: any) => filterUpdates(update, pathsToRemove))
++                    .filter((update): update is Update => update !== undefined);
 +                //console.log(JSON.stringify(data.updates, null, 2));
 +                return data.updates;
 +            }
