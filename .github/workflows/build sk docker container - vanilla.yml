@@ -26,7 +26,6 @@ jobs:
       - name: signalk-server build
         run: |
           cd signalk-server
-          mv ./../*.tgz .
           rm -f package-lock.json
           rm -rf node_modules
           npm install --package-lock-only
