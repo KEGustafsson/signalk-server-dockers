@@ -1,0 +1,157 @@
+diff --git a/.github/workflows/build-docker.yml b/.github/workflows/build-docker.yml
+index 53b95bf26..6c0c126dd 100644
+--- a/.github/workflows/build-docker.yml
++++ b/.github/workflows/build-docker.yml
+@@ -26,13 +26,8 @@ jobs:
+           npm install npm@latest -g
+           npm install --package-lock-only
+           npm ci && npm cache clean --force
+-          npm run build --workspaces --if-present
+-          for dir in packages/*; do
+-            pushd $dir && npm pack && mv *.tgz ../../ && popd
+-          done
+-          jq '.workspaces=[]' package.json > _package.json && mv _package.json package.json
+-          npm i --save *.tgz
+-          npm run build
++          npm run build:all
++          npm pack --workspaces
+           rm typedoc-signalk-theme*.tgz # This is only needed as a dev dependency
+           npm pack
+       - name: Upload artifacts
+diff --git a/docker/Dockerfile b/docker/Dockerfile
+index 68ca6f6af..6ccef9672 100644
+--- a/docker/Dockerfile
++++ b/docker/Dockerfile
+@@ -18,7 +18,7 @@ WORKDIR /home/node/signalk
+ COPY *.tgz .
+ USER root
+ 
+-RUN npm i -g signalk-server-*.tgz
++RUN npm i -g *.tgz
+ # move server-admin-ui that gets installed as sibling of signalk-server
+ RUN mv /usr/lib/node_modules/@signalk/* /usr/lib/node_modules/signalk-server/node_modules/@signalk/
+ 
+diff --git a/package.json b/package.json
+index 6c15e8e43..8c038a9ec 100644
+--- a/package.json
++++ b/package.json
+@@ -5,16 +5,15 @@
+   "main": "index.js",
+   "scripts": {
+     "build": "tsc --build",
+-    "build:all": "npm run build:workspaces && npm run build && npm run build-declaration && npm run build:docs",
++    "build:all": "npm run build:workspaces && npm run build && npm run build:docs",
+     "build:docs": "typedoc",
+     "build:workspaces": "npm run build --workspaces --if-present",
+-    "build-declaration": "tsc --declaration",
+     "watch": "tsc --build -w",
+     "prettier": "prettier -w src/",
+     "lint": "eslint --fix",
+     "format": "npm run prettier && npm run lint",
+     "ci-lint": "eslint && prettier --check src/",
+-    "prepublishOnly": "npm run lint && npm run build:all && npm run build-declaration",
++    "prepublishOnly": "npm run lint && npm run build:all",
+     "update-latest-release": "git checkout master && git branch -D latest-release || git checkout -b latest-release && git push -f origin/latest-release",
+     "start": "node bin/signalk-server",
+     "test-only": "mocha --require ts-node/register --extensions ts,tsx,js --timeout 20000 --exit 'test/**/*.[jt]s' 'dist/**/*.test.js'",
+diff --git a/packages/server-api/package.json b/packages/server-api/package.json
+index 1bf1fb476..215ab635c 100644
+--- a/packages/server-api/package.json
++++ b/packages/server-api/package.json
+@@ -7,7 +7,7 @@
+   "scripts": {
+     "generate": "ts-auto-guard src/autopilotapi.ts 2>/dev/null",
+     "build": "npm run generate && tsc -b",
+-    "watch": "tsc --declaration --watch",
++    "watch": "tsc --watch",
+     "prepublishOnly": "npm run build",
+     "prettier": "prettier -w src/",
+     "lint": "eslint --ext .ts --ext .js --fix src/",
+diff --git a/packages/server-api/src/deltas.ts b/packages/server-api/src/deltas.ts
+index e8787f487..280dbc330 100644
+--- a/packages/server-api/src/deltas.ts
++++ b/packages/server-api/src/deltas.ts
+@@ -55,7 +55,9 @@ export type Update = {
+   timestamp?: Timestamp
+   source?: Source
+   $source?: SourceRef
+-} & ({ values: PathValue[] } | { meta: Meta[] }) // require either values or meta or both
++  values?: PathValue[] | null
++  meta?: Meta[] | null
++}
+ 
+ export function hasValues(u: Update): u is Update & { values: PathValue[] } {
+   return 'values' in u && Array.isArray(u.values)
+diff --git a/src/index.ts b/src/index.ts
+index 9efe4122e..459499c65 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -307,7 +307,7 @@ class Server {
+       }
+     }
+ 
+-    app.streambundle = new StreamBundle(app, app.selfId)
++    app.streambundle = new StreamBundle(app.selfId)
+     new Zones(app.streambundle, (delta: Delta) =>
+       app.handleMessage('self.notificationhandler', delta)
+     )
+diff --git a/src/streambundle.ts b/src/streambundle.ts
+index 6fd24d22f..3cf9e5a3a 100644
+--- a/src/streambundle.ts
++++ b/src/streambundle.ts
+@@ -19,7 +19,6 @@ import {
+   Delta,
+   NormalizedDelta,
+   Path,
+-  ServerAPI,
+   Update,
+   Value,
+   NormalizedMetaDelta
+@@ -36,11 +35,10 @@ export class StreamBundle implements IStreamBundle {
+   selfAllPathsStream: Bacon.Bus<unknown, Value>
+   keys: Bacon.Bus<unknown, Path>
+   availableSelfPaths: { [key: Path]: true }
+-  app: ServerAPI
+   metaBus: Bacon.Bus<unknown, NormalizedMetaDelta>
+   selfMetaBus: Bacon.Bus<unknown, NormalizedMetaDelta>
+ 
+-  constructor(app: ServerAPI, selfId: string) {
++  constructor(selfId: string) {
+     this.selfContext = 'vessels.' + selfId
+     this.buses = {}
+     this.allPathsBus = new Bacon.Bus()
+@@ -50,7 +48,6 @@ export class StreamBundle implements IStreamBundle {
+     this.selfAllPathsStream = new Bacon.Bus()
+     this.keys = new Bacon.Bus()
+     this.availableSelfPaths = {}
+-    this.app = app
+     this.metaBus = new Bacon.Bus()
+     this.selfMetaBus = new Bacon.Bus()
+   }
+@@ -66,7 +63,7 @@ export class StreamBundle implements IStreamBundle {
+             timestamp: update.timestamp! // TSTODO: make optional/required match
+           }
+ 
+-          if ('meta' in update) {
++          if ('meta' in update && Array.isArray(update.meta)) {
+             update.meta.forEach((meta) => {
+               this.push(meta.path, {
+                 ...base,
+@@ -77,7 +74,7 @@ export class StreamBundle implements IStreamBundle {
+             })
+           }
+ 
+-          if ('values' in update) {
++          if ('values' in update && Array.isArray(update.values)) {
+             update.values.forEach((pathValue) => {
+               this.push(pathValue.path, {
+                 ...base,
+@@ -87,7 +84,7 @@ export class StreamBundle implements IStreamBundle {
+               })
+             })
+           }
+-        }, this)
++        })
+       }
+     } catch (e) {
+       console.error(e)
