@@ -1,6 +1,6 @@
 diff --git a/src/baseDeltaFilter.ts b/src/baseDeltaFilter.ts
 new file mode 100644
-index 00000000..401fc60a
+index 00000000..4ed10055
 --- /dev/null
 +++ b/src/baseDeltaFilter.ts
 @@ -0,0 +1,282 @@
@@ -27,7 +27,7 @@ index 00000000..401fc60a
 + * @param pathToRemove - Array of UpdateValue objects specifying paths/values to remove
 + * @returns Filtered update object or array
 + */
-+export function filterUpdates(update: Update | any[], pathToRemove: UpdateValue[]): Update | any[] {
++export function filterUpdates(update: any, pathToRemove: any): any {
 +  if (Array.isArray(update)) {
 +    // If input is an array, recursively filter each item
 +    return update.map(item => filterUpdates(item, pathToRemove));
@@ -39,7 +39,7 @@ index 00000000..401fc60a
 +
 +    // Filter out values that match any of the paths to remove
 +    const filteredValues = consolidated.filter(updateValue => {
-+      return !pathToRemove.some(removeItem => {
++      return !pathToRemove.some((removeItem: UpdateValue) => {
 +        if (updateValue.path === '' && removeItem.path === '') {
 +          // Special case for root paths - check property matching
 +          return hasMatchingProperties(updateValue.value, removeItem.value);
@@ -240,10 +240,10 @@ index 00000000..401fc60a
 +  }>;
 +}
 +
-+export function extractPathValuePairs(data: InputData): PathValuePair[] {
-+  const result: PathValuePair[] = [];
++export function extractPathValuePairs(data: any) {
++  const result: any = [];
 +
-+  data.values.forEach(item => {
++  data.values.forEach((item: { path: string; value: any }) => {
 +    if (item.path === "") {
 +      // Handle root level properties
 +      if (typeof item.value === 'object' && item.value !== null) {
@@ -288,7 +288,7 @@ index 00000000..401fc60a
 +export type { PathValuePair, InputData };
 \ No newline at end of file
 diff --git a/src/index.ts b/src/index.ts
-index 9efe4122..47a08a28 100644
+index 459499c6..452304a7 100644
 --- a/src/index.ts
 +++ b/src/index.ts
 @@ -66,6 +66,7 @@ import { WithProviderStatistics } from './deltastats'
@@ -316,7 +316,7 @@ index 9efe4122..47a08a28 100644
 +                pathsToRemove = extractPathValuePairs(update)
 +                //console.log('Extracted paths:', pathsToRemove);
 +            } else if (pathsToRemove) {
-+                data.updates = data.updates.map((update: any) =>
++                data.updates = (data.updates ?? []).map((update) =>
 +                    filterUpdates(update, pathsToRemove)
 +                ).filter(Boolean);
 +                //console.log(JSON.stringify(data.updates, null, 2));
