@@ -288,7 +288,7 @@ index 00000000..4ed10055
 +export type { PathValuePair, InputData };
 \ No newline at end of file
 diff --git a/src/index.ts b/src/index.ts
-index 50993ec3..61c9e9b4 100644
+index 50993ec3..8c9464e3 100644
 --- a/src/index.ts
 +++ b/src/index.ts
 @@ -66,6 +66,7 @@ import { WithProviderStatistics } from './deltastats'
@@ -307,7 +307,7 @@ index 50993ec3..61c9e9b4 100644
      app.handleMessage = (
        providerId: string,
        data: Partial<Delta>,
-@@ -305,6 +307,17 @@ class Server {
+@@ -305,6 +307,19 @@ class Server {
                delete update.meta
              }
 
@@ -316,8 +316,10 @@ index 50993ec3..61c9e9b4 100644
 +                pathsToRemove = extractPathValuePairs(update)
 +                console.log('Extracted paths:', pathsToRemove);
 +              } else if (pathsToRemove) {
-+                update = filterUpdates(update, pathsToRemove)
-+                console.log(JSON.stringify(update, null, 2));
++                const updateMod = filterUpdates(update, pathsToRemove)
++                if (updateMod !== update) {
++                  console.log(JSON.stringify(update, null, 2));
++                }
 +                return update
 +              }
 +            }
