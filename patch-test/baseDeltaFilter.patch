@@ -288,7 +288,7 @@ index 00000000..4ed10055
 +export type { PathValuePair, InputData };
 \ No newline at end of file
 diff --git a/src/index.ts b/src/index.ts
-index 50993ec3..27cee02b 100644
+index 50993ec3..61c9e9b4 100644
 --- a/src/index.ts
 +++ b/src/index.ts
 @@ -66,6 +66,7 @@ import { WithProviderStatistics } from './deltastats'
@@ -313,12 +313,12 @@ index 50993ec3..27cee02b 100644
 
 +            if (data.context === `vessels.${app.selfId}` && 'values' in update) {
 +              if (pathsToRemove.length === 0 && update.$source === 'defaults') {
-+                  pathsToRemove = extractPathValuePairs(update)
-+                  //console.log('Extracted paths:', pathsToRemove);
++                pathsToRemove = extractPathValuePairs(update)
++                console.log('Extracted paths:', pathsToRemove);
 +              } else if (pathsToRemove) {
-+                  filterUpdates(update, pathsToRemove)
-+                  //console.log(JSON.stringify(data.updates, null, 2));
-+                  return update as Update
++                update = filterUpdates(update, pathsToRemove)
++                console.log(JSON.stringify(update, null, 2));
++                return update
 +              }
 +            }
 +
