@@ -1,4 +1,5 @@
-FROM ghcr.io/kegustafsson/signalk-server-base:latest AS base
+ARG UBUNTU_VERSION
+FROM ghcr.io/kegustafsson/signalk-server-base:latest-${UBUNTU_VERSION} AS base
 
 USER node
 RUN mkdir -p /home/node/.signalk/ /home/node/signalk/ \
@@ -17,7 +18,7 @@ FROM base AS tarballs_installed
 WORKDIR /home/node/signalk
 COPY *.tgz .
 USER root
-RUN npm in -g signalk-server-*.tgz \
+RUN npm in -g *.tgz \
   && mv /usr/lib/node_modules/@signalk/* /usr/lib/node_modules/signalk-server/node_modules/@signalk/ \
   && cp *.tgz /usr/lib/node_modules/signalk-server/ \
   && ls -la /usr/lib/node_modules/signalk-server/*.tgz \
@@ -31,7 +32,7 @@ USER node
 COPY --chown=node docker/startup.sh /home/node/signalk/startup.sh
 RUN chmod +x /home/node/signalk/startup.sh
 EXPOSE 3000
-ENV IS_IN_DOCKER true
-ENV SKIP_ADMINUI_VERSION_CHECK true
+ENV IS_IN_DOCKER=true
+ENV SKIP_ADMINUI_VERSION_CHECK=true
 WORKDIR /home/node/.signalk
 ENTRYPOINT ["/home/node/signalk/startup.sh"]

@@ -26,18 +26,13 @@ jobs:
       - name: signalk-server build
         run: |
           cd signalk-server
+          mv ./../*.tgz .
           rm -f package-lock.json
           rm -rf node_modules
           npm install --package-lock-only
           npm ci && npm cache clean --force
-          npm run build --workspaces --if-present
+          npm run build:all
           npm pack --workspaces
-          ls -la *.tgz
-          cat package.json
-          jq '.workspaces=[]' package.json > _package.json && mv _package.json package.json
-          npm i --save *.tgz
-          cat package.json
-          npm run build
           rm typedoc-signalk-theme*.tgz # This is only needed as a dev dependency
           npm pack
       - name: Save tag to artifact
@@ -132,11 +127,6 @@ jobs:
           registry: ghcr.io
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
-      - name: Modify Dockerfile for build
-        run: |
-          sed -i \
-            "s|:latest|:latest-${{ matrix.os }}|g" \
-            ./docker/Dockerfile
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
@@ -146,6 +136,8 @@ jobs:
           push: true
           tags: |
             ghcr.io/kegustafsson/signalk-server:${{ matrix.arch }}-${{ matrix.os }}-${{ github.run_id }}
+          build-args: |
+            UBUNTU_VERSION=${{ matrix.os }}
 
   create-and-push-manifest:
     needs: [build_docker_tags, build-images]
