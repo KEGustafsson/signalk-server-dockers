@@ -1,9 +1,9 @@
 version: 2
 updates:
   # Enable version updates for npm
-  - package-ecosystem: "npm"
+  - package-ecosystem: "docker-compose"
     # Look for `package.json` and `lock` files in the `root` directory
-    directory: "/"
+    directory: "/docker/"
     # Check the npm registry for updates every day (weekdays)
     schedule:
       interval: "weekly"
@@ -11,7 +11,7 @@ updates:
   # Enable version updates for Docker
   - package-ecosystem: "docker"
     # Look for a `Dockerfile` in the `root` directory
-    directory: "/"
+    directory: "/docker/"
     # Check for updates once a week
     schedule:
       interval: "weekly"
