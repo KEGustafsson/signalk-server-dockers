@@ -1,0 +1,69 @@
+From 4702cf031639e36ff66067b35eeaf983353bf765 Mon Sep 17 00:00:00 2001
+From: Scott Bender <scott@scottbender.net>
+Date: Tue, 29 Apr 2025 10:58:41 -0400
+Subject: [PATCH] fix: deltaPriority code sets update.values to undefined when
+ there are no values
+
+---
+ src/deltaPriority.ts | 43 +++++++++++++++++++++++--------------------
+ 1 file changed, 23 insertions(+), 20 deletions(-)
+
+diff --git a/src/deltaPriority.ts b/src/deltaPriority.ts
+index dc0e48575..b66b73897 100644
+--- a/src/deltaPriority.ts
++++ b/src/deltaPriority.ts
+@@ -145,31 +145,34 @@ export const getToPreferredDelta = (
+       const millis = now.getTime()
+       delta.updates &&
+         delta.updates.forEach((update: any) => {
+-          update.values =
+-            update.values &&
+-            update.values.reduce((acc: any, pathValue: PathValue) => {
+-              const latest = getLatest(
+-                delta.context as Context,
+-                pathValue.path as Path
+-              )
+-              const isPreferred = isPreferredValue(
+-                pathValue.path as Path,
+-                latest,
+-                update.$source,
+-                millis
+-              )
+-              if (isPreferred) {
+-                setLatest(
++          if ('values' in update) {
++            update.values = update.values.reduce(
++              (acc: any, pathValue: PathValue) => {
++                const latest = getLatest(
+                   delta.context as Context,
++                  pathValue.path as Path
++                )
++                const isPreferred = isPreferredValue(
+                   pathValue.path as Path,
+-                  update.$source as SourceRef,
++                  latest,
++                  update.$source,
+                   millis
+                 )
+-                acc.push(pathValue)
++                if (isPreferred) {
++                  setLatest(
++                    delta.context as Context,
++                    pathValue.path as Path,
++                    update.$source as SourceRef,
++                    millis
++                  )
++                  acc.push(pathValue)
++                  return acc
++                }
+                 return acc
+-              }
+-              return acc
+-            }, [])
++              },
++              []
++            )
++          }
+         })
+     }
+     return delta
