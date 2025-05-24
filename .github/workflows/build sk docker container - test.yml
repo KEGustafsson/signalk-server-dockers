@@ -95,8 +95,8 @@ jobs:
       - name: signalk-server download and patch
         id: git
         run: |
-          # git clone https://github.com/SignalK/signalk-server.git
-          git clone -b redirects https://github.com/KEGustafsson/signalk-server.git
+          git clone https://github.com/SignalK/signalk-server.git
+          # git clone -b redirects https://github.com/KEGustafsson/signalk-server.git
           cd signalk-server
           git fetch --tags
           tag=$(git describe --tags `git rev-list --tags --max-count=1`)
@@ -129,12 +129,16 @@ jobs:
           mv ./../*.tgz .
           rm -f package-lock.json
           rm -rf node_modules
+          npm cache clean -f
+          npm install npm@latest -g
           npm install --package-lock-only
           npm ci && npm cache clean --force
           npm run build:all
           npm pack --workspaces
           rm typedoc-signalk-theme*.tgz # This is only needed as a dev dependency
+          ls -la ./doc
           npm pack
+          ls -la ./doc
       - name: Save tag to artifact
         run: echo ${{ steps.git.outputs.tag }} > tag.txt
       - name: Upload tag
