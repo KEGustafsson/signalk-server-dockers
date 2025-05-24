@@ -136,9 +136,9 @@ jobs:
           npm run build:all
           npm pack --workspaces
           rm typedoc-signalk-theme*.tgz # This is only needed as a dev dependency
-          ls -la ./doc
+          ls -la ./docs
           npm pack
-          ls -la ./doc
+          ls -la ./docs
       - name: Save tag to artifact
         run: echo ${{ steps.git.outputs.tag }} > tag.txt
       - name: Upload tag
