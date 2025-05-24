@@ -95,8 +95,8 @@ jobs:
       - name: signalk-server download and patch
         id: git
         run: |
-          git clone https://github.com/SignalK/signalk-server.git
-          # git clone -b redirects https://github.com/KEGustafsson/signalk-server.git
+          # git clone https://github.com/SignalK/signalk-server.git
+          git clone -b redirects https://github.com/KEGustafsson/signalk-server.git
           cd signalk-server
           git fetch --tags
           tag=$(git describe --tags `git rev-list --tags --max-count=1`)
@@ -136,9 +136,7 @@ jobs:
           npm run build:all
           npm pack --workspaces
           rm typedoc-signalk-theme*.tgz # This is only needed as a dev dependency
-          ls -la ./docs
           npm pack
-          ls -la ./docs
       - name: Save tag to artifact
         run: echo ${{ steps.git.outputs.tag }} > tag.txt
       - name: Upload tag
