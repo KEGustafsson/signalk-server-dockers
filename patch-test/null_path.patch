@@ -127,56 +127,52 @@ From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
 Date: Sun, 1 Sep 2024 12:26:41 +0300
 Subject: [PATCH 3/4] fix null
 
----
- src/deltaPriority.ts | 32 +++++++++++++++++---------------
- 1 file changed, 17 insertions(+), 15 deletions(-)
-
 diff --git a/src/deltaPriority.ts b/src/deltaPriority.ts
-index cb0b0e682..89695a3eb 100644
+index b66b7389..7da37df1 100644
 --- a/src/deltaPriority.ts
 +++ b/src/deltaPriority.ts
-@@ -149,27 +149,29 @@ export const getToPreferredDelta = (
-           update.values =
-             update.values &&
-             update.values.reduce((acc: any, pathValue: PathValue) => {
--              const latest = getLatest(
--                delta.context as Context,
--                pathValue.path as Path
--              )
--              const isPreferred = isPreferredValue(
--                pathValue.path as Path,
--                latest,
--                update.$source,
--                millis
--              )
--              if (isPreferred) {
--                setLatest(
-+              if (pathValue != null) {
-+                const latest = getLatest(
-                   delta.context as Context,
-+                  pathValue.path as Path
-+                )
-+                const isPreferred = isPreferredValue(
-                   pathValue.path as Path,
--                  update.$source as SourceRef,
-+                  latest,
-+                  update.$source,
-                   millis
-                 )
--                acc.push(pathValue)
-+                if (isPreferred) {
-+                  setLatest(
-+                    delta.context as Context,
-+                    pathValue.path as Path,
-+                    update.$source as SourceRef,
-+                    millis
+@@ -148,27 +148,29 @@ export const getToPreferredDelta = (
+           if ('values' in update) {
+             update.values = update.values.reduce(
+               (acc: any, pathValue: PathValue) => {
+-                const latest = getLatest(
+-                  delta.context as Context,
+-                  pathValue.path as Path
+-                )
+-                const isPreferred = isPreferredValue(
+-                  pathValue.path as Path,
+-                  latest,
+-                  update.$source,
+-                  millis
+-                )
+-                if (isPreferred) {
+-                  setLatest(
++                if (pathValue != null) {
++                  const latest = getLatest(
+                     delta.context as Context,
++                    pathValue.path as Path
 +                  )
-+                  acc.push(pathValue)
-+                  return acc
-+                }
-                 return acc
-               }
--              return acc
-             }, [])
-         })
-     }
++                  const isPreferred = isPreferredValue(
+                     pathValue.path as Path,
+-                    update.$source as SourceRef,
++                    latest,
++                    update.$source,
+                     millis
+                   )
+-                  acc.push(pathValue)
++                  if (isPreferred) {
++                    setLatest(
++                      delta.context as Context,
++                      pathValue.path as Path,
++                      update.$source as SourceRef,
++                      millis
++                    )
++                    acc.push(pathValue)
++                    return acc
++                  }
+                   return acc
+                 }
+-                return acc
+               },
+               []
+             )
