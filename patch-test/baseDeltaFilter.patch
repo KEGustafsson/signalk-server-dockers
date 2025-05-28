@@ -1,457 +1,119 @@
-diff --git a/src/baseDeltaFilter.ts b/src/baseDeltaFilter.ts
-new file mode 100644
-index 00000000..4ed10055
---- /dev/null
-+++ b/src/baseDeltaFilter.ts
-@@ -0,0 +1,282 @@
-+/**
-+ * Interface representing a single update value with a path and value
-+ */
-+export interface UpdateValue {
-+  path: string;
-+  value: any;
-+}
-+
-+/**
-+ * Interface representing an update operation which may contain multiple values
-+ * and additional arbitrary properties
-+ */
-+export interface Update {
-+  values?: UpdateValue[];
-+  [key: string]: any;
-+}
-+
-+/**
-+ * Filters out specified paths from an update object or array
-+ * @param update - The update object or array to filter
-+ * @param pathToRemove - Array of UpdateValue objects specifying paths/values to remove
-+ * @returns Filtered update object or array
-+ */
-+export function filterUpdates(update: any, pathToRemove: any): any {
-+  if (Array.isArray(update)) {
-+    // If input is an array, recursively filter each item
-+    return update.map(item => filterUpdates(item, pathToRemove));
-+  }
-+
-+  if (update.values && Array.isArray(update.values)) {
-+    // Consolidate root paths (empty string paths) first
-+    const consolidated = consolidateRootPaths(update.values);
-+
-+    // Filter out values that match any of the paths to remove
-+    const filteredValues = consolidated.filter(updateValue => {
-+      return !pathToRemove.some((removeItem: UpdateValue) => {
-+        if (updateValue.path === '' && removeItem.path === '') {
-+          // Special case for root paths - check property matching
-+          return hasMatchingProperties(updateValue.value, removeItem.value);
-+        }
-+        return isMatchingPathValue(updateValue, removeItem);
-+      });
-+    });
-+
-+    // Reconstruct values to remove nested properties from remaining objects
-+    const reconstructedValues = reconstructValues(filteredValues, pathToRemove);
-+
-+    return {
-+      ...update,
-+      values: reconstructedValues
-+    };
-+  }
-+
-+  return update;
-+}
-+
-+/**
-+ * Consolidates multiple root path updates (empty string paths) into a single update
-+ * @param values - Array of UpdateValue objects
-+ * @returns Consolidated array of UpdateValue objects
-+ */
-+function consolidateRootPaths(values: UpdateValue[] | null | undefined): UpdateValue[] {
-+  if (!values) {
-+      return [];
-+  }
-+  const rootValues = values.filter((v): v is UpdateValue => v !== null && v !== undefined && v.path === '');
-+  const otherValues = values.filter((v): v is UpdateValue => v !== null && v !== undefined && v.path !== '');
-+  if (rootValues.length <= 1) {
-+      return values.filter((v): v is UpdateValue => v !== null && v !== undefined);
-+  }
-+  const mergedRootValue = rootValues.reduce((acc, curr) => {
-+      return { path: '', value: deepMerge(acc.value, curr.value) };
-+  }, { path: '', value: {} });
-+
-+  return [mergedRootValue, ...otherValues];
-+}
-+/**
-+ * Deep merges two objects
-+ * @param target - Target object to merge into
-+ * @param source - Source object to merge from
-+ * @returns Merged object
-+ */
-+function deepMerge(target: any, source: any): any {
-+  for (const key in source) {
-+    if (source[key] instanceof Object && !Array.isArray(source[key])) {
-+      // Recursively merge objects
-+      target[key] = deepMerge(target[key] || {}, source[key]);
-+    } else {
-+      // Assign primitive values or arrays directly
-+      target[key] = source[key];
-+    }
-+  }
-+  return target;
-+}
-+
-+/**
-+ * Checks if two UpdateValue objects match based on their paths and values
-+ * @param updateValue - UpdateValue to check
-+ * @param removeItem - UpdateValue to compare against
-+ * @returns True if paths/values match, false otherwise
-+ */
-+function isMatchingPathValue(updateValue: UpdateValue, removeItem: UpdateValue): boolean {
-+  if (updateValue.path === removeItem.path) {
-+    return true;
-+  }
-+
-+  // Handle cases where one path is root ('') and the other is nested
-+  if (updateValue.path === '') {
-+    const nestedPath = getNestedValue(updateValue.value, removeItem.path);
-+    return nestedPath !== undefined;
-+  }
-+
-+  if (removeItem.path === '') {
-+    const nestedPath = getNestedValue(removeItem.value, updateValue.path);
-+    return nestedPath !== undefined;
-+  }
-+
-+  return false;
-+}
-+
-+/**
-+ * Checks if an object contains all properties matching a pattern object
-+ * @param obj - Object to check
-+ * @param pattern - Pattern object to match against
-+ * @returns True if all pattern properties match, false otherwise
-+ */
-+function hasMatchingProperties(obj: any, pattern: any): boolean {
-+  if (typeof pattern !== 'object' || pattern === null) {
-+    return isValueMatch(obj, pattern);
-+  }
-+
-+  return Object.keys(pattern).every(key => {
-+    if (!(key in obj)) return false;
-+    return hasMatchingProperties(obj[key], pattern[key]);
-+  });
-+}
-+
-+/**
-+ * Compares two values for equality with case-insensitive string comparison
-+ * @param value - First value to compare
-+ * @param pattern - Second value to compare
-+ * @returns True if values match, false otherwise
-+ */
-+function isValueMatch(value: any, pattern: any): boolean {
-+  if (typeof value === 'string' && typeof pattern === 'string') {
-+    return value.toLowerCase() === pattern.toLowerCase();
-+  }
-+  return value === pattern;
-+}
-+
-+/**
-+ * Gets a nested value from an object using dot notation path
-+ * @param obj - Object to traverse
-+ * @param path - Dot notation path (e.g., 'a.b.c')
-+ * @returns The value at the specified path or undefined if not found
-+ */
-+function getNestedValue(obj: any, path: string): any {
-+  if (!path) return obj;
-+  return path.split('.').reduce((acc, part) => acc?.[part], obj);
-+}
-+
-+/**
-+ * Reconstructs values by removing nested properties that match removal patterns
-+ * @param values - Array of UpdateValue objects to process
-+ * @param pathToRemove - Array of UpdateValue objects specifying removal patterns
-+ * @returns Array of reconstructed UpdateValue objects
-+ */
-+function reconstructValues(values: UpdateValue[], pathToRemove: UpdateValue[]): UpdateValue[] {
-+  return values.map(updateValue => {
-+    if (typeof updateValue.value !== 'object' || updateValue.value === null) {
-+      return updateValue;
-+    }
-+
-+    // Find removal patterns that match this updateValue's path
-+    const removePatterns = pathToRemove.filter(removeItem => {
-+      if (removeItem.path !== updateValue.path) return false;
-+      return typeof removeItem.value === 'object' && removeItem.value !== null;
-+    });
-+
-+    if (removePatterns.length === 0) return updateValue;
-+
-+    // Deep clone and remove matched properties
-+    const newValue = deepCloneAndRemove(updateValue.value, removePatterns);
-+    return { ...updateValue, value: newValue };
-+  });
-+}
-+
-+/**
-+ * Deep clones an object while removing properties that match removal patterns
-+ * @param obj - Object to clone and modify
-+ * @param removePatterns - Array of UpdateValue objects specifying removal patterns
-+ * @returns New object with specified properties removed
-+ */
-+function deepCloneAndRemove(obj: any, removePatterns: UpdateValue[]): any {
-+  const result = Array.isArray(obj) ? [...obj] : { ...obj };
-+
-+  for (const pattern of removePatterns) {
-+    for (const key in pattern.value) {
-+      if (key in result) {
-+        if (typeof pattern.value[key] === 'object' && pattern.value[key] !== null) {
-+          // Recursively process nested objects
-+          result[key] = deepCloneAndRemove(result[key], [{
-+            path: pattern.path,
-+            value: pattern.value[key]
-+          }]);
-+          // Remove empty objects
-+          if (Object.keys(result[key]).length === 0) {
-+            delete result[key];
-+          }
-+        } else if (isValueMatch(result[key], pattern.value[key])) {
-+          // Remove matching primitive values
-+          delete result[key];
-+        }
-+      }
-+    }
-+  }
-+
-+  return result;
-+}
-+
-+//------------------ Extract path and value pairs from baseDelta------------------
-+// This function is used to extract path and value pairs from the baseDelta object
-+// and return them in a flattened array. Used for filtering of SK data streams.
-+
-+interface PathValuePair {
-+  path: string;
-+  value: any; // Consider using a more specific type if possible
-+}
-+
-+interface InputData {
-+  values: Array<{
-+    path: string;
-+    value: any; // Consider using a more specific type if possible
-+  }>;
-+}
-+
-+export function extractPathValuePairs(data: any) {
-+  const result: any = [];
-+
-+  data.values.forEach((item: { path: string; value: any }) => {
-+    if (item.path === "") {
-+      // Handle root level properties
-+      if (typeof item.value === 'object' && item.value !== null) {
-+        Object.entries(item.value).forEach(([key, value]) => {
-+          if (typeof value === 'object' && value !== null) {
-+            Object.entries(value).forEach(([subKey, subValue]) => {
-+              result.push({
-+                path: key,
-+                value: { [subKey]: subValue }
-+              });
-+            });
-+          } else {
-+            result.push({
-+              path: "",
-+              value: { [key]: value }
-+            });
-+          }
-+        });
-+      }
-+    } else {
-+      // Handle nested paths
-+      if (typeof item.value === 'object' && item.value !== null) {
-+        Object.entries(item.value).forEach(([key, value]) => {
-+          result.push({
-+            path: item.path,
-+            value: { [key]: value }
-+          });
-+        });
-+      } else {
-+        result.push({
-+          path: item.path,
-+          value: item.value
-+        });
-+      }
-+    }
-+  });
-+
-+  return result;
-+}
-+
-+// Optionally export the interfaces if they need to be used elsewhere
-+export type { PathValuePair, InputData };
-\ No newline at end of file
+From 5c1ebc674fea827d20a6caaadef051c775a3f251 Mon Sep 17 00:00:00 2001
+From: Scott Bender <scott@scottbender.net>
+Date: Wed, 28 May 2025 13:12:56 -0400
+Subject: [PATCH 1/2] fix: ignore static self data
+
+---
+ src/index.ts | 57 +++++++++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 54 insertions(+), 3 deletions(-)
+
 diff --git a/src/index.ts b/src/index.ts
-index 50993ec3..46d7e2ac 100644
+index 50993ec37..6ac11cd64 100644
 --- a/src/index.ts
 +++ b/src/index.ts
-@@ -66,6 +66,7 @@ import { WithProviderStatistics } from './deltastats'
- import { pipedProviders } from './pipedproviders'
- import { EventsActorId, WithWrappedEmitter, wrapEmitter } from './events'
- import { Zones } from './zones'
-+import { filterUpdates, extractPathValuePairs } from './baseDeltaFilter'
- const debug = createDebug('signalk-server')
-
- import { StreamBundle } from './streambundle'
-@@ -264,6 +265,7 @@ class Server {
-     }
-     app.activateSourcePriorities()
-
-+    let pathsToRemove: any = []
-     app.handleMessage = (
-       providerId: string,
-       data: Partial<Delta>,
-@@ -305,6 +307,21 @@ class Server {
-               delete update.meta
-             }
-
-+            if (data.context === `vessels.${app.selfId}` && 'values' in update) {
-+              if (pathsToRemove.length === 0 && update.$source === 'defaults') {
-+                pathsToRemove = extractPathValuePairs(update)
-+                debug('Extracted paths:', pathsToRemove);
-+              } else if (pathsToRemove) {
-+                const updateMod = filterUpdates(update, pathsToRemove)
-+                if (JSON.stringify(updateMod) !== JSON.stringify(update)) {
-+                  debug(JSON.stringify(update, null, 2));
-+                  debug(JSON.stringify(updateMod, null, 2));
-+                  debug("----------------------------------------------");
-+                }
-+                return updateMod
-+              }
+@@ -315,11 +315,13 @@ class Server {
+         if (data.updates.length < 1) return
+ 
+         try {
+-          const preferredDelta = toPreferredDelta(data, now, app.selfContext)
++          let delta = filterStaticSelfData(data, app.selfContext)
++          delta = toPreferredDelta(delta, now, app.selfContext)
++
+           if (skVersion == SKVersion.v1) {
+-            deltachainV1.process(preferredDelta)
++            deltachainV1.process(delta)
+           } else {
+-            deltachainV2.process(preferredDelta)
++            deltachainV2.process(delta)
+           }
+         } catch (err) {
+           console.error(err)
+@@ -673,3 +675,52 @@ async function startInterfaces(
+     })
+   )
+ }
++
++function filterStaticSelfData(delta: any, selfContext: string) {
++  if (delta.context === selfContext) {
++    delta.updates &&
++      delta.updates.forEach((update: any) => {
++        if ('values' in update) {
++          update.values = update.values.reduce((acc: any, pathValue: any) => {
++            const nvp = filterSelfDataKP(pathValue)
++            if (nvp) {
++              acc.push(nvp)
 +            }
++            return acc
++          }, [])
++          if (update.values.length == 0) {
++            delete update.values
++          }
++        }
++      })
++  }
++  return delta
++}
 +
-             if ('values' in update || 'meta' in update) {
-               return update as Update
-             }
-diff --git a/test/baseDeltaFilter.js b/test/baseDeltaFilter.js
-new file mode 100644
-index 00000000..f3aff587
---- /dev/null
-+++ b/test/baseDeltaFilter.js
-@@ -0,0 +1,119 @@
-+const { expect } = require('chai');
-+const { filterUpdates } = require('../dist/baseDeltaFilter.js');
++function filterSelfDataKP(pathValue: any) {
++  const emptyKeys = ['name', 'mmsi']
 +
-+describe('filterUpdates', () => {
-+  const pathToRemove = [
-+    { path: "", value: { name: "GenericVessel" } },
-+    { path: "", value: { mmsi: "123456789" } },
-+    { path: "communication", value: { callsignVhf: "GEN123" } },
-+    { path: "design.aisShipType", value: { name: "GenericType" } },
-+    { path: "design.aisShipType", value: { id: 42 } },
-+    { path: "design.draft", value: { maximum: 1.5 } },
-+    { path: "design.length", value: { overall: 15 } },
-+    { path: "design.beam", value: 5 },
-+    { path: "sensors.gps.fromBow", value: 7 },
-+    { path: "sensors.gps.fromCenter", value: 1 },
-+    { path: "design.airHeight", value: 5 }
-+  ];
++  const filteredPaths = [
++    'design.aisShipType',
++    'design.beam',
++    'design.length',
++    'design.draft',
++    'sensors.gps.fromBow',
++    'sensors.gps.fromCenter'
++  ]
 +
-+  describe('basic filtering', () => {
-+    it('should remove exact matches at root path', () => {
-+      const update = {
-+        values: [
-+          { path: "", value: { mmsi: "123456789" } },
-+          { path: "", value: { name: "genericvessel" } } // case insensitive
-+        ]
-+      };
-+
-+      const result = filterUpdates(update, pathToRemove);
-+      expect(result.values).to.have.length(0);
-+    });
-+
-+    it('should remove nested matches in root path', () => {
-+      const update = {
-+        values: [
-+          { path: "", value: { communication: { callsignVhf: "GEN123" } } }
-+        ]
-+      };
-+
-+      const result = filterUpdates(update, pathToRemove);
-+      expect(result.values).to.have.length(0);
-+    });
-+
-+    it('should remove specific path matches', () => {
-+      const update = {
-+        values: [
-+          { path: "design.length", value: { overall: 15 } },
-+          { path: "design.beam", value: 5 }
-+        ]
-+      };
-+
-+      const result = filterUpdates(update, pathToRemove);
-+      expect(result.values).to.have.length(0);
-+    });
-+  });
-+
-+  describe('edge cases', () => {
-+    it('should handle empty update', () => {
-+      const update = { values: [] };
-+      const result = filterUpdates(update, pathToRemove);
-+      expect(result.values).to.have.length(0);
-+    });
-+
-+    it('should preserve non-matching values', () => {
-+      const update = {
-+        values: [
-+          { path: "navigation.position", value: { latitude: 60.1, longitude: 22.3 } },
-+          { path: "sensors.ais.fromBow", value: 5 }
-+        ]
-+      };
-+
-+      const result = filterUpdates(update, pathToRemove);
-+      expect(result.values).to.have.length(2);
-+    });
-+
-+    it('should handle array input', () => {
-+      const updates = [
-+        { values: [{ path: "", value: { mmsi: "123456789" } }] },
-+        { values: [{ path: "design.length", value: { overall: 15 } }] }
-+      ];
-+
-+      const results = filterUpdates(updates, pathToRemove);
-+      expect(results).to.have.length(2);
-+      expect(results[0].values).to.have.length(0);
-+      expect(results[1].values).to.have.length(0);
-+    });
-+
-+    it('should handle case variations in string values', () => {
-+      const update = {
-+        values: [
-+          { path: "", value: { name: "genericvessel" } }, // lowercase
-+          { path: "design.aisShipType", value: { name: "GENERICTYPE" } } // uppercase
-+        ]
-+      };
-+
-+      const result = filterUpdates(update, pathToRemove);
-+      expect(result.values).to.have.length(0);
-+    });
-+  });
-+
-+  describe('real-world scenarios', () => {
-+    it('should filter complex update with mixed matches', () => {
-+      const update = {
-+        values: [
-+          { path: "", value: { mmsi: "123456789", name: "GenericVessel" } },
-+          { path: "design.length", value: { overall: 15 } },
-+          { path: "sensors.ais.fromBow", value: 5 }, // Should keep
-+          { path: "", value: { communication: { callsignVhf: "GEN123" } } },
-+          { path: "design.aisShipType", value: { id: 42, name: "GenericType" } },
-+          { path: "navigation.speed", value: 10 } // Should keep
-+        ]
-+      };
-+
-+      const result = filterUpdates(update, pathToRemove);
-+      expect(result.values).to.have.length(2);
-+      expect(result.values.find(v => v.path === "sensors.ais.fromBow")).to.exist;
-+      expect(result.values.find(v => v.path === "navigation.speed")).to.exist;
-+    });
-+  });
-+});
-\ No newline at end of file
++  if (pathValue.path === '') {
++    if (Object.keys(pathValue.value).some((k) => emptyKeys.includes(k))) {
++      const value = pathValue.value
++      pathValue.value = {}
++      Object.keys(value).forEach((k) => {
++        if (!emptyKeys.includes(k)) {
++          pathValue.value[k] = value[k]
++        }
++      })
++    }
++  } else if (filteredPaths.includes(pathValue.path)) {
++    return null
++  }
++  return pathValue
++}
+
+From 462c6edfe72c70ab6df51045fdd18a18dded8831 Mon Sep 17 00:00:00 2001
+From: Scott Bender <scott@scottbender.net>
+Date: Wed, 28 May 2025 13:36:03 -0400
+Subject: [PATCH 2/2] fix: allow messages from defaults through
+
+---
+ src/index.ts       | 2 +-
+ test/deltacache.js | 1 +
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/index.ts b/src/index.ts
+index 6ac11cd64..90cf6004c 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -680,7 +680,7 @@ function filterStaticSelfData(delta: any, selfContext: string) {
+   if (delta.context === selfContext) {
+     delta.updates &&
+       delta.updates.forEach((update: any) => {
+-        if ('values' in update) {
++        if ('values' in update && update['$source'] !== 'defaults') {
+           update.values = update.values.reduce((acc: any, pathValue: any) => {
+             const nvp = filterSelfDataKP(pathValue)
+             if (nvp) {
+diff --git a/test/deltacache.js b/test/deltacache.js
+index abfe21978..358df64b0 100644
+--- a/test/deltacache.js
++++ b/test/deltacache.js
+@@ -46,6 +46,7 @@ const testDelta = {
+     },
+     {
+       timestamp: '2014-05-03T09:14:11.096Z',
++      $source: 'defaults',
+       values: [
+         {
+           path: '',

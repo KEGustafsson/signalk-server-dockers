@@ -176,6 +176,8 @@ jobs:
           mv ./../*.tgz .
           rm -f package-lock.json
           rm -rf node_modules
+          npm cache clean -f
+          npm install npm@latest -g
           npm install --package-lock-only
           npm ci && npm cache clean --force
           npm run build:all

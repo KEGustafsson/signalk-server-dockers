@@ -95,15 +95,15 @@ jobs:
       - name: signalk-server download and patch
         id: git
         run: |
-          # git clone https://github.com/SignalK/signalk-server.git
-          git clone -b redirects https://github.com/KEGustafsson/signalk-server.git
+          git clone https://github.com/SignalK/signalk-server.git
+          # git clone -b fix https://github.com/KEGustafsson/signalk-server.git
           cd signalk-server
           git fetch --tags
           tag=$(git describe --tags `git rev-list --tags --max-count=1`)
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "Extracted tag: $tag"
-          if [ -d "./../patch" ] && [ "$(ls -A ./../patch/*.patch 2>/dev/null)" ]; then
-            git apply ./../patch/*.patch
+          if [ -d "./../patch-test" ] && [ "$(ls -A ./../patch-test/*.patch 2>/dev/null)" ]; then
+            git apply ./../patch-test/*.patch
           else
             echo "No patches to apply"
           fi
