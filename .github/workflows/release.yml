@@ -1,0 +1,41 @@
+name: Release - build & publish modules and server, build & publish docker containers
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build_all:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org'
+      - run: |
+          git clone https://github.com/SignalK/signalk-server.git
+          cd signalk-server
+          cd packages/server-admin-ui-dependencies
+          npm install --package-lock-only
+          npm ci && npm cache clean --force
+          #npm publish --access public
+          cd ../server-admin-ui
+          npm install --package-lock-only
+          npm ci && npm cache clean --force
+          #npm publish --access public
+          cd ../server-api
+          npm install --package-lock-only
+          npm ci && npm cache clean --force
+          #npm publish --access public
+          cd ../streams
+          npm install --package-lock-only
+          npm ci && npm cache clean --force
+          #npm publish --access public
+          cd ../resources-provider-plugin
+          npm install --package-lock-only
+          npm ci && npm cache clean --force
+          #npm publish --access public
+          cd ../..
+          npm install --package-lock-only
+          npm ci && npm cache clean --force
+
