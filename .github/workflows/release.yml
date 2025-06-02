@@ -29,7 +29,7 @@ jobs:
           cd ../server-admin-ui
           npm install --package-lock-only
           npm ci && npm cache clean --force
-          #npm publish --access public
+          npm run build
           npm publish --dry-run
           ls -la
           echo "---------------------------------------------------"
@@ -37,27 +37,34 @@ jobs:
           cd ../server-api
           npm install --package-lock-only
           npm ci && npm cache clean --force
-          #npm publish --access public
+          npm run build
           npm publish --dry-run
           ls -la
           echo "---------------------------------------------------"
-          echo "building server-plugin"
+          echo "building streams"
           cd ../streams
           npm install --package-lock-only
           npm ci && npm cache clean --force
-          #npm publish --access public
           npm publish --dry-run
           ls -la
           echo "---------------------------------------------------"
-          echo "building server-prvider-plugin"
+          echo "building resources-provider-plugin"
           cd ../resources-provider-plugin
           npm install --package-lock-only
           npm ci && npm cache clean --force
-          #npm publish --access public
+          npm run build
           npm publish --dry-run
           ls -la
           echo "---------------------------------------------------"
-          echo "building signalkserver"          
+          echo "building typedoc-theme"
+          cd ../typedoc-theme
+          npm install --package-lock-only
+          npm ci && npm cache clean --force
+          npm run build
+          npm publish --dry-run
+          ls -la
+          echo "---------------------------------------------------"
+          echo "building signal-kserver"          
           cd ../..
           npm install --package-lock-only
           npm ci && npm cache clean --force
