@@ -269,6 +269,11 @@ jobs:
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
       - name: Login to ghcr.io
+        run: |
+          tags=$(cat docker_tags_${{ matrix.os }}.txt | sed 's/,/\n/g')
+          echo "tag: $tag"
+          echo "tag: ${{ steps.set_images.outputs.IMAGES }}"      
+      - name: Login to ghcr.io
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
