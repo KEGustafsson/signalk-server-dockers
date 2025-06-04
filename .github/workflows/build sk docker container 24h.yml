@@ -227,7 +227,9 @@ jobs:
         run: |
           if [[ "${{ steps.vars.outputs.tag }}" == *beta* ]]; then
             tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.os }}"
             tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:latest-${{ matrix.os }}"
           else
             tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }}"
