@@ -1,7 +1,7 @@
 From 5c1ebc674fea827d20a6caaadef051c775a3f251 Mon Sep 17 00:00:00 2001
 From: Scott Bender <scott@scottbender.net>
 Date: Wed, 28 May 2025 13:12:56 -0400
-Subject: [PATCH 1/3] fix: ignore static self data
+Subject: [PATCH 1/4] fix: ignore static self data
 
 ---
  src/index.ts | 57 +++++++++++++++++++++++++++++++++++++++++++++++++---
@@ -85,7 +85,7 @@ index 50993ec37..6ac11cd64 100644
 From 462c6edfe72c70ab6df51045fdd18a18dded8831 Mon Sep 17 00:00:00 2001
 From: Scott Bender <scott@scottbender.net>
 Date: Wed, 28 May 2025 13:36:03 -0400
-Subject: [PATCH 2/3] fix: allow messages from defaults through
+Subject: [PATCH 2/4] fix: allow messages from defaults through
 
 ---
  src/index.ts       | 2 +-
@@ -121,7 +121,7 @@ index abfe21978..358df64b0 100644
 From 89aed7ab5cfcfe96ef9f290b57a9567e13d449d4 Mon Sep 17 00:00:00 2001
 From: Scott Bender <scott@scottbender.net>
 Date: Fri, 30 May 2025 12:56:06 -0400
-Subject: [PATCH 3/3] fix: ignore communication.callsignVhf
+Subject: [PATCH 3/4] fix: ignore communication.callsignVhf
 
 ---
  src/index.ts | 18 +++++++++++++-----
@@ -170,3 +170,58 @@ index 90cf6004c..d9f5e031c 100644
      }
    } else if (filteredPaths.includes(pathValue.path)) {
      return null
+
+From 40d9a438f0249b01d1dde2c366deef6ae1b80227 Mon Sep 17 00:00:00 2001
+From: Scott Bender <scott@scottbender.net>
+Date: Fri, 6 Jun 2025 10:00:11 -0400
+Subject: [PATCH 4/4] fix: filter out communication.callsignVhf
+
+---
+ src/index.ts | 25 ++++++++++++++++---------
+ 1 file changed, 16 insertions(+), 9 deletions(-)
+
+diff --git a/src/index.ts b/src/index.ts
+index d9f5e031c..b3c01a5d7 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -699,8 +699,8 @@ function filterStaticSelfData(delta: any, selfContext: string) {
+ 
+ function filterSelfDataKP(pathValue: any) {
+   const deepKeys: { [key: string]: string[] } = {
+-    '': ['name', 'mmsi'],
+-    communication: ['callsignVhf']
++    '': ['name', 'mmsi', 'communication'],
++    //communication: ['callsignVhf']
+   }
+ 
+   const filteredPaths: string[] = [
+@@ -714,15 +714,22 @@ function filterSelfDataKP(pathValue: any) {
+ 
+   const deep = deepKeys[pathValue.path]
+ 
++  const filterValues = (obj: any, items: string[]) => {
++    const res: {[key:string]: any} = {}
++    Object.keys(obj).forEach((k) => {
++      if (!items.includes(k)) {
++        res[k] = obj.value[k]
++      } 
++    })
++    return res
++  }
++
+   if (deep !== undefined) {
+     if (Object.keys(pathValue.value).some((k) => deep.includes(k))) {
+-      const value = pathValue.value
+-      pathValue.value = {}
+-      Object.keys(value).forEach((k) => {
+-        if (!deep.includes(k)) {
+-          pathValue.value[k] = value[k]
+-        }
+-      })
++      pathValue.value = filterValues(pathValue.value, deep)
++      if ( pathValue.path === '' && pathValue.value.communication !== undefined ) {
++        pathValue.value.communication = filterValues(pathValue.value.communication, ['callsignVhf'])
++      }
+       if (Object.keys(pathValue.value).length == 0) {
+         return null
+       }
