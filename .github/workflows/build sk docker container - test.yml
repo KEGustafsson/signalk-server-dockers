@@ -95,8 +95,8 @@ jobs:
       - name: signalk-server download and patch
         id: git
         run: |
-          git clone https://github.com/SignalK/signalk-server.git
-          # git clone -b fix https://github.com/KEGustafsson/signalk-server.git
+          # git clone https://github.com/SignalK/signalk-server.git
+          git clone -b ws_client https://github.com/KEGustafsson/signalk-server.git
           cd signalk-server
           git fetch --tags
           tag=$(git describe --tags `git rev-list --tags --max-count=1`)
