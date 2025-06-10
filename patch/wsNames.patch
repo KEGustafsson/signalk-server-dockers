@@ -1,0 +1,77 @@
+From 935849890b78c17a57acca576e5c424fc5af4ca1 Mon Sep 17 00:00:00 2001
+From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
+Date: Tue, 10 Jun 2025 17:26:05 +0300
+Subject: [PATCH] feat: use websocket device description on dashboard instead
+ of id
+
+---
+ .../src/views/Dashboard/Dashboard.js          | 26 ++++++++++++++++---
+ 1 file changed, 22 insertions(+), 4 deletions(-)
+
+diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
+index 403322a22..60d67bf99 100644
+--- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
++++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
+@@ -1,4 +1,4 @@
+-import React from 'react'
++import React, { useState, useEffect } from 'react'
+ import { connect } from 'react-redux'
+ import {
+   Card,
+@@ -34,7 +34,17 @@ const Dashboard = (props) => {
+   if (errorCount > 0) {
+     errors = `(${errorCount} errors)`
+   }
++  const [devices, setDevices] = useState([])
+ 
++  useEffect(() => {
++    fetch(`${window.serverRoutesPrefix}/security/devices`, {
++      credentials: 'include'
++    })
++      .then(res => res.json())
++      .then(data => setDevices(data))
++      .catch(() => setDevices([]))
++  }, [])
++  
+   const getLinkType = (providerId) => {
+     try {
+       return providerStatus.find((item) => item.id === providerId).statusType
+@@ -66,6 +76,14 @@ const Dashboard = (props) => {
+   }
+ 
+   const renderActivity = (providerId, providerStats, linkType) => {
++    let device = providerId
++    if (providerId.startsWith('ws.')) {
++      const found = devices.find(
++        (d) => d.clientId === providerId.slice(3)
++      )
++      device = found && found.description ? found.description : providerId
++    }
++
+     return (
+       <li key={providerId} onClick={() => props.history.push(`/dashboard`)}>
+         <i
+@@ -84,7 +102,7 @@ const Dashboard = (props) => {
+         <span className="title">
+           {linkType === 'plugin'
+             ? pluginNameLink(providerId)
+-            : providerIdLink(providerId)}
++            : providerIdLink(providerId, device)}
+         </span>
+         {providerStats.writeRate > 0 && (
+           <span className="value">
+@@ -285,11 +303,11 @@ function pluginNameLink(id) {
+   return <a href={'#/serverConfiguration/plugins/' + id}>{id}</a>
+ }
+ 
+-function providerIdLink(id) {
++function providerIdLink(id, name) {
+   if (id === 'defaults') {
+     return <a href={'#/serverConfiguration/settings'}>{id}</a>
+   } else if (id.startsWith('ws.')) {
+-    return <a href={'#/security/devices'}>{id}</a>
++    return <a href={'#/security/devices'}>{name}</a>
+   } else {
+     return <a href={'#/serverConfiguration/connections/' + id}>{id}</a>
+  
+}
