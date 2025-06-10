@@ -1,15 +1,5 @@
-From 935849890b78c17a57acca576e5c424fc5af4ca1 Mon Sep 17 00:00:00 2001
-From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
-Date: Tue, 10 Jun 2025 17:26:05 +0300
-Subject: [PATCH] feat: use websocket device description on dashboard instead
- of id
-
----
- .../src/views/Dashboard/Dashboard.js          | 26 ++++++++++++++++---
- 1 file changed, 22 insertions(+), 4 deletions(-)
-
 diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-index 403322a22..60d67bf99 100644
+index 403322a2..60d67bf9 100644
 --- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
 +++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
 @@ -1,4 +1,4 @@
@@ -23,7 +13,7 @@ index 403322a22..60d67bf99 100644
      errors = `(${errorCount} errors)`
    }
 +  const [devices, setDevices] = useState([])
- 
+
 +  useEffect(() => {
 +    fetch(`${window.serverRoutesPrefix}/security/devices`, {
 +      credentials: 'include'
@@ -32,13 +22,13 @@ index 403322a22..60d67bf99 100644
 +      .then(data => setDevices(data))
 +      .catch(() => setDevices([]))
 +  }, [])
-+  
++
    const getLinkType = (providerId) => {
      try {
        return providerStatus.find((item) => item.id === providerId).statusType
 @@ -66,6 +76,14 @@ const Dashboard = (props) => {
    }
- 
+
    const renderActivity = (providerId, providerStats, linkType) => {
 +    let device = providerId
 +    if (providerId.startsWith('ws.')) {
@@ -63,7 +53,7 @@ index 403322a22..60d67bf99 100644
 @@ -285,11 +303,11 @@ function pluginNameLink(id) {
    return <a href={'#/serverConfiguration/plugins/' + id}>{id}</a>
  }
- 
+
 -function providerIdLink(id) {
 +function providerIdLink(id, name) {
    if (id === 'defaults') {
@@ -73,5 +63,4 @@ index 403322a22..60d67bf99 100644
 +    return <a href={'#/security/devices'}>{name}</a>
    } else {
      return <a href={'#/serverConfiguration/connections/' + id}>{id}</a>
-  
-}
+   }

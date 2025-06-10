@@ -13,7 +13,7 @@ index 50993ec37..6ac11cd64 100644
 +++ b/src/index.ts
 @@ -315,11 +315,13 @@ class Server {
          if (data.updates.length < 1) return
- 
+
          try {
 -          const preferredDelta = toPreferredDelta(data, now, app.selfContext)
 +          let delta = filterStaticSelfData(data, app.selfContext)
@@ -133,14 +133,14 @@ index 90cf6004c..d9f5e031c 100644
 +++ b/src/index.ts
 @@ -698,9 +698,12 @@ function filterStaticSelfData(delta: any, selfContext: string) {
  }
- 
+
  function filterSelfDataKP(pathValue: any) {
 -  const emptyKeys = ['name', 'mmsi']
 +  const deepKeys: { [key: string]: string[] } = {
 +    '': ['name', 'mmsi'],
 +    communication: ['callsignVhf']
 +  }
- 
+
 -  const filteredPaths = [
 +  const filteredPaths: string[] = [
      'design.aisShipType',
@@ -149,7 +149,7 @@ index 90cf6004c..d9f5e031c 100644
 @@ -709,15 +712,20 @@ function filterSelfDataKP(pathValue: any) {
      'sensors.gps.fromCenter'
    ]
- 
+
 -  if (pathValue.path === '') {
 -    if (Object.keys(pathValue.value).some((k) => emptyKeys.includes(k))) {
 +  const deep = deepKeys[pathValue.path]
@@ -185,7 +185,7 @@ index d9f5e031c..b3c01a5d7 100644
 --- a/src/index.ts
 +++ b/src/index.ts
 @@ -699,8 +699,8 @@ function filterStaticSelfData(delta: any, selfContext: string) {
- 
+
  function filterSelfDataKP(pathValue: any) {
    const deepKeys: { [key: string]: string[] } = {
 -    '': ['name', 'mmsi'],
@@ -193,18 +193,18 @@ index d9f5e031c..b3c01a5d7 100644
 +    '': ['name', 'mmsi', 'communication'],
 +    //communication: ['callsignVhf']
    }
- 
+
    const filteredPaths: string[] = [
 @@ -714,15 +714,22 @@ function filterSelfDataKP(pathValue: any) {
- 
+
    const deep = deepKeys[pathValue.path]
- 
+
 +  const filterValues = (obj: any, items: string[]) => {
 +    const res: {[key:string]: any} = {}
 +    Object.keys(obj).forEach((k) => {
 +      if (!items.includes(k)) {
 +        res[k] = obj.value[k]
-+      } 
++      }
 +    })
 +    return res
 +  }
@@ -240,24 +240,24 @@ index b3c01a5d7..b0f291bc6 100644
 --- a/src/index.ts
 +++ b/src/index.ts
 @@ -699,7 +699,7 @@ function filterStaticSelfData(delta: any, selfContext: string) {
- 
+
  function filterSelfDataKP(pathValue: any) {
    const deepKeys: { [key: string]: string[] } = {
 -    '': ['name', 'mmsi', 'communication'],
 +    '': ['name', 'mmsi', 'communication']
      //communication: ['callsignVhf']
    }
- 
+
 @@ -715,11 +715,11 @@ function filterSelfDataKP(pathValue: any) {
    const deep = deepKeys[pathValue.path]
- 
+
    const filterValues = (obj: any, items: string[]) => {
 -    const res: {[key:string]: any} = {}
 +    const res: { [key: string]: any } = {}
      Object.keys(obj).forEach((k) => {
        if (!items.includes(k)) {
          res[k] = obj.value[k]
--      } 
+-      }
 +      }
      })
      return res
@@ -279,4 +279,4 @@ index b3c01a5d7..b0f291bc6 100644
        }
        if (Object.keys(pathValue.value).length == 0) {
          return null
-         
+
