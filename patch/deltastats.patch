@@ -1,5 +1,5 @@
 diff --git a/src/deltastats.ts b/src/deltastats.ts
-index d59ede8d..d6d78f79 100644
+index d59ede8d..dca5a423 100644
 --- a/src/deltastats.ts
 +++ b/src/deltastats.ts
 @@ -17,7 +17,8 @@
@@ -12,18 +12,21 @@ index d59ede8d..d6d78f79 100644
  const STATS_UPDATE_INTERVAL_SECONDS = 5
  export const CONNECTION_WRITE_EVENT_NAME = 'connectionwrite'
  
-@@ -72,7 +73,10 @@ export function startDeltaStatistics(
+@@ -72,7 +73,13 @@ export function startDeltaStatistics(
  
    return setInterval(() => {
      updateProviderPeriodStats(app)
 +    const loadAverage = os.loadavg()
      const anyApp = app as any
 +    const config = getSecurityConfig(anyApp)
-+    const devices = anyApp.securityStrategy.getDevices(config)
++    let devices = [];
++    if ( anyApp && anyApp.securityStrategy && typeof anyApp.securityStrategy.getDevices === 'function' ) {
++      devices = anyApp.securityStrategy.getDevices(config);
++    }
      app.emit('serverevent', {
        type: 'SERVERSTATISTICS',
        from: 'signalk-server',
-@@ -83,7 +87,11 @@ export function startDeltaStatistics(
+@@ -83,7 +90,11 @@ export function startDeltaStatistics(
          numberOfAvailablePaths: anyApp.streambundle.getAvailablePaths().length,
          wsClients: anyApp.interfaces.ws ? anyApp.interfaces.ws.numClients() : 0,
          providerStatistics: app.providerStatistics,
