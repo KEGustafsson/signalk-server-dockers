@@ -1,8 +1,8 @@
 diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-index 403322a2..eef0c9a8 100644
+index 403322a2..2ccce745 100644
 --- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
 +++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-@@ -17,19 +17,25 @@ const Dashboard = (props) => {
+@@ -17,13 +17,18 @@ const Dashboard = (props) => {
      numberOfAvailablePaths,
      wsClients,
      providerStatistics,
@@ -23,14 +23,7 @@ index 403322a2..eef0c9a8 100644
    }
    const providerStatus = props.providerStatus || []
    const errorCount = providerStatus.filter((s) => s.type === 'error').length
-   const uptimeD = Math.floor(uptime / (60 * 60 * 24))
-   const uptimeH = Math.floor((uptime % (60 * 60 * 24)) / (60 * 60))
-   const uptimeM = Math.floor((uptime % (60 * 60)) / 60)
-+  console.log(JSON.stringify(devices, null, 2))
-   let errors = ''
-   if (errorCount > 0) {
-     errors = `(${errorCount} errors)`
-@@ -66,6 +72,14 @@ const Dashboard = (props) => {
+@@ -66,6 +71,13 @@ const Dashboard = (props) => {
    }
  
    const renderActivity = (providerId, providerStats, linkType) => {
@@ -41,11 +34,10 @@ index 403322a2..eef0c9a8 100644
 +      )
 +      device = found && found.description ? found.description : providerId
 +    }
-+    console.log(JSON.stringify(devices, null, 2))
      return (
        <li key={providerId} onClick={() => props.history.push(`/dashboard`)}>
          <i
-@@ -84,7 +98,7 @@ const Dashboard = (props) => {
+@@ -84,7 +96,7 @@ const Dashboard = (props) => {
          <span className="title">
            {linkType === 'plugin'
              ? pluginNameLink(providerId)
@@ -54,7 +46,7 @@ index 403322a2..eef0c9a8 100644
          </span>
          {providerStats.writeRate > 0 && (
            <span className="value">
-@@ -111,11 +125,33 @@ const Dashboard = (props) => {
+@@ -111,11 +123,33 @@ const Dashboard = (props) => {
            </span>
          )}
          <div className="bars">
@@ -93,7 +85,7 @@ index 403322a2..eef0c9a8 100644
          </div>
        </li>
      )
-@@ -188,6 +224,15 @@ const Dashboard = (props) => {
+@@ -188,6 +222,15 @@ const Dashboard = (props) => {
                        {uptimeD} days, {uptimeH} hours, {uptimeM} minutes
                      </strong>
                    </div>
@@ -109,7 +101,7 @@ index 403322a2..eef0c9a8 100644
                  </Col>
                  <Col xs="12" md="6">
                    <div className="text-muted" style={{ fontSize: '1rem' }}>
-@@ -285,11 +330,11 @@ function pluginNameLink(id) {
+@@ -285,11 +328,11 @@ function pluginNameLink(id) {
    return <a href={'#/serverConfiguration/plugins/' + id}>{id}</a>
  }
  
