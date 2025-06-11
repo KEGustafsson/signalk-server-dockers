@@ -1,8 +1,8 @@
 diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-index 403322a2..a9681ac1 100644
+index 403322a2..3f7ab1dd 100644
 --- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
 +++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-@@ -17,19 +17,25 @@ const Dashboard = (props) => {
+@@ -17,7 +17,10 @@ const Dashboard = (props) => {
      numberOfAvailablePaths,
      wsClients,
      providerStatistics,
@@ -11,34 +11,10 @@ index 403322a2..a9681ac1 100644
 +    loadAvg1m,
 +    loadAvg5m,
 +    loadAvg15m,
-+    devices,
    } = props.serverStatistics || {
      deltaRate: 0,
      numberOfAvailablePaths: 0,
-     wsClients: 0,
-     providerStatistics: {},
--    uptime: ''
-+    uptime: '',
-+    devices: []
-   }
-   const providerStatus = props.providerStatus || []
-   const errorCount = providerStatus.filter((s) => s.type === 'error').length
-   const uptimeD = Math.floor(uptime / (60 * 60 * 24))
-   const uptimeH = Math.floor((uptime % (60 * 60 * 24)) / (60 * 60))
-   const uptimeM = Math.floor((uptime % (60 * 60)) / 60)
-+  console.log(JSON.stringify(devices, null, 2))
-   let errors = ''
-   if (errorCount > 0) {
-     errors = `(${errorCount} errors)`
-@@ -66,6 +72,7 @@ const Dashboard = (props) => {
-   }
- 
-   const renderActivity = (providerId, providerStats, linkType) => {
-+    console.log(JSON.stringify(devices, null, 2))
-     return (
-       <li key={providerId} onClick={() => props.history.push(`/dashboard`)}>
-         <i
-@@ -111,11 +118,33 @@ const Dashboard = (props) => {
+@@ -111,11 +114,33 @@ const Dashboard = (props) => {
            </span>
          )}
          <div className="bars">
@@ -77,7 +53,7 @@ index 403322a2..a9681ac1 100644
          </div>
        </li>
      )
-@@ -188,6 +217,15 @@ const Dashboard = (props) => {
+@@ -188,6 +213,15 @@ const Dashboard = (props) => {
                        {uptimeD} days, {uptimeH} hours, {uptimeM} minutes
                      </strong>
                    </div>
