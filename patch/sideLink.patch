@@ -1,8 +1,35 @@
 diff --git a/packages/server-admin-ui/src/components/Sidebar/Sidebar.js b/packages/server-admin-ui/src/components/Sidebar/Sidebar.js
-index 2249ad34..44bf4eaf 100644
+index 2249ad34..e7fccf9a 100644
 --- a/packages/server-admin-ui/src/components/Sidebar/Sidebar.js
 +++ b/packages/server-admin-ui/src/components/Sidebar/Sidebar.js
-@@ -303,13 +303,17 @@ const mapStateToProps = (state) => {
+@@ -84,13 +84,24 @@ class Sidebar extends Component {
+       return (
+         <NavItem key={key} className={classes.item}>
+           {isExternal(url) ? (
+-            <RsNavLink href={url} className={classes.link}>
++            <RsNavLink
++              href={url}
++              className={classes.link}
++              {...(item.target ? { target: item.target } : {})}
++              {...(item.rel ? { rel: item.rel } : {})}
++            >
+               <i className={classes.icon} />
+               {item.name}
+               {badge(item.badge)}
+             </RsNavLink>
+           ) : (
+-            <NavLink to={url} className={classes.link} activeClassName="active">
++            <NavLink
++              to={url}
++              className={classes.link}
++              activeClassName="active"
++              {...(item.target ? { target: item.target } : {})}
++              {...(item.rel ? { rel: item.rel } : {})}
++            >
+               <i className={classes.icon} />
+               {item.name}
+               {badge(item.badge)}
+@@ -303,13 +314,17 @@ const mapStateToProps = (state) => {
    result.items.push({
      name: 'Documentation',
      url: `${window.location.protocol}//${window.location.host}/documentation`,
