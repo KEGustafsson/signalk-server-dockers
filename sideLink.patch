@@ -1,0 +1,24 @@
+diff --git a/packages/server-admin-ui/src/components/Sidebar/Sidebar.js b/packages/server-admin-ui/src/components/Sidebar/Sidebar.js
+index 2249ad34..44bf4eaf 100644
+--- a/packages/server-admin-ui/src/components/Sidebar/Sidebar.js
++++ b/packages/server-admin-ui/src/components/Sidebar/Sidebar.js
+@@ -303,13 +303,17 @@ const mapStateToProps = (state) => {
+   result.items.push({
+     name: 'Documentation',
+     url: `${window.location.protocol}//${window.location.host}/documentation`,
+-    icon: 'icon-book-open'
++    icon: 'icon-book-open',
++    target: '_blank',
++    rel: 'noopener noreferrer'
+   })
+ 
+   result.items.push({
+     name: 'OpenApi',
+     url: `${window.location.protocol}//${window.location.host}/doc/openapi`,
+-    icon: 'icon-energy'
++    icon: 'icon-energy',
++    target: '_blank',
++    rel: 'noopener noreferrer'
+   })
+ 
+   return result
