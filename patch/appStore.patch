@@ -1,0 +1,30 @@
+From 596d2a4e2beb7681627916425c33dfce735aecb0 Mon Sep 17 00:00:00 2001
+From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
+Date: Wed, 18 Jun 2025 15:12:23 +0300
+Subject: [PATCH] fix add default values
+
+---
+ .../server-admin-ui/src/views/appstore/Apps/Apps.js  | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/packages/server-admin-ui/src/views/appstore/Apps/Apps.js b/packages/server-admin-ui/src/views/appstore/Apps/Apps.js
+index 97f481d9f..a616f106c 100644
+--- a/packages/server-admin-ui/src/views/appstore/Apps/Apps.js
++++ b/packages/server-admin-ui/src/views/appstore/Apps/Apps.js
+@@ -221,5 +221,15 @@ const updateAvailable = (app, appStore) => {
+   )
+ }
+ 
+-const mapStateToProps = ({ appStore }) => ({ appStore })
++const mapStateToProps = ({ appStore }) => ({
++  appStore: {
++    available: [],
++    installed: [],
++    installing: [],
++    updates: [],
++    categories: [],
++    storeAvailable: true,
++    ...appStore,
++  }
++})
+ export default connect(mapStateToProps)(Apps)
