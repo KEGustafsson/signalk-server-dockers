@@ -1,5 +1,14 @@
+From 78eb0e51ffa8d4d9448145c1cfe175f023efb671 Mon Sep 17 00:00:00 2001
+From: KEGustafsson <ke.gustafsson@gmail.com>
+Date: Thu, 12 Jun 2025 16:16:55 +0300
+Subject: [PATCH 1/2] feat: open Documentation and OpenApi links to a new tabs
+
+---
+ .../src/components/Sidebar/Sidebar.js         | 23 +++++++++++++++----
+ 1 file changed, 19 insertions(+), 4 deletions(-)
+
 diff --git a/packages/server-admin-ui/src/components/Sidebar/Sidebar.js b/packages/server-admin-ui/src/components/Sidebar/Sidebar.js
-index 2249ad34..e7fccf9a 100644
+index 2249ad348..e7fccf9a3 100644
 --- a/packages/server-admin-ui/src/components/Sidebar/Sidebar.js
 +++ b/packages/server-admin-ui/src/components/Sidebar/Sidebar.js
 @@ -84,13 +84,24 @@ class Sidebar extends Component {
@@ -46,6 +55,66 @@ index 2249ad34..e7fccf9a 100644
 +    icon: 'icon-energy',
 +    target: '_blank',
 +    rel: 'noopener noreferrer'
+   })
+ 
+   return result
+
+From 70455951308906734576fffed975704bb37c9e13 Mon Sep 17 00:00:00 2001
+From: KEGustafsson <ke.gustafsson@gmail.com>
+Date: Tue, 24 Jun 2025 11:36:21 +0300
+Subject: [PATCH 2/2] refactor: streamline props handling for Documentation and
+ OpenApi links in Sidebar
+
+---
+ .../src/components/Sidebar/Sidebar.js          | 18 ++++++++++--------
+ 1 file changed, 10 insertions(+), 8 deletions(-)
+
+diff --git a/packages/server-admin-ui/src/components/Sidebar/Sidebar.js b/packages/server-admin-ui/src/components/Sidebar/Sidebar.js
+index e7fccf9a3..8ed03b19f 100644
+--- a/packages/server-admin-ui/src/components/Sidebar/Sidebar.js
++++ b/packages/server-admin-ui/src/components/Sidebar/Sidebar.js
+@@ -87,8 +87,7 @@ class Sidebar extends Component {
+             <RsNavLink
+               href={url}
+               className={classes.link}
+-              {...(item.target ? { target: item.target } : {})}
+-              {...(item.rel ? { rel: item.rel } : {})}
++              {...(item.props || {})}
+             >
+               <i className={classes.icon} />
+               {item.name}
+@@ -99,8 +98,7 @@ class Sidebar extends Component {
+               to={url}
+               className={classes.link}
+               activeClassName="active"
+-              {...(item.target ? { target: item.target } : {})}
+-              {...(item.rel ? { rel: item.rel } : {})}
++              {...(item.props || {})}
+             >
+               <i className={classes.icon} />
+               {item.name}
+@@ -315,16 +313,20 @@ const mapStateToProps = (state) => {
+     name: 'Documentation',
+     url: `${window.location.protocol}//${window.location.host}/documentation`,
+     icon: 'icon-book-open',
+-    target: '_blank',
+-    rel: 'noopener noreferrer'
++    props: {
++      target: '_blank',
++      rel: 'noopener noreferrer'
++    }
+   })
+ 
+   result.items.push({
+     name: 'OpenApi',
+     url: `${window.location.protocol}//${window.location.host}/doc/openapi`,
+     icon: 'icon-energy',
+-    target: '_blank',
+-    rel: 'noopener noreferrer'
++    props: {
++      target: '_blank',
++      rel: 'noopener noreferrer'
++    }
    })
  
    return result
