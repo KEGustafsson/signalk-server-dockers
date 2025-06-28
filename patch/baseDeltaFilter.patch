@@ -1,0 +1,24 @@
+From b5b18216a96544d5975b5485be487d644ece24e6 Mon Sep 17 00:00:00 2001
+From: Scott Bender <scott@scottbender.net>
+Date: Fri, 27 Jun 2025 20:31:35 -0400
+Subject: [PATCH] fix: empty communication map sent when filtering self static
+ data
+
+---
+ src/index.ts | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/index.ts b/src/index.ts
+index f661379f1..58b6213d8 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -736,6 +736,9 @@ function filterSelfDataKP(pathValue: any) {
+         pathValue.value.communication,
+         ['callsignVhf']
+       )
++      if (Object.keys(pathValue.value.communication).length === 0) {
++        delete pathValue.value.communication
++      }
+     }
+     if (Object.keys(pathValue.value).length == 0) {
+       return null
