@@ -1,0 +1,41 @@
+diff --git a/src/deltastats.ts b/src/deltastats.ts
+index d59ede8d..dca5a423 100644
+--- a/src/deltastats.ts
++++ b/src/deltastats.ts
+@@ -17,7 +17,8 @@
+ 
+ import { isUndefined, values } from 'lodash'
+ import { EventEmitter } from 'node:events'
+-
++import os from 'os'
++import { getSecurityConfig } from './security'
+ const STATS_UPDATE_INTERVAL_SECONDS = 5
+ export const CONNECTION_WRITE_EVENT_NAME = 'connectionwrite'
+ 
+@@ -72,7 +73,13 @@ export function startDeltaStatistics(
+ 
+   return setInterval(() => {
+     updateProviderPeriodStats(app)
++    const loadAverage = os.loadavg()
+     const anyApp = app as any
++    const config = getSecurityConfig(anyApp)
++    let devices = [];
++    if ( anyApp && anyApp.securityStrategy && typeof anyApp.securityStrategy.getDevices === 'function' ) {
++      devices = anyApp.securityStrategy.getDevices(config);
++    }
+     app.emit('serverevent', {
+       type: 'SERVERSTATISTICS',
+       from: 'signalk-server',
+@@ -83,7 +90,11 @@ export function startDeltaStatistics(
+         numberOfAvailablePaths: anyApp.streambundle.getAvailablePaths().length,
+         wsClients: anyApp.interfaces.ws ? anyApp.interfaces.ws.numClients() : 0,
+         providerStatistics: app.providerStatistics,
+-        uptime: process.uptime()
++        uptime: process.uptime(),
++        loadAvg1m: loadAverage[0].toFixed(2),
++        loadAvg5m: loadAverage[1].toFixed(2),
++        loadAvg15m: loadAverage[2].toFixed(2),
++        devices: devices
+       }
+     })
+     app.lastIntervalDeltaCount = app.deltaCount
