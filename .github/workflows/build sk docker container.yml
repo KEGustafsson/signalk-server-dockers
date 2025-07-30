@@ -127,7 +127,11 @@ jobs:
       - name: signalk-server build
         run: |
           cd signalk-server
-#          mv ./../*.tgz .
+          if [ "$(ls -A ./../*.tgz 2>/dev/null)" ]; then
+            mv ./../*.tgz .
+          else
+            echo "No files to move"
+          fi
           rm -f package-lock.json
           rm -rf node_modules
           npm cache clean -f
