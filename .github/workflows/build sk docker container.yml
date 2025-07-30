@@ -31,6 +31,7 @@ jobs:
       - name: signalk-server build
         run: |
           cd signalk-server
+          npm i --save @canboat/canboatjs
           npm cache clean -f
           npm install npm@latest -g
           npm install --package-lock-only
