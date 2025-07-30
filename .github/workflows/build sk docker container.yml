@@ -52,7 +52,7 @@ jobs:
           retention-days: 1
           name: packed-modules
           path: |
-            *.tgz
+            ./signalk-server/*.tgz
 
   build_docker_tags:
     needs: [signalk-server]
