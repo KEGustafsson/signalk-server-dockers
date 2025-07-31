@@ -129,7 +129,7 @@ jobs:
           mv ./../*.tgz .
           rm -f package-lock.json
           rm -rf node_modules
-          npm i --save @canboat/canboatjs
+          # npm i --save @canboat/canboatjs
           npm cache clean -f
           npm install npm@latest -g
           npm install --package-lock-only
