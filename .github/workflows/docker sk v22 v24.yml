@@ -260,7 +260,7 @@ jobs:
         include:
           - os: 24.04
             node: v24
-            tag: latest-v24
+            tag: latest
           - os: 24.04
             node: v22
             tag: latest
