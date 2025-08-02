@@ -23,7 +23,7 @@ RUN mkdir -p /var/run/dbus/ /var/run/avahi-daemon/ \
   && chmod -R 777 /var/run/dbus/ /var/run/avahi-daemon/ \
   && chown -R avahi:avahi /var/run/avahi-daemon/
 
-RUN curl -fsSL https://deb.nodesource.com/setup_current.x | bash - && \
+RUN curl -fsSL https://deb.nodesource.com/setup_current.x | bash - \
   && DEBIAN_FRONTEND=noninteractive apt-get -y install nodejs \
   && echo "=== Installation Complete ===" \
   && echo "Node.js version: $(node --version)" \
