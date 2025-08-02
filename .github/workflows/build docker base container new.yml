@@ -18,7 +18,12 @@ jobs:
             platform: linux/amd64
           - vm: ubuntu-24.04-arm
             arch: arm
+            node: v22
             platform: linux/arm64,linux/arm/v7
+          - vm: ubuntu-24.04-arm
+            arch: arm
+            node: v24
+            platform: linux/arm64           
     runs-on: ${{ matrix.vm }}
     steps:
       - uses: actions/checkout@v4
