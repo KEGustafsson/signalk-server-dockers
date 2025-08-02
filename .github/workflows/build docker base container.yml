@@ -1,15 +1,16 @@
 name: Build Docker base images
 
 on:
-  #schedule:
-  #  - cron: "0 0 * * 1"
+  schedule:
+    - cron: "0 0 * * 1"
   workflow_dispatch:
 
 jobs:
   build-images:
     strategy:
       matrix:
-        os: [22.04, 24.04]
+        os: [24.04]
+        node: [22.x, 24.x]
         vm: [ubuntu-latest, ubuntu-24.04-arm]
         include:
           - vm: ubuntu-latest
@@ -17,7 +18,12 @@ jobs:
             platform: linux/amd64
           - vm: ubuntu-24.04-arm
             arch: arm
+            node: 22.x
             platform: linux/arm64,linux/arm/v7
+          - vm: ubuntu-24.04-arm
+            arch: arm
+            node: 24.x
+            platform: linux/arm64
     runs-on: ${{ matrix.vm }}
     steps:
       - uses: actions/checkout@v4
@@ -38,12 +44,14 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           tags: |
-            ghcr.io/kegustafsson/signalk-server-base:${{ matrix.arch }}-${{ matrix.os }}
+            ghcr.io/kegustafsson/signalk-server-base:${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}
+          build-args: |
+            NODE=${{ matrix.node }}
 
       - name: Modify Dockerfile_rel for testing
         run: |
           sed -i \
-            "s|:latest|:${{ matrix.arch }}-${{ matrix.os }}|g" \
+            "s|:latest|:${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}|g" \
             ./docker/Dockerfile_rel  
 
       - name: Build Signal K test docker
@@ -60,7 +68,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [22.04, 24.04]
+        os: [24.04]
+        node: [22.x, 24.x]
 
     steps:
       - name: Login to ghcr.io
@@ -80,11 +89,11 @@ jobs:
         uses: int128/docker-manifest-create-action@v2
         with:
           tags: |
-            ghcr.io/kegustafsson/signalk-server-base:latest-${{ matrix.os }}
-            kgustafs/signalk-server-base:latest-${{ matrix.os }}
+            ghcr.io/kegustafsson/signalk-server-base:latest-${{ matrix.os }}-${{ matrix.node }}
+            kgustafs/signalk-server-base:latest-${{ matrix.os }}-${{ matrix.node }}
           sources: |
-            ghcr.io/kegustafsson/signalk-server-base:amd-${{ matrix.os }}
-            ghcr.io/kegustafsson/signalk-server-base:arm-${{ matrix.os }}
+            ghcr.io/kegustafsson/signalk-server-base:amd-${{ matrix.os }}-${{ matrix.node }}
+            ghcr.io/kegustafsson/signalk-server-base:arm-${{ matrix.os }}-${{ matrix.node }}
 
   housekeeping:
     needs: create-and-push-manifest
@@ -97,7 +106,7 @@ jobs:
         with:
           packages: signalk-server-base
           delete-untagged: true
-          delete-tags: amd-22.04,arm-22.04,amd-24.04,arm-24.04
+          delete-tags: amd-24.04-22.x,arm-24.04-24.x
           token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   slack:
@@ -106,4 +115,4 @@ jobs:
     steps:
       - name: Slack notification
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"Ubuntu 22.04 and 24.04 base images ready"}' https://hooks.slack.com/services/${{ secrets.SLACK }}
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"Ubuntu 24.04 and Node v22 & v24 base images ready"}' https://hooks.slack.com/services/${{ secrets.SLACK }}

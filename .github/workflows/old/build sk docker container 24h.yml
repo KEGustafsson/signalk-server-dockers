@@ -1,8 +1,8 @@
 name: SignalK Docker Build 24h
 
 on:
-  schedule:
-    - cron: "0 1 * * *"
+  #schedule:
+  #  - cron: "0 1 * * *"
   workflow_dispatch:
 
 jobs:
@@ -58,7 +58,7 @@ jobs:
       - name: Node setup
         uses: actions/setup-node@v4
         with:
-          node-version: '24.x'
+          node-version: '22.x'
       - name: react-jsonschema-form-bs4
         run: |
           git clone https://github.com/KEGustafsson/react-jsonschema-form-bs4.git
@@ -84,7 +84,7 @@ jobs:
       - name: Node setup
         uses: actions/setup-node@v4
         with:
-          node-version: '24.x'
+          node-version: '22.x'
       - name: specification
         run: |
           git clone https://github.com/SignalK/specification.git
@@ -108,7 +108,7 @@ jobs:
       - name: Node setup
         uses: actions/setup-node@v4
         with:
-          node-version: '24.x'
+          node-version: '22.x'
       - uses: actions/download-artifact@v4
         with:
           name: specification
@@ -139,7 +139,7 @@ jobs:
       - name: Node setup
         uses: actions/setup-node@v4
         with:
-          node-version: '24.x'
+          node-version: '22.x'
       - name: signalk-server download and patch
         id: git
         run: |
@@ -204,8 +204,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [24.04]
-        node: [22.x, 24.x]
+        os: [22.04, 24.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -227,36 +226,35 @@ jobs:
         id: set-tags
         run: |
           if [[ "${{ steps.vars.outputs.tag }}" == *beta* ]]; then
-            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:latest-${{ matrix.os }}-${{ matrix.node }}"
+            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:latest-${{ matrix.os }}"
           else
-            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:latest-${{ matrix.os }}-${{ matrix.node }}"
+            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:latest-${{ matrix.os }}"
           fi
           echo "tags=$tags" >> $GITHUB_OUTPUT
       - name: Save docker tags to artifact
-        run: echo ${{ steps.set-tags.outputs.tags }} > docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt
+        run: echo ${{ steps.set-tags.outputs.tags }} > docker_tags_${{ matrix.os }}.txt
       - name: Upload tag
         uses: actions/upload-artifact@v4
         with:
           retention-days: 1
-          name: docker_tags_${{ matrix.os }}_${{ matrix.node }}
-          path: docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt
+          name: docker_tags_${{ matrix.os }}
+          path: docker_tags_${{ matrix.os }}.txt
 
   build-images:
     needs: [signalk-server]
     strategy:
       matrix:
-        os: [24.04]
-        node: [22.x, 24.x]
+        os: [22.04, 24.04]
         vm: [ubuntu-latest, ubuntu-24.04-arm]
         include:
           - vm: ubuntu-latest
@@ -264,12 +262,7 @@ jobs:
             platform: linux/amd64
           - vm: ubuntu-24.04-arm
             arch: arm
-            node: 22.x
             platform: linux/arm64,linux/arm/v7
-          - vm: ubuntu-24.04-arm
-            arch: arm
-            node: 24.x
-            platform: linux/arm64
     runs-on: ${{ matrix.vm }}
     steps:
       - name: Checkout
@@ -293,24 +286,21 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           tags: |
-            ghcr.io/kegustafsson/signalk-server:${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
+            ghcr.io/kegustafsson/signalk-server:${{ matrix.arch }}-${{ matrix.os }}-${{ github.run_id }}
           build-args: |
-            UBUNTU_VERSION=${{ matrix.os }}-${{ matrix.node }}
+            UBUNTU_VERSION=${{ matrix.os }}
 
   create-and-push-manifest:
     needs: [build_docker_tags, build-images]
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [24.04]
-        node: [22.x, 24.x]
+        os: [22.04, 24.04]
         include:
           - os: 24.04
-            node: 24.x
             tag: latest
-          - os: 24.04
-            node: 22.x
-            tag: latest-22.x
+          - os: 22.04
+            tag: latest-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -318,21 +308,16 @@ jobs:
         uses: docker/setup-buildx-action@v3
       - uses: actions/download-artifact@v4
         with:
-          name: docker_tags_${{ matrix.os }}_${{ matrix.node }}
+          name: docker_tags_${{ matrix.os }}
       - name: Set multi-line output
         id: set_images
         run: |
-          tags=$(cat docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt | sed 's/,/\n/g')
+          tags=$(cat docker_tags_${{ matrix.os }}.txt | sed 's/,/\n/g')
           {
             echo 'IMAGES<<EOF'
             printf "%s\n" "$tags"
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
-      - name: Print tags
-        run: |
-          tags=$(cat docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt | sed 's/,/\n/g')
-          echo "tags: $tags"
-          echo "tags: ${{ steps.set_images.outputs.IMAGES }}"      
       - name: Login to ghcr.io
         uses: docker/login-action@v3
         with:
@@ -352,8 +337,8 @@ jobs:
             ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }}
             kgustafs/signalk-server:${{ matrix.tag }}
           sources: |
-            ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
-            ghcr.io/kegustafsson/signalk-server:arm-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
+            ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }}-${{ github.run_id }}
+            ghcr.io/kegustafsson/signalk-server:arm-${{ matrix.os }}-${{ github.run_id }}
 
   housekeeping:
     needs: create-and-push-manifest
@@ -366,7 +351,7 @@ jobs:
         with:
           packages: signalk-server
           delete-untagged: true
-          delete-tags: amd-24.04-22.x-${{ github.run_id }},arm-24.04-24.x-${{ github.run_id }}
+          delete-tags: amd-22.04-${{ github.run_id }},arm-22.04-${{ github.run_id }},amd-24.04-${{ github.run_id }},arm-24.04-${{ github.run_id }}
           token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   slack:
@@ -384,4 +369,4 @@ jobs:
           echo "TAG=$tag" >> $GITHUB_OUTPUT
       - name: Slack notification
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"New Signal K image available, ${{ steps.vars.outputs.TAG }} with Node 22.x and 24.x"}' https://hooks.slack.com/services/${{ secrets.SLACK }}
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"New Signal K image available, ${{ steps.vars.outputs.TAG }}"}' https://hooks.slack.com/services/${{ secrets.SLACK }}
