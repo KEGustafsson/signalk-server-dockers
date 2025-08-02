@@ -1,4 +1,5 @@
 FROM ubuntu:24.04
+ARG NODE
 
 RUN userdel -r ubuntu \
   && groupadd --gid 1000 node \
@@ -23,7 +24,7 @@ RUN mkdir -p /var/run/dbus/ /var/run/avahi-daemon/ \
   && chmod -R 777 /var/run/dbus/ /var/run/avahi-daemon/ \
   && chown -R avahi:avahi /var/run/avahi-daemon/
 
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+RUN curl -fsSL https://deb.nodesource.com/setup_$NODE | bash - \
   && DEBIAN_FRONTEND=noninteractive apt-get -y install --no-install-recommends nodejs \
   && npm config rm proxy \
   && npm config rm https-proxy \
@@ -38,4 +39,3 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
   && npm install yarn -g \
   && sudo setcap cap_net_raw+eip $(eval readlink -f `which node`) \
   && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-  
