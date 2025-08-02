@@ -31,7 +31,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
     else \
         echo "Installing nodejs for architecture: $arch" && \
         DEBIAN_FRONTEND=noninteractive apt-get -y install nodejs; \
-    fi
+    fi && \
     echo "=== Installation Complete ===" && \
     echo "Node.js version: $(node --version)" && \
     if command -v npm >/dev/null 2>&1; then \
