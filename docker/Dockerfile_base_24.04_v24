@@ -24,11 +24,13 @@ RUN mkdir -p /var/run/dbus/ /var/run/avahi-daemon/ \
   && chown -R avahi:avahi /var/run/avahi-daemon/
 
 RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
-    DEBIAN_FRONTEND=noninteractive apt-get -y install nodejs && \
-    ARCH=$(uname -m) && \
-    if [ "$ARCH" = "armv7l" ] || [ "$ARCH" = "armhf" ]; then \
-        echo "Detected ARM v7 architecture, installing npm..." && \
-        DEBIAN_FRONTEND=noninteractive apt-get -y install npm; \
+    arch=$(dpkg --print-architecture) && \
+    if [ "$arch" = "armhf" ]; then \
+        echo "Detected ARM v7 architecture, installing nodejs and npm..." && \
+        DEBIAN_FRONTEND=noninteractive apt-get -y install nodejs npm \
+    else \
+        echo "Installing nodejs for architecture: $arch" && \
+        DEBIAN_FRONTEND=noninteractive apt-get -y install nodejs \
     fi
 
 RUN npm config rm proxy \
