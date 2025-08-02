@@ -260,6 +260,9 @@ jobs:
         include:
           - os: 24.04
             node: v24
+            tag: latest-v24
+          - os: 24.04
+            node: v22
             tag: latest
     steps:
       - name: Checkout
