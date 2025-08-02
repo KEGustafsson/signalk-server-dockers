@@ -23,22 +23,11 @@ RUN mkdir -p /var/run/dbus/ /var/run/avahi-daemon/ \
   && chmod -R 777 /var/run/dbus/ /var/run/avahi-daemon/ \
   && chown -R avahi:avahi /var/run/avahi-daemon/
 
-RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
-    arch=$(dpkg --print-architecture) && \
-    if [ "$arch" = "armhf" ]; then \
-        echo "Detected ARM v7 architecture, installing nodejs and npm..." && \
-        DEBIAN_FRONTEND=noninteractive apt-get -y install nodejs npm; \
-    else \
-        echo "Installing nodejs for architecture: $arch" && \
-        DEBIAN_FRONTEND=noninteractive apt-get -y install nodejs; \
-    fi && \
-    echo "=== Installation Complete ===" && \
-    echo "Node.js version: $(node --version)" && \
-    if command -v npm >/dev/null 2>&1; then \
-        echo "npm version: $(npm --version)"; \
-    else \
-        echo "npm: not installed"; \
-    fi
+RUN curl -fsSL https://deb.nodesource.com/setup_current.x | bash - && \
+  && DEBIAN_FRONTEND=noninteractive apt-get -y install nodejs \
+  && echo "=== Installation Complete ===" \
+  && echo "Node.js version: $(node --version)" \
+  && echo "npm version: $(npm --version)"
 
 RUN npm config rm proxy \
   && npm config rm https-proxy \
