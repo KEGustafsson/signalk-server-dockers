@@ -260,7 +260,7 @@ jobs:
         include:
           - os: 24.04
             node: v24
-            tag: latest
+            tag: latest-v24
           - os: 24.04
             node: v22
             tag: latest
@@ -302,8 +302,8 @@ jobs:
         with:
           tags: |
             ${{ steps.set_images.outputs.IMAGES }}
-            ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }}-${{ matrix.node }}
-            kgustafs/signalk-server:${{ matrix.tag }}-${{ matrix.node }}
+            ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }}
+            kgustafs/signalk-server:${{ matrix.tag }}
           sources: |
             ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
             ghcr.io/kegustafsson/signalk-server:arm-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
