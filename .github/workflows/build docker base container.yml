@@ -108,6 +108,14 @@ jobs:
           delete-untagged: true
           delete-tags: amd-24.04-24.x,amd-24.04-22.x,arm-24.04-24.x,arm-24.04-22.x
           token: ${{ secrets.GHCR_TOKEN_NEW }}
+      - name: Remove Temporary & Untagged Images older than 14 days from Docker Hub
+        uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          packages: signalk-server-base
+          delete-untagged: true
+          delete-tags: amd*,arm*,sha*
+          older-than: 14 days
+          token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   slack:
     runs-on: ubuntu-latest
