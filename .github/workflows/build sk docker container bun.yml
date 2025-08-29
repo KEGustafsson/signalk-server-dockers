@@ -119,6 +119,7 @@ jobs:
           cd signalk-server
           mv ./../*.tgz .
           rm -f package-lock.json
+          rm -f bun.lock
           rm -rf node_modules
           bun ci
           bun pm cache rm
