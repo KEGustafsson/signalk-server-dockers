@@ -82,6 +82,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Node setup
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
       - name: Bun setup
         uses: oven-sh/setup-bun@v2
       - name: signalk-server download and patch
@@ -122,17 +126,11 @@ jobs:
           rm -f bun.lock
           rm -rf node_modules
           sudo apt-get update && sudo apt-get install -y libavahi-compat-libdnssd-dev
-          bun i
+          bun ci
           bun pm untrusted
           bun pm trust --all
-          bun run --filter ./packages/resources-provider-plugin build
-          bun run --filter ./packages/server-admin-ui-dependencies build
-          bun run --filter ./packages/server-admin-ui build
-          bun run --filter ./packages/server-api build
-          bun run --filter ./packages/streams build
-          bun x tsc --build
-          bun run build:docs
-          bun pm pack workspaces
+          npm run build:all
+          npm pack --workspaces
           rm signalk-typedoc-signalk-theme*.tgz # This is only needed as a dev dependency
           bun pm pack
       - name: Save tag to artifact
