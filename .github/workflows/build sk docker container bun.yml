@@ -126,7 +126,8 @@ jobs:
           rm -f package-lock.json
           rm -rf node_modules
           npm cache clean -f
-          bun i
+          npm install --package-lock-only
+          npm ci && npm cache clean --force
           npm run build --workspaces --if-present
           bun x tsc --build
           bun x typedoc
