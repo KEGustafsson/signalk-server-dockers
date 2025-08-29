@@ -120,7 +120,7 @@ jobs:
           mv ./../*.tgz .
           rm -f package-lock.json
           rm -rf node_modules
-          bun install --frozen-lockfile
+          bun ci
           bun pm cache rm
           bun build:all
           bun pm pack --workspaces
