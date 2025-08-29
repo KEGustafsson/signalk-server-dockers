@@ -121,7 +121,7 @@ jobs:
           rm -f package-lock.json
           rm -f bun.lock
           rm -rf node_modules
-          bun ci
+          bun i
           bun pm cache rm
           bun build:all
           bun pm pack --workspaces
