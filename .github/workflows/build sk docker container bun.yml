@@ -63,6 +63,7 @@ jobs:
           git clone https://github.com/SignalK/nmea0183-signalk.git
           cd nmea0183-signalk
           mv ../*.tgz .
+          bun remove @signalk/signalk-schema
           bun i --save *.tgz
           rm -rf node_modules
           rm -f *.tgz
