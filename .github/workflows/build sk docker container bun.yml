@@ -126,7 +126,7 @@ jobs:
           rm -f bun.lock
           rm -rf node_modules
           sudo apt-get update && sudo apt-get install -y libavahi-compat-libdnssd-dev
-          bun ci
+          bun i
           bun pm untrusted
           bun pm trust --all
           npm run build:all
