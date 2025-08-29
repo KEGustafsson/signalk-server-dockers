@@ -125,7 +125,12 @@ jobs:
           bun i
           bun pm untrusted
           bun pm trust --all
-          bun run build
+          bun run --filter ./packages/resources-provider-plugin build
+          bun run --filter ./packages/server-admin-ui-dependencies build
+          bun run --filter ./packages/server-admin-ui build
+          bun run --filter ./packages/server-api build
+          bun run --filter ./packages/streams build
+          bun x tsc --build
           bun run build:docs
           bun pm pack workspaces
           rm signalk-typedoc-signalk-theme*.tgz # This is only needed as a dev dependency
