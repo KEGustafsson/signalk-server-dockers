@@ -9,16 +9,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Node setup
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24.x'
+      - name: Bun setup
+        uses: oven-sh/setup-bun@v2
       - name: react-jsonschema-form-bs4
         run: |
           git clone -b bun https://github.com/KEGustafsson/react-jsonschema-form-bs4.git
           cd react-jsonschema-form-bs4
           rm -f package-lock.json
-          npm install -g bun
           bun i
           bun pm pack
       - name: Upload artifacts
@@ -34,15 +31,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Node setup
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24.x'
+      - name: Bun setup
+        uses: oven-sh/setup-bun@v2
       - name: specification
         run: |
           git clone https://github.com/SignalK/specification.git
           cd specification
-          npm install -g bun
           bun i
           bun pm pack
       - name: Upload artifacts
@@ -59,10 +53,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Node setup
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24.x'
+      - name: Bun setup
+        uses: oven-sh/setup-bun@v2
       - uses: actions/download-artifact@v4
         with:
           name: specification
@@ -71,10 +63,8 @@ jobs:
           git clone https://github.com/SignalK/nmea0183-signalk.git
           cd nmea0183-signalk
           mv ../*.tgz .
-          npm install -g bun
           bun i --save *.tgz
           rm -rf node_modules
-          rm -f package-lock.json
           rm -f *.tgz
           bun pm pack
       - name: Upload artifacts
@@ -91,10 +81,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Node setup
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24.x'
+      - name: Bun setup
+        uses: oven-sh/setup-bun@v2
       - name: signalk-server download and patch
         id: git
         run: |
@@ -117,10 +105,8 @@ jobs:
         run: |
           cd signalk-server/packages/server-admin-ui
           mv ./../../../*.tgz .
-          npm install -g bun
           bun i --save-dev *.tgz
           rm -rf node_modules
-          rm -f package-lock.json
       - uses: actions/download-artifact@v4
         with:
           name: nmea0183-signalk
@@ -133,8 +119,6 @@ jobs:
           mv ./../*.tgz .
           rm -f package-lock.json
           rm -rf node_modules
-          npm install -g bun
-          bun install --package-lock-only
           bun install --frozen-lockfile
           bun pm cache rm
           bun build:all
