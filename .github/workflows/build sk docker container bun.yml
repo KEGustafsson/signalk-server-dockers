@@ -123,8 +123,10 @@ jobs:
           rm -rf node_modules
           bun i
           bun pm cache rm
-          bun build:all
-          bun pm pack --workspaces
+          bun run build workspaces
+          bun run build
+          bun run build:docs
+          bun pm pack workspaces
           rm signalk-typedoc-signalk-theme*.tgz # This is only needed as a dev dependency
           bun pm pack
       - name: Save tag to artifact
