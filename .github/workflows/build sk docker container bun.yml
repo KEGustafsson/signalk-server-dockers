@@ -111,6 +111,8 @@ jobs:
           cd signalk-server/packages/server-admin-ui
           mv ./../../../*.tgz .
           bun i --save-dev *.tgz
+          bun pm untrusted
+          bun pm trust --all
           rm -rf node_modules
       - uses: actions/download-artifact@v4
         with:
