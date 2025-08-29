@@ -122,6 +122,8 @@ jobs:
           rm -f bun.lock
           rm -rf node_modules
           bun i
+          bun pm untrusted
+          bun pm trust --all
           bun run build
           bun run build:docs
           bun pm pack workspaces
