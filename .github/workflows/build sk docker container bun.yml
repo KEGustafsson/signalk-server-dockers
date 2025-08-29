@@ -20,7 +20,7 @@ jobs:
           rm -f package-lock.json
           npm install -g bun
           bun i
-          bun pack
+          bun pm pack
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -44,7 +44,7 @@ jobs:
           cd specification
           npm install -g bun
           bun i
-          bun pack
+          bun pm pack
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -76,7 +76,7 @@ jobs:
           rm -rf node_modules
           rm -f package-lock.json
           rm -f *.tgz
-          bun pack
+          bun pm pack
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -135,11 +135,12 @@ jobs:
           rm -rf node_modules
           npm install -g bun
           bun install --package-lock-only
-          bun ci && bun cache clean --force
+          bun install --frozen-lockfile
+          bun pm cache rm
           bun build:all
-          bun pack --workspaces
+          bun pm pack --workspaces
           rm signalk-typedoc-signalk-theme*.tgz # This is only needed as a dev dependency
-          bun pack
+          bun pm pack
       - name: Save tag to artifact
         run: echo ${{ steps.git.outputs.tag }} > tag.txt
       - name: Upload tag
