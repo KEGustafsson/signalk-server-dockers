@@ -15,7 +15,7 @@ jobs:
           node-version: '24.x'
       - name: react-jsonschema-form-bs4
         run: |
-          git clone https://github.com/KEGustafsson/react-jsonschema-form-bs4.git
+          git clone -b bun https://github.com/KEGustafsson/react-jsonschema-form-bs4.git
           cd react-jsonschema-form-bs4
           rm -f package-lock.json
           npm install -g bun
