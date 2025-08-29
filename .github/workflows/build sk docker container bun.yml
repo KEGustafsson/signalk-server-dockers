@@ -125,9 +125,10 @@ jobs:
           rm -f package-lock.json
           rm -rf node_modules
           npm cache clean -f
-          npm install --package-lock-only
-          npm ci && npm cache clean --force
-          npm run build:all
+          bun i
+          npm run build --workspaces --if-present
+          bun x tsc --build
+          bun x typedoc
           npm pack --workspaces
           rm signalk-typedoc-signalk-theme*.tgz # This is only needed as a dev dependency
           bun pm pack
