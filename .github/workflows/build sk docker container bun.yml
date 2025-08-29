@@ -123,12 +123,11 @@ jobs:
           cd signalk-server
           mv ./../*.tgz .
           rm -f package-lock.json
-          rm -f bun.lock
           rm -rf node_modules
-          sudo apt-get update && sudo apt-get install -y libavahi-compat-libdnssd-dev
-          bun ci
-          bun pm untrusted
-          bun pm trust --all
+          npm cache clean -f
+          npm install npm@latest -g
+          npm install --package-lock-only
+          npm ci && npm cache clean --force
           npm run build:all
           npm pack --workspaces
           rm signalk-typedoc-signalk-theme*.tgz # This is only needed as a dev dependency
