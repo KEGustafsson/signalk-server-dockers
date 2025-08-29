@@ -108,13 +108,11 @@ jobs:
           name: react-jsonschema-form-bs4
       - name: server-admin-ui patch 
         run: |
-          sudo apt-get update && sudo apt-get install -y libavahi-compat-libdnssd-dev
           cd signalk-server/packages/server-admin-ui
           mv ./../../../*.tgz .
-          bun i --save-dev *.tgz
-          bun pm untrusted
-          bun pm trust --all
+          npm i --save-dev *.tgz
           rm -rf node_modules
+          rm -f package-lock.json
       - uses: actions/download-artifact@v4
         with:
           name: nmea0183-signalk
