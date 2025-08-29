@@ -108,6 +108,7 @@ jobs:
           name: react-jsonschema-form-bs4
       - name: server-admin-ui patch 
         run: |
+          sudo apt-get update && sudo apt-get install -y libavahi-compat-libdnssd-dev
           cd signalk-server/packages/server-admin-ui
           mv ./../../../*.tgz .
           bun i --save-dev *.tgz
