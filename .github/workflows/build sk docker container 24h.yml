@@ -16,48 +16,59 @@ jobs:
         id: check
         run: |
           EXTERNAL_REPO="SignalK/signalk-server"
-          tags=$(curl -s "https://api.github.com/repos/$EXTERNAL_REPO/tags" | jq -r '.[].name')
-          latest_v_tag=$(echo "$tags" | grep '^v' | head -n 1)
+          tags_response=$(curl -s "https://api.github.com/repos/$EXTERNAL_REPO/tags")
+          if [ -z "$tags_response" ] || [ "$tags_response" == "null" ]; then
+              echo "Failed to fetch tags from GitHub API."
+              exit 1
+          fi
+          if echo "$tags_response" | jq -e 'type == "object" and has("message")' > /dev/null 2>&1; then
+              error_message=$(echo "$tags_response" | jq -r '.message')
+              echo "GitHub API error: $error_message"
+              exit 1
+          fi
+          tags_count=$(echo "$tags_response" | jq '. | length')
+          if [ "$tags_count" -eq 0 ]; then
+              echo "No tags found in repository."
+              exit 0
+          fi
+          echo "Found $tags_count total tags"
+          latest_v_tag=""
+          latest_v_tag_commit_date=""
+          latest_v_tag_commit_sha=""
+          for i in $(seq 0 $((tags_count - 1))); do
+              tag_name=$(echo "$tags_response" | jq -r ".[$i].name")
+              
+              # Check if tag starts with 'v'
+              if [[ "$tag_name" =~ ^v.* ]]; then
+                  latest_v_tag="$tag_name"
+                  latest_v_tag_commit_sha=$(echo "$tags_response" | jq -r ".[$i].commit.sha")
+                  
+                  echo "Found latest v* tag: $latest_v_tag"
+                  echo "Commit SHA: $latest_v_tag_commit_sha"
+                  break
+              fi
+          done
           if [ -z "$latest_v_tag" ]; then
               echo "No valid v* tags found."
               exit 0
           fi
-          echo "Latest v* tag: $latest_v_tag"
-          tag_ref_details=$(curl -s "https://api.github.com/repos/$EXTERNAL_REPO/git/refs/tags/$latest_v_tag")
-          object_type=$(echo "$tag_ref_details" | jq -r '.object.type')
-          object_sha=$(echo "$tag_ref_details" | jq -r '.object.sha')
-          if [ -z "$object_sha" ] || [ "$object_sha" == "null" ]; then
-              echo "Failed to fetch tag reference details."
+          echo "Fetching commit details..."
+          commit_details=$(curl -s "https://api.github.com/repos/$EXTERNAL_REPO/commits/$latest_v_tag_commit_sha")
+          if [ -z "$commit_details" ] || [ "$commit_details" == "null" ]; then
+              echo "Failed to fetch commit details."
               exit 1
           fi
-          echo "Tag object type: $object_type"
-          echo "Object SHA: $object_sha"
-          if [ "$object_type" == "tag" ]; then
-              # Annotated tag - get tag object details
-              tag_object_details=$(curl -s "https://api.github.com/repos/$EXTERNAL_REPO/git/tags/$object_sha")
-              commit_date=$(echo "$tag_object_details" | jq -r '.tagger.date')
-              commit_sha=$(echo "$tag_object_details" | jq -r '.object.sha')
-              if [ -z "$commit_date" ] || [ "$commit_date" == "null" ]; then
-                  echo "Failed to fetch annotated tag details."
-                  exit 1
-              fi
-              echo "Tag type: Annotated"
-              echo "Tag date: $commit_date"
-          elif [ "$object_type" == "commit" ]; then
-              # Lightweight tag - get commit details directly
-              commit_sha="$object_sha"
-              commit_details=$(curl -s "https://api.github.com/repos/$EXTERNAL_REPO/git/commits/$commit_sha")
-              commit_date=$(echo "$commit_details" | jq -r '.committer.date')
-              if [ -z "$commit_date" ] || [ "$commit_date" == "null" ]; then
-                  echo "Failed to fetch commit details for lightweight tag."
-                  exit 1
-              fi
-              echo "Tag type: Lightweight"
-              echo "Commit date: $commit_date"
-          else
-              echo "Unknown tag object type: $object_type"
+          commit_error=$(echo "$commit_details" | jq -r '.message // empty')
+          if [ -n "$commit_error" ]; then
+              echo "GitHub API error fetching commit: $commit_error"
               exit 1
           fi
+          commit_date=$(echo "$commit_details" | jq -r '.commit.committer.date // .commit.author.date // empty')
+          if [ -z "$commit_date" ] || [ "$commit_date" == "null" ]; then
+              echo "Failed to extract commit date."
+              exit 1
+          fi
+          echo "Commit date: $commit_date"
           current_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           time_24h_ago=$(date -u -d "$current_time - 24 hours" +"%Y-%m-%dT%H:%M:%SZ")
           commit_epoch=$(date -u -d "$commit_date" +%s)
@@ -70,12 +81,13 @@ jobs:
           echo "Time difference: ${days}d ${hours}h ${minutes}m ${seconds}s"
           echo "Tag/Commit Date: $commit_date"
           echo "Current Time: $current_time"
+          echo "24h ago threshold: $time_24h_ago"
           if [[ "$commit_date" > "$time_24h_ago" ]]; then
-              echo "New v* tag $latest_v_tag found in the last 24 hours."
+              echo "✅ New v* tag $latest_v_tag found in the last 24 hours."
               echo "proceed=true" >> $GITHUB_OUTPUT
           else
-              echo "No new v* tags found in the last 24 hours."
-              echo "Latest v* tag is $latest_v_tag"
+              echo "❌ No new v* tags found in the last 24 hours."
+              echo "Latest v* tag is $latest_v_tag (${days}d ${hours}h ${minutes}m old)"
               echo "proceed=false" >> $GITHUB_OUTPUT
           fi
 
