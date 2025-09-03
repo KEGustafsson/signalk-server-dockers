@@ -4,30 +4,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  react-jsonschema-form-bs4:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-      - name: Node setup
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24.x'
-      - name: react-jsonschema-form-bs4
-        run: |
-          git clone https://github.com/KEGustafsson/react-jsonschema-form-bs4.git
-          cd react-jsonschema-form-bs4
-          rm -f package-lock.json
-          npm i
-          npm pack
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          retention-days: 1
-          name: react-jsonschema-form-bs4
-          path: |
-            ./react-jsonschema-form-bs4/*.tgz
-
   specification:
     runs-on: ubuntu-latest
     steps:
@@ -83,7 +59,7 @@ jobs:
             ./nmea0183-signalk/*.tgz
 
   signalk-server:
-    needs: [nmea0183-signalk, react-jsonschema-form-bs4]
+    needs: [nmea0183-signalk]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -107,16 +83,6 @@ jobs:
           else
             echo "No patches to apply"
           fi
-      - uses: actions/download-artifact@v5
-        with:
-          name: react-jsonschema-form-bs4
-      - name: server-admin-ui patch 
-        run: |
-          cd signalk-server/packages/server-admin-ui
-          mv ./../../../*.tgz .
-          npm i --save-dev *.tgz
-          rm -rf node_modules
-          rm -f package-lock.json
       - uses: actions/download-artifact@v5
         with:
           name: nmea0183-signalk
