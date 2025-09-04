@@ -79,7 +79,7 @@ jobs:
           echo "Extracted tag: $tag"
           cd ..
           rm -rf signalk-server
-          git clone -b bootstrap5 https://github.com/KEGustafsson/signalk-server.git
+          git clone -b rjsf-update https://github.com/KEGustafsson/signalk-server.git
           cd signalk-server
           if [ -d "./../patch" ] && [ "$(ls -A ./../patch/*.patch 2>/dev/null)" ]; then
             git apply ./../patch/*.patch
