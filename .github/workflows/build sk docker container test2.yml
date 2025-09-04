@@ -127,7 +127,7 @@ jobs:
     strategy:
       matrix:
         os: [24.04]
-        node: [22.x, 24.x]
+        node: [24.x]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -190,20 +190,12 @@ jobs:
     strategy:
       matrix:
         os: [24.04]
-        node: [22.x, 24.x]
-        vm: [ubuntu-latest] #, ubuntu-24.04-arm]
+        node: [24.x]
+        vm: [ubuntu-latest]
         include:
           - vm: ubuntu-latest
             arch: amd
             platform: linux/amd64
-          #- vm: ubuntu-24.04-arm
-          #  arch: arm
-          #  node: 22.x
-          #  platform: linux/arm64,linux/arm/v7
-          #- vm: ubuntu-24.04-arm
-          #  arch: arm
-          #  node: 24.x
-          #  platform: linux/arm64
     runs-on: ${{ matrix.vm }}
     steps:
       - name: Checkout
@@ -237,14 +229,11 @@ jobs:
     strategy:
       matrix:
         os: [24.04]
-        node: [22.x, 24.x]
+        node: [24.x]
         include:
           - os: 24.04
             node: 24.x
             tag: latest
-          - os: 24.04
-            node: 22.x
-            tag: latest-22.x
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -287,9 +276,6 @@ jobs:
             kgustafs/signalk-server:${{ matrix.tag }}
           sources: |
             ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
-            #sources: |
-          #  ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
-          #  ghcr.io/kegustafsson/signalk-server:arm-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
 
   housekeeping:
     needs: create-and-push-manifest
