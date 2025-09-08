@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Bun setup
         uses: oven-sh/setup-bun@v2
       - name: react-jsonschema-form-bs4
@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Bun setup
         uses: oven-sh/setup-bun@v2
       - name: specification
@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Bun setup
         uses: oven-sh/setup-bun@v2
       - uses: actions/download-artifact@v5
@@ -81,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Node setup
         uses: actions/setup-node@v4
         with:
@@ -158,7 +158,7 @@ jobs:
         node: [22.x, 24.x]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - uses: actions/download-artifact@v5
         with:
           name: tag
@@ -235,7 +235,7 @@ jobs:
     runs-on: ${{ matrix.vm }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - uses: actions/download-artifact@v5
         with:
           name: packed-modules
@@ -275,7 +275,7 @@ jobs:
             tag: latest-22.x
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - uses: actions/download-artifact@v5
