@@ -13,23 +13,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ['22', '24']
-        include:
-          - node-version: '22'
-            image-tag: 'latest-22.x'
-          - node-version: '24'
-            image-tag: 'latest-24.x'
+        node-version: ['22.x', '24.x']
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-        
+        uses: actions/checkout@v4        
       - name: Run Trivy vulnerability scanner for Node ${{ matrix.node-version }}
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: 'ghcr.io/kegustafsson/signalk-server:${{ matrix.image-tag }}'
+          image-ref: 'ghcr.io/kegustafsson/signalk-server:latest-${{ matrix.node-version }}'
           format: 'sarif'
           output: 'trivy-results-node${{ matrix.node-version }}.sarif'
-
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()
