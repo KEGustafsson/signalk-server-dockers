@@ -1,6 +1,9 @@
 name: Security Scan
 on:
   workflow_dispatch:
+permissions:
+  contents: read
+  security-events: write
 jobs:
   build:
     name: Security Scan
