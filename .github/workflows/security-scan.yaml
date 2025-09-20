@@ -1,4 +1,4 @@
-name: Security Scan
+name: Security Scan Docker Image
 on:
   workflow_dispatch:
 permissions:
