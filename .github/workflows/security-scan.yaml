@@ -12,7 +12,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: 'docker.io/KEGustafsson/signalk-server:latest'
+          image-ref: 'ghcr.io/KEGustafsson/signalk-server:latest'
           format: 'sarif'
           output: 'trivy-results.sarif'
 
