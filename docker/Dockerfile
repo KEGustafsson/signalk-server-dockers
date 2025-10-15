@@ -19,9 +19,9 @@ WORKDIR /home/node/signalk
 COPY *.tgz .
 USER root
 RUN npm in -g *.tgz
-RUN tree -a -I 'node_modules' /usr/lib/node_modules/@signalk/streams \
+RUN find /usr/lib/node_modules/@signalk/streams -name node_modules -prune -o -print \
   && cat /usr/lib/node_modules/@signalk/streams/package.json
-RUN tree -a -I 'node_modules' /usr/lib/node_modules/signalk-server/node_modules/@signalk/streams \
+RUN find /usr/lib/node_modules/signalk-server/node_modules/@signalk/streams -prune -o -print \
   && cat /usr/lib/node_modules/signalk-server/node_modules/@signalk/streams/package.json
 RUN cp -Rf /usr/lib/node_modules/@signalk/* /usr/lib/node_modules/signalk-server/node_modules/@signalk/ \
   && rm -rf /usr/lib/node_modules/@signalk/ \
