@@ -18,17 +18,11 @@ FROM base AS tarballs_installed
 WORKDIR /home/node/signalk
 COPY *.tgz .
 USER root
-RUN npm in -g *.tgz
-RUN find /usr/lib/node_modules/@signalk/streams -name node_modules -prune -o -print \
-  && cat /usr/lib/node_modules/@signalk/streams/package.json
-RUN find /usr/lib/node_modules/signalk-server/node_modules/@signalk/streams -prune -o -print \
-  && cat /usr/lib/node_modules/signalk-server/node_modules/@signalk/streams/package.json
-RUN cp -Rf /usr/lib/node_modules/@signalk/* /usr/lib/node_modules/signalk-server/node_modules/@signalk/ \
-  && rm -rf /usr/lib/node_modules/@signalk/ \
+RUN npm in -g *.tgz \
+  && mv /usr/lib/node_modules/@signalk/* /usr/lib/node_modules/signalk-server/node_modules/@signalk/ \
   && cp *.tgz /usr/lib/node_modules/signalk-server/ \
   && ls -la /usr/lib/node_modules/signalk-server/*.tgz \
   && npm cache clean --force
-
 FROM base AS production
 USER root
 RUN ln -s /usr/lib/node_modules/signalk-server/bin/signalk-server /usr/bin/signalk-server
