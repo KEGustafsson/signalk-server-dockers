@@ -15,7 +15,8 @@ jobs:
           node-version: '24.x'
       - name: react-jsonschema-form-bs4
         run: |
-          git clone https://github.com/KEGustafsson/react-jsonschema-form-bs4.git
+          # git clone https://github.com/KEGustafsson/react-jsonschema-form-bs4.git
+          git clone -b nmp_audit https://github.com/KEGustafsson/react-jsonschema-form-bs4.git
           cd react-jsonschema-form-bs4
           rm -f package-lock.json
           npm i
@@ -96,7 +97,7 @@ jobs:
         id: git
         run: |
           # git clone https://github.com/SignalK/signalk-server.git
-          git clone -b stream https://github.com/KEGustafsson/signalk-server.git
+          git clone -b nmp_audit https://github.com/KEGustafsson/signalk-server.git
           cd signalk-server
           git fetch --tags
           tag=$(git describe --tags `git rev-list --tags --max-count=1`)
