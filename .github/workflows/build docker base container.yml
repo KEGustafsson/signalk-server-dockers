@@ -16,13 +16,17 @@ jobs:
         vm: [ubuntu-latest, ubuntu-24.04-arm]
         include:
           - vm: ubuntu-latest
+            os: 24.04
+            node: 24.x
             arch: amd
             platform: linux/amd64
           - vm: ubuntu-24.04-arm
+            os: 24.04
             arch: arm
             node: 22.x
             platform: linux/arm64,linux/arm/v7
           - vm: ubuntu-24.04-arm
+            os: 24.04
             arch: arm
             node: 24.x
             platform: linux/arm64

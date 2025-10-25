@@ -249,6 +249,8 @@ jobs:
       matrix:
         os: [24.04]
         node: [22.x, 24.x]
+        exclude:
+          - node: 22.x
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -312,16 +314,21 @@ jobs:
       matrix:
         os: [24.04]
         node: [22.x, 24.x]
+        exclude:
+          - node: 22.x
         vm: [ubuntu-latest, ubuntu-24.04-arm]
         include:
           - vm: ubuntu-latest
+            os: 24.04
             arch: amd
             platform: linux/amd64
           - vm: ubuntu-24.04-arm
+            os: 24.04
             arch: arm
             node: 22.x
             platform: linux/arm64,linux/arm/v7
           - vm: ubuntu-24.04-arm
+            os: 24.04
             arch: arm
             node: 24.x
             platform: linux/arm64
@@ -359,6 +366,8 @@ jobs:
       matrix:
         os: [24.04]
         node: [22.x, 24.x]
+        exclude:
+          - node: 22.x
         include:
           - os: 24.04
             node: 24.x
@@ -413,6 +422,12 @@ jobs:
   housekeeping:
     needs: create-and-push-manifest
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [24.04]
+        node: [22.x, 24.x]
+        exclude:
+          - node: 22.x
     permissions:
       packages: write
     steps:
@@ -421,7 +436,7 @@ jobs:
         with:
           packages: signalk-server
           delete-untagged: true
-          delete-tags: amd-24.04-24.x-${{ github.run_id }},amd-24.04-22.x-${{ github.run_id }},arm-24.04-24.x-${{ github.run_id }},arm-24.04-22.x-${{ github.run_id }}
+          delete-tags: amd-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }},arm-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
           token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   slack:
@@ -439,4 +454,4 @@ jobs:
           echo "TAG=$tag" >> $GITHUB_OUTPUT
       - name: Slack notification
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"New Signal K image available, ${{ steps.vars.outputs.TAG }} with Node 22.x and 24.x"}' https://hooks.slack.com/services/${{ secrets.SLACK }}
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"New Signal K image available, ${{ steps.vars.outputs.TAG }}"}' https://hooks.slack.com/services/${{ secrets.SLACK }}
