@@ -11,6 +11,8 @@ jobs:
       matrix:
         os: [24.04]
         node: [22.x, 24.x]
+        exclude:
+          - node-version: 22.x
         vm: [ubuntu-latest, ubuntu-24.04-arm]
         include:
           - vm: ubuntu-latest
@@ -70,6 +72,8 @@ jobs:
       matrix:
         os: [24.04]
         node: [22.x, 24.x]
+        exclude:
+          - node-version: 22.x
 
     steps:
       - name: Login to ghcr.io
@@ -98,6 +102,12 @@ jobs:
   housekeeping:
     needs: create-and-push-manifest
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [24.04]
+        node: [22.x, 24.x]
+        exclude:
+          - node-version: 22.x
     permissions:
       packages: write
     steps:
@@ -106,7 +116,7 @@ jobs:
         with:
           packages: signalk-server-base
           delete-untagged: true
-          delete-tags: amd-24.04-24.x,amd-24.04-22.x,arm-24.04-24.x,arm-24.04-22.x
+          delete-tags: amd-${{ matrix.os }}-${{ matrix.node }},arm-${{ matrix.os }}-${{ matrix.node }}
           token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   slack:
@@ -115,4 +125,4 @@ jobs:
     steps:
       - name: Slack notification
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"Ubuntu 24.04 and Node v22 & v24 base images ready"}' https://hooks.slack.com/services/${{ secrets.SLACK }}
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"Ubuntu 24.04 base images ready"}' https://hooks.slack.com/services/${{ secrets.SLACK }}
