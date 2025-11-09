@@ -1,4 +1,4 @@
-name: SignalK Docker Build test
+name: SignalK Docker Build jsonschema-dev
 
 on:
   workflow_dispatch:
