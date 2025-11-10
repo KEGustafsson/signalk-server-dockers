@@ -99,7 +99,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Node setup
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24.x'
       - name: react-jsonschema-form-bs4
@@ -125,7 +125,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Node setup
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24.x'
       - name: specification
@@ -149,7 +149,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Node setup
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24.x'
       - uses: actions/download-artifact@v4
@@ -180,7 +180,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Node setup
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24.x'
       - name: signalk-server download and patch
