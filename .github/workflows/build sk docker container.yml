@@ -22,7 +22,7 @@ jobs:
           npm i
           npm pack
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           retention-days: 1
           name: react-jsonschema-form-bs4
@@ -45,7 +45,7 @@ jobs:
           npm i
           npm pack
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           retention-days: 1
           name: specification
@@ -76,7 +76,7 @@ jobs:
           rm -f *.tgz
           npm pack
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           retention-days: 1
           name: nmea0183-signalk
@@ -141,13 +141,13 @@ jobs:
       - name: Save tag to artifact
         run: echo ${{ steps.git.outputs.tag }} > tag.txt
       - name: Upload tag
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           retention-days: 1
           name: tag
           path: tag.txt
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           retention-days: 1
           name: packed-modules
@@ -213,7 +213,7 @@ jobs:
       - name: Save docker tags to artifact
         run: echo ${{ steps.set-tags.outputs.tags }} > docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt
       - name: Upload tag
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           retention-days: 1
           name: docker_tags_${{ matrix.os }}_${{ matrix.node }}
