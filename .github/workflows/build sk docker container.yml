@@ -306,8 +306,6 @@ jobs:
 #            node: 22.x
 #            tag: latest-22.x
     steps:
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
       - uses: actions/download-artifact@v5
         with:
           name: docker_tags_${{ matrix.os }}_${{ matrix.node }}
@@ -322,18 +320,16 @@ jobs:
             printf "%s\n" "$ghcr_tags"
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
-      - name: Login to ghcr.io
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.GHCR_USERNAME }}
-          password: ${{ secrets.GHCR_TOKEN }}
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      - name: Install skopeo
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
       - name: Copy images from GHCR to Docker Hub
+        env:
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_HUB_ACCESS_TOKEN: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
         run: |
           # Copy images from GHCR to Docker Hub based on IMAGES list
           while IFS= read -r ghcr_tag; do
@@ -341,11 +337,18 @@ jobs:
             # Convert ghcr tag to hub tag
             hub_tag=$(echo "$ghcr_tag" | sed 's|ghcr.io/kegustafsson/signalk-server|docker.io/kgustafs/signalk-server|')
             echo "Copying $ghcr_tag to $hub_tag"
-            docker buildx imagetools create -t "$hub_tag" "$ghcr_tag"
+            skopeo copy --all \
+              --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
+              --dest-creds "${DOCKER_HUB_USERNAME}:${DOCKER_HUB_ACCESS_TOKEN}" \
+              "docker://${ghcr_tag}" "docker://${hub_tag}"
           done <<< "${{ steps.set_images.outputs.GHCR_IMAGES }}"
           # Copy the matrix.tag manifest
           echo "Copying ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }} to docker.io/kgustafs/signalk-server:${{ matrix.tag }}"
-          docker buildx imagetools create -t "docker.io/kgustafs/signalk-server:${{ matrix.tag }}" "ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }}"
+          skopeo copy --all \
+            --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
+            --dest-creds "${DOCKER_HUB_USERNAME}:${DOCKER_HUB_ACCESS_TOKEN}" \
+            "docker://ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }}" \
+            "docker://docker.io/kgustafs/signalk-server:${{ matrix.tag }}"
 
   housekeeping:
     needs: copy-to-dockerhub
