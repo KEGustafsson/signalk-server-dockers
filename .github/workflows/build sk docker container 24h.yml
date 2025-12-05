@@ -91,32 +91,6 @@ jobs:
               echo "proceed=false" >> $GITHUB_OUTPUT
           fi
 
-  react-jsonschema-form-bs4:
-    needs: [check-new-v-tags]
-    if: ${{ needs.check-new-v-tags.outputs.proceed == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Node setup
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24.x'
-      - name: react-jsonschema-form-bs4
-        run: |
-          git clone https://github.com/KEGustafsson/react-jsonschema-form-bs4.git
-          cd react-jsonschema-form-bs4
-          rm -f package-lock.json
-          npm i
-          npm pack
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          retention-days: 1
-          name: react-jsonschema-form-bs4
-          path: |
-            ./react-jsonschema-form-bs4/*.tgz
-
   specification:
     needs: [check-new-v-tags]
     if: ${{ needs.check-new-v-tags.outputs.proceed == 'true' }}
@@ -174,7 +148,7 @@ jobs:
             ./nmea0183-signalk/*.tgz
 
   signalk-server:
-    needs: [nmea0183-signalk, react-jsonschema-form-bs4]
+    needs: [nmea0183-signalk]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -197,16 +171,6 @@ jobs:
           else
             echo "No patches to apply"
           fi
-      - uses: actions/download-artifact@v4
-        with:
-          name: react-jsonschema-form-bs4
-      - name: server-admin-ui patch 
-        run: |
-          cd signalk-server/packages/server-admin-ui
-          mv ./../../../*.tgz .
-          npm i --save-dev *.tgz
-          rm -rf node_modules
-          rm -f package-lock.json
       - uses: actions/download-artifact@v4
         with:
           name: nmea0183-signalk
