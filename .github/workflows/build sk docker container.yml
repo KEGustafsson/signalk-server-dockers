@@ -78,11 +78,11 @@ jobs:
           tag=$(git describe --tags `git rev-list --tags --max-count=1`)
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "Extracted tag: $tag"
-          if [ -d "./../patch" ] && [ "$(ls -A ./../patch/*.patch 2>/dev/null)" ]; then
-            git apply ./../patch/*.patch
-          else
-            echo "No patches to apply"
-          fi
+          # if [ -d "./../patch" ] && [ "$(ls -A ./../patch/*.patch 2>/dev/null)" ]; then
+          #  git apply ./../patch/*.patch
+          # else
+          #  echo "No patches to apply"
+          # fi
       - uses: actions/download-artifact@v5
         with:
           name: nmea0183-signalk
