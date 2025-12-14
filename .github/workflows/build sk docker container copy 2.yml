@@ -248,24 +248,29 @@ jobs:
           - os: 24.04
             node: 24.x
             tag: latest
-#          - os: 24.04
-#            node: 22.x
-#            tag: latest-22.x
+  #        - os: 24.04
+  #          node: 22.x
+  #          tag: latest-22.x
     steps:
       - name: Checkout
         uses: actions/checkout@v5
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - uses: actions/download-artifact@v5
+      - name: Download Docker tag artifact
+        uses: actions/download-artifact@v5
         with:
           name: docker_tags_${{ matrix.os }}_${{ matrix.node }}
-      - name: Normalize and filter GHCR tags
+      - name: Normalize and filter GHCR tags (multiline output)
+        id: ghcr_tags
         shell: bash
         run: |
           set -euo pipefail
-          sed 's/,/\n/g' docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt \
-            | grep '^ghcr\.io/' \
-            > tags.txt
+          {
+            echo 'IMAGES<<EOF'
+            sed 's/,/\n/g' docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt \
+              | grep '^ghcr\.io/'
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
       - name: Login to ghcr.io
         uses: docker/login-action@v3
         with:
@@ -276,7 +281,7 @@ jobs:
         uses: int128/docker-manifest-create-action@v2
         with:
           tags: |
-            $(cat tags.txt)
+            ${{ steps.ghcr_tags.outputs.IMAGES }}
             ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }}
           sources: |
             ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
@@ -307,11 +312,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y skopeo
-      - name: Normalize tags
+      - name: Normalize and filter GHCR tags
         shell: bash
         run: |
           set -euo pipefail
-          sed 's/,/\n/g' docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt > tags.txt
+          sed 's/,/\n/g' docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt \
+            | grep '^ghcr\.io/' \
+            > tags.txt
       - name: Copy images from GHCR to Docker Hub
         shell: bash
         env:
@@ -321,10 +328,8 @@ jobs:
           DOCKER_HUB_ACCESS_TOKEN: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          while IFS= read -r tag; do
-            [ -z "$tag" ] && continue
-            ghcr_image="${tag#ghcr.io/}"
-            ghcr_image="ghcr.io/${ghcr_image}"
+          while IFS= read -r ghcr_image; do
+            [ -z "$ghcr_image" ] && continue
             hub_image="${ghcr_image/ghcr.io\/kegustafsson\/signalk-server/docker.io\/kgustafs\/signalk-server}"
             skopeo copy --all \
               --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
