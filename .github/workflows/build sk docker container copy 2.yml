@@ -262,10 +262,9 @@ jobs:
       - name: Set multi-line output for GHCR
         id: set_images
         run: |
-          tags=$(cat docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt | sed 's/,/\n/g')
           {
             echo 'IMAGES<<EOF'
-            printf "%s\n" "$tags"
+            sed 's/,/\n/g' docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
       - name: Print tags
