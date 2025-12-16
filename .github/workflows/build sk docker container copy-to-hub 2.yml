@@ -255,9 +255,9 @@ jobs:
           - os: 24.04
             node: 24.x
             tag: latest
-  #        - os: 24.04
-  #          node: 22.x
-  #          tag: latest-22.x
+          - os: 24.04
+            node: 22.x
+            tag: latest-22.x
     steps:
       - name: Checkout
         uses: actions/checkout@v5
