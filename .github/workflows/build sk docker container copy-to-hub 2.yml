@@ -68,16 +68,23 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24.x'
+      - name: signalk-server tags
+        id: git
+        run: |
+          git clone https://github.com/SignalK/signalk-server.git
+          cd signalk-server
+          git fetch --tags
+          tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+          echo "tag=$tag" >> $GITHUB_OUTPUT
+          echo "Extracted tag: $tag"
+          cd ..
+          rm -rf signalk-server
       - name: signalk-server download and patch
         id: git
         run: |
           # git clone https://github.com/SignalK/signalk-server.git
           git clone -b dev https://github.com/KEGustafsson/signalk-server.git
           cd signalk-server
-          git fetch --tags
-          tag=$(git describe --tags `git rev-list --tags --max-count=1`)
-          echo "tag=$tag" >> $GITHUB_OUTPUT
-          echo "Extracted tag: $tag"
           #if [ -d "./../patch" ] && [ "$(ls -A ./../patch/*.patch 2>/dev/null)" ]; then
           #  git apply ./../patch/*.patch
           #else
@@ -242,8 +249,8 @@ jobs:
       matrix:
         os: [24.04]
         node: [22.x, 24.x]
-        exclude:
-          - node: 22.x
+#        exclude:
+#          - node: 22.x
         include:
           - os: 24.04
             node: 24.x
