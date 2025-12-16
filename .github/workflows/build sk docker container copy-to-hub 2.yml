@@ -69,7 +69,7 @@ jobs:
         with:
           node-version: '24.x'
       - name: signalk-server tags
-        id: git
+        id: tags
         run: |
           git clone https://github.com/SignalK/signalk-server.git
           cd signalk-server
