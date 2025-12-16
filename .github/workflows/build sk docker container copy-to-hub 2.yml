@@ -155,24 +155,12 @@ jobs:
         id: set-tags
         run: |
           if [[ "${{ steps.vars.outputs.tag }}" == *beta* ]]; then
-            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:latest-${{ matrix.os }}-${{ matrix.node }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.node }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.node }}"
             tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.node }}"
             tags="$tags,${{ steps.vars.outputs.hub }}:latest-${{ matrix.node }}"
           else
-            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.hub }}:latest-${{ matrix.os }}-${{ matrix.node }}"
-            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.node }}"
+            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.node }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.node }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.node }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.node }}"
