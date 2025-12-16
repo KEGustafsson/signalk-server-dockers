@@ -353,21 +353,19 @@ jobs:
   housekeeping:
     needs: copy-to-dockerhub
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        os: [24.04]
-        node: [22.x, 24.x]
-#        exclude:
-#          - node: 22.x
     permissions:
       packages: write
     steps:
-      - name: Remove Docker Image from GHCR
+      - name: Remove intermediate Docker Images from GHCR
         uses: dataaxiom/ghcr-cleanup-action@v1
         with:
           packages: signalk-server
           delete-untagged: true
-          delete-tags: amd-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }},arm-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
+          delete-tags: |
+            amd-24.04-22.x-${{ github.run_id }}
+            arm-24.04-22.x-${{ github.run_id }}
+            amd-24.04-24.x-${{ github.run_id }}
+            arm-24.04-24.x-${{ github.run_id }}
           token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   slack:
