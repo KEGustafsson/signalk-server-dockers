@@ -1,14 +1,101 @@
-name: SignalK Docker Build - Copy
+name: SignalK Docker Build 24h -Old
 
 on:
   workflow_dispatch:
 
 jobs:
+  check-new-v-tags:
+    runs-on: ubuntu-latest
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+    
+    steps:
+      - name: Fetch and compare tags
+        id: check
+        run: |
+          EXTERNAL_REPO="SignalK/signalk-server"
+          tags_response=$(curl -s "https://api.github.com/repos/$EXTERNAL_REPO/tags")
+          if [ -z "$tags_response" ] || [ "$tags_response" == "null" ]; then
+              echo "Failed to fetch tags from GitHub API."
+              exit 1
+          fi
+          if echo "$tags_response" | jq -e 'type == "object" and has("message")' > /dev/null 2>&1; then
+              error_message=$(echo "$tags_response" | jq -r '.message')
+              echo "GitHub API error: $error_message"
+              exit 1
+          fi
+          tags_count=$(echo "$tags_response" | jq '. | length')
+          if [ "$tags_count" -eq 0 ]; then
+              echo "No tags found in repository."
+              exit 0
+          fi
+          echo "Found $tags_count total tags"
+          latest_v_tag=""
+          latest_v_tag_commit_date=""
+          latest_v_tag_commit_sha=""
+          for i in $(seq 0 $((tags_count - 1))); do
+              tag_name=$(echo "$tags_response" | jq -r ".[$i].name")
+              
+              # Check if tag starts with 'v'
+              if [[ "$tag_name" =~ ^v.* ]]; then
+                  latest_v_tag="$tag_name"
+                  latest_v_tag_commit_sha=$(echo "$tags_response" | jq -r ".[$i].commit.sha")
+                  
+                  echo "Found latest v* tag: $latest_v_tag"
+                  echo "Commit SHA: $latest_v_tag_commit_sha"
+                  break
+              fi
+          done
+          if [ -z "$latest_v_tag" ]; then
+              echo "No valid v* tags found."
+              exit 0
+          fi
+          echo "Fetching commit details..."
+          commit_details=$(curl -s "https://api.github.com/repos/$EXTERNAL_REPO/commits/$latest_v_tag_commit_sha")
+          if [ -z "$commit_details" ] || [ "$commit_details" == "null" ]; then
+              echo "Failed to fetch commit details."
+              exit 1
+          fi
+          commit_error=$(echo "$commit_details" | jq -r '.message // empty')
+          if [ -n "$commit_error" ]; then
+              echo "GitHub API error fetching commit: $commit_error"
+              exit 1
+          fi
+          commit_date=$(echo "$commit_details" | jq -r '.commit.committer.date // .commit.author.date // empty')
+          if [ -z "$commit_date" ] || [ "$commit_date" == "null" ]; then
+              echo "Failed to extract commit date."
+              exit 1
+          fi
+          echo "Commit date: $commit_date"
+          current_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          time_24h_ago=$(date -u -d "$current_time - 24 hours" +"%Y-%m-%dT%H:%M:%SZ")
+          commit_epoch=$(date -u -d "$commit_date" +%s)
+          current_epoch=$(date -u -d "$current_time" +%s)
+          time_diff_seconds=$((current_epoch - commit_epoch))
+          days=$((time_diff_seconds / 86400))
+          hours=$(( (time_diff_seconds % 86400) / 3600 ))
+          minutes=$(( (time_diff_seconds % 3600) / 60 ))
+          seconds=$((time_diff_seconds % 60))
+          echo "Time difference: ${days}d ${hours}h ${minutes}m ${seconds}s"
+          echo "Tag/Commit Date: $commit_date"
+          echo "Current Time: $current_time"
+          echo "24h ago threshold: $time_24h_ago"
+          if [[ "$commit_date" > "$time_24h_ago" ]]; then
+              echo "✅ New v* tag $latest_v_tag found in the last 24 hours."
+              echo "proceed=true" >> $GITHUB_OUTPUT
+          else
+              echo "❌ No new v* tags found in the last 24 hours."
+              echo "Latest v* tag is $latest_v_tag (${days}d ${hours}h ${minutes}m old)"
+              echo "proceed=false" >> $GITHUB_OUTPUT
+          fi
+
   specification:
+    needs: [check-new-v-tags]
+    if: ${{ needs.check-new-v-tags.outputs.proceed == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
       - name: Node setup
         uses: actions/setup-node@v4
         with:
@@ -32,12 +119,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
       - name: Node setup
         uses: actions/setup-node@v4
         with:
           node-version: '24.x'
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v4
         with:
           name: specification
       - name: nmea0183-signalk
@@ -63,7 +150,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
       - name: Node setup
         uses: actions/setup-node@v4
         with:
@@ -71,22 +158,21 @@ jobs:
       - name: signalk-server download and patch
         id: git
         run: |
-          # git clone https://github.com/SignalK/signalk-server.git
-          git clone -b dev https://github.com/KEGustafsson/signalk-server.git
+          git clone https://github.com/SignalK/signalk-server.git
           cd signalk-server
           git fetch --tags
           tag=$(git describe --tags `git rev-list --tags --max-count=1`)
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "Extracted tag: $tag"
-          #if [ -d "./../patch" ] && [ "$(ls -A ./../patch/*.patch 2>/dev/null)" ]; then
-          #  git apply ./../patch/*.patch
-          #else
-          #  echo "No patches to apply"
-          #fi
-      - uses: actions/download-artifact@v5
+          if [ -d "./../patch" ] && [ "$(ls -A ./../patch/*.patch 2>/dev/null)" ]; then
+            git apply ./../patch/*.patch
+          else
+            echo "No patches to apply"
+          fi
+      - uses: actions/download-artifact@v4
         with:
           name: nmea0183-signalk
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v4
         with:
           name: specification
       - name: signalk-server build
@@ -129,8 +215,8 @@ jobs:
           - node: 22.x
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+        uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
           name: tag
       - name: Set TAG for build-args
@@ -211,8 +297,8 @@ jobs:
     runs-on: ${{ matrix.vm }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+        uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
           name: packed-modules
       - name: Set up Docker Buildx
@@ -253,105 +339,50 @@ jobs:
 #            tag: latest-22.x
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v4
         with:
           name: docker_tags_${{ matrix.os }}_${{ matrix.node }}
-      - name: Set multi-line output for GHCR
+      - name: Set multi-line output
         id: set_images
         run: |
           tags=$(cat docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt | sed 's/,/\n/g')
-          # Filter to only ghcr tags
-          ghcr_tags=$(echo "$tags" | grep "^ghcr.io/")
           {
             echo 'IMAGES<<EOF'
-            printf "%s\n" "$ghcr_tags"
+            printf "%s\n" "$tags"
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
       - name: Print tags
         run: |
-          echo "GHCR tags: ${{ steps.set_images.outputs.IMAGES }}"
+          tags=$(cat docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt | sed 's/,/\n/g')
+          echo "tags: $tags"
+          echo "tags: ${{ steps.set_images.outputs.IMAGES }}"      
       - name: Login to ghcr.io
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
-      - name: Create and push multi-arch manifest to GHCR
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      - name: Create and push multi-arch manifest to GHCR and Docker Hub
         uses: int128/docker-manifest-create-action@v2
         with:
           tags: |
             ${{ steps.set_images.outputs.IMAGES }}
             ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }}
+            kgustafs/signalk-server:${{ matrix.tag }}
           sources: |
             ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
             ghcr.io/kegustafsson/signalk-server:arm-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
 
-  copy-to-dockerhub:
-    needs: create-and-push-manifest
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        os: [24.04]
-        node: [22.x, 24.x]
-        exclude:
-          - node: 22.x
-        include:
-          - os: 24.04
-            node: 24.x
-            tag: latest
-#          - os: 24.04
-#            node: 22.x
-#            tag: latest-22.x
-    steps:
-      - uses: actions/download-artifact@v5
-        with:
-          name: docker_tags_${{ matrix.os }}_${{ matrix.node }}
-      - name: Set images to copy
-        id: set_images
-        run: |
-          tags=$(cat docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt | sed 's/,/\n/g')
-          # Filter to only ghcr tags
-          ghcr_tags=$(echo "$tags" | grep "^ghcr.io/")
-          {
-            echo 'GHCR_IMAGES<<EOF'
-            printf "%s\n" "$ghcr_tags"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
-      - name: Install skopeo
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y skopeo
-      - name: Copy images from GHCR to Docker Hub
-        env:
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
-          DOCKER_HUB_ACCESS_TOKEN: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-        run: |
-          # Copy images from GHCR to Docker Hub based on IMAGES list
-          while IFS= read -r ghcr_tag; do
-            [ -z "$ghcr_tag" ] && continue
-            # Convert ghcr tag to hub tag
-            hub_tag=$(echo "$ghcr_tag" | sed 's|ghcr.io/kegustafsson/signalk-server|docker.io/kgustafs/signalk-server|')
-            echo "Copying $ghcr_tag to $hub_tag"
-            skopeo copy --all \
-              --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
-              --dest-creds "${DOCKER_HUB_USERNAME}:${DOCKER_HUB_ACCESS_TOKEN}" \
-              "docker://${ghcr_tag}" "docker://${hub_tag}"
-          done <<< "${{ steps.set_images.outputs.GHCR_IMAGES }}"
-          # Copy the matrix.tag manifest
-          echo "Copying ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }} to docker.io/kgustafs/signalk-server:${{ matrix.tag }}"
-          skopeo copy --all \
-            --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
-            --dest-creds "${DOCKER_HUB_USERNAME}:${DOCKER_HUB_ACCESS_TOKEN}" \
-            "docker://ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }}" \
-            "docker://docker.io/kgustafs/signalk-server:${{ matrix.tag }}"
-
   housekeeping:
-    needs: copy-to-dockerhub
+    needs: create-and-push-manifest
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -374,7 +405,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: housekeeping
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v4
         with:
           name: tag
       - name: Set TAG for build-args
@@ -385,4 +416,4 @@ jobs:
           echo "TAG=$tag" >> $GITHUB_OUTPUT
       - name: Slack notification
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"Manually triggered image ready, ${{ steps.vars.outputs.TAG }}"}' https://hooks.slack.com/services/${{ secrets.SLACK }}
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"New Signal K image available, ${{ steps.vars.outputs.TAG }}"}' https://hooks.slack.com/services/${{ secrets.SLACK }}

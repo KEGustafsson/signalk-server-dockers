@@ -1,4 +1,4 @@
-name: SignalK Docker Build - Copy 2
+name: SignalK Docker Build - Old
 
 on:
   workflow_dispatch:
@@ -8,9 +8,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
       - name: Node setup
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: '24.x'
       - name: specification
@@ -20,7 +20,7 @@ jobs:
           npm i
           npm pack
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           retention-days: 1
           name: specification
@@ -32,12 +32,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
       - name: Node setup
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: '24.x'
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v5
         with:
           name: specification
       - name: nmea0183-signalk
@@ -51,7 +51,7 @@ jobs:
           rm -f *.tgz
           npm pack
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           retention-days: 1
           name: nmea0183-signalk
@@ -63,37 +63,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
       - name: Node setup
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: '24.x'
-      - name: signalk-server tags
-        id: tags
+      - name: signalk-server download and patch
+        id: git
         run: |
-          git clone https://github.com/SignalK/signalk-server.git
+          # git clone https://github.com/SignalK/signalk-server.git
+          git clone -b claude/use-wsdeviceswithnames-012GGoqS6tWQHhjXcrWidooe https://github.com/KEGustafsson/signalk-server.git
           cd signalk-server
           git fetch --tags
           tag=$(git describe --tags `git rev-list --tags --max-count=1`)
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "Extracted tag: $tag"
-          cd ..
-          rm -rf signalk-server
-      - name: signalk-server download and patch
-        id: git
-        run: |
-          git clone https://github.com/SignalK/signalk-server.git
-          # git clone -b dev https://github.com/KEGustafsson/signalk-server.git
-          cd signalk-server
-          if [ -d "./../patch_new" ] && [ "$(ls -A ./../patch_new/*.patch 2>/dev/null)" ]; then
-            git apply ./../patch_new/*.patch
-          else
-            echo "No patches to apply"
-          fi
-      - uses: actions/download-artifact@v7
+          # if [ -d "./../patch" ] && [ "$(ls -A ./../patch/*.patch 2>/dev/null)" ]; then
+          #  git apply ./../patch/*.patch
+          # else
+          #  echo "No patches to apply"
+          # fi
+      - uses: actions/download-artifact@v5
         with:
           name: nmea0183-signalk
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v5
         with:
           name: specification
       - name: signalk-server build
@@ -111,15 +104,15 @@ jobs:
           rm signalk-typedoc-signalk-theme*.tgz # This is only needed as a dev dependency
           npm pack
       - name: Save tag to artifact
-        run: echo ${{ steps.tags.outputs.tag }} > tag.txt
+        run: echo ${{ steps.git.outputs.tag }} > tag.txt
       - name: Upload tag
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           retention-days: 1
           name: tag
           path: tag.txt
       - name: Upload artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           retention-days: 1
           name: packed-modules
@@ -132,12 +125,12 @@ jobs:
       matrix:
         os: [24.04]
         node: [22.x, 24.x]
-#        exclude:
-#          - node: 22.x
+        exclude:
+          - node: 22.x
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
-      - uses: actions/download-artifact@v7
+        uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
         with:
           name: tag
       - name: Set TAG for build-args
@@ -155,12 +148,24 @@ jobs:
         id: set-tags
         run: |
           if [[ "${{ steps.vars.outputs.tag }}" == *beta* ]]; then
+            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.os }}-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:latest-${{ matrix.os }}-${{ matrix.node }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.node }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.node }}"
             tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.node }}"
             tags="$tags,${{ steps.vars.outputs.hub }}:latest-${{ matrix.node }}"
           else
-            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.node }}"
+            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }}-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }}-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.os }}-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-${{ matrix.os }}-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.os }}-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.os }}-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:latest-${{ matrix.os }}-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-${{ matrix.node }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}-${{ matrix.node }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}-${{ matrix.node }}"
             tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-${{ matrix.node }}"
@@ -173,7 +178,7 @@ jobs:
       - name: Save docker tags to artifact
         run: echo ${{ steps.set-tags.outputs.tags }} > docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt
       - name: Upload tag
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         with:
           retention-days: 1
           name: docker_tags_${{ matrix.os }}_${{ matrix.node }}
@@ -185,19 +190,19 @@ jobs:
       matrix:
         os: [24.04]
         node: [22.x, 24.x]
-#        exclude:
-#          - node: 22.x
+        exclude:
+          - node: 22.x
         vm: [ubuntu-latest, ubuntu-24.04-arm]
         include:
           - vm: ubuntu-latest
             os: 24.04
             arch: amd
             platform: linux/amd64
-          - vm: ubuntu-24.04-arm
-            os: 24.04
-            arch: arm
-            node: 22.x
-            platform: linux/arm64,linux/arm/v7
+#          - vm: ubuntu-24.04-arm
+#            os: 24.04
+#            arch: arm
+#            node: 22.x
+#            platform: linux/arm64,linux/arm/v7
           - vm: ubuntu-24.04-arm
             os: 24.04
             arch: arm
@@ -206,8 +211,8 @@ jobs:
     runs-on: ${{ matrix.vm }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
-      - uses: actions/download-artifact@v7
+        uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
         with:
           name: packed-modules
       - name: Set up Docker Buildx
@@ -237,127 +242,84 @@ jobs:
       matrix:
         os: [24.04]
         node: [22.x, 24.x]
-#        exclude:
-#          - node: 22.x
+        exclude:
+          - node: 22.x
         include:
           - os: 24.04
             node: 24.x
             tag: latest
-          - os: 24.04
-            node: 22.x
-            tag: latest-22.x
+#          - os: 24.04
+#            node: 22.x
+#            tag: latest-22.x
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Download Docker tag artifact
-        uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v5
         with:
           name: docker_tags_${{ matrix.os }}_${{ matrix.node }}
-      - name: Normalize and filter GHCR tags (multiline output)
-        id: ghcr_tags
-        shell: bash
+      - name: Set multi-line output
+        id: set_images
         run: |
-          set -euo pipefail
+          tags=$(cat docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt | sed 's/,/\n/g')
           {
             echo 'IMAGES<<EOF'
-            sed 's/,/\n/g' docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt \
-              | grep '^ghcr\.io/'
+            printf "%s\n" "$tags"
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
+      - name: Print tags
+        run: |
+          tags=$(cat docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt | sed 's/,/\n/g')
+          echo "tags: $tags"
+          echo "tags: ${{ steps.set_images.outputs.IMAGES }}"      
       - name: Login to ghcr.io
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
-      - name: Create and push multi-arch manifest to GHCR
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      - name: Create and push multi-arch manifest to GHCR and Docker Hub
         uses: int128/docker-manifest-create-action@v2
         with:
           tags: |
-            ${{ steps.ghcr_tags.outputs.IMAGES }}
+            ${{ steps.set_images.outputs.IMAGES }}
             ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }}
+            kgustafs/signalk-server:${{ matrix.tag }}
           sources: |
             ghcr.io/kegustafsson/signalk-server:amd-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
             ghcr.io/kegustafsson/signalk-server:arm-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
 
-  copy-to-dockerhub:
+  housekeeping:
     needs: create-and-push-manifest
     runs-on: ubuntu-latest
     strategy:
       matrix:
         os: [24.04]
         node: [22.x, 24.x]
-#        exclude:
-#          - node: 22.x
-        include:
-          - os: 24.04
-            node: 24.x
-            tag: latest
-          - os: 24.04
-            node: 22.x
-            tag: latest-22.x
-    steps:
-      - name: Download Docker tag artifact
-        uses: actions/download-artifact@v7
-        with:
-          name: docker_tags_${{ matrix.os }}_${{ matrix.node }}
-      - name: Install skopeo
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y skopeo
-      - name: Normalize and filter GHCR tags
-        shell: bash
-        run: |
-          set -euo pipefail
-          sed 's/,/\n/g' docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt \
-            | grep '^ghcr\.io/' \
-            > tags.txt
-      - name: Copy images from GHCR to Docker Hub
-        shell: bash
-        env:
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
-          DOCKER_HUB_ACCESS_TOKEN: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-        run: |
-          set -euo pipefail
-          while IFS= read -r ghcr_image; do
-            [ -z "$ghcr_image" ] && continue
-            hub_image="${ghcr_image/ghcr.io\/kegustafsson\/signalk-server/docker.io\/kgustafs\/signalk-server}"
-            skopeo copy --all \
-              --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
-              --dest-creds "${DOCKER_HUB_USERNAME}:${DOCKER_HUB_ACCESS_TOKEN}" \
-              "docker://${ghcr_image}" \
-              "docker://${hub_image}"
-          done < tags.txt
-          skopeo copy --all \
-            --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
-            --dest-creds "${DOCKER_HUB_USERNAME}:${DOCKER_HUB_ACCESS_TOKEN}" \
-            "docker://ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }}" \
-            "docker://docker.io/kgustafs/signalk-server:${{ matrix.tag }}"
-
-  housekeeping:
-    needs: copy-to-dockerhub
-    runs-on: ubuntu-latest
+        exclude:
+          - node: 22.x
     permissions:
       packages: write
     steps:
-      - name: Remove intermediate Docker Images from GHCR
+      - name: Remove Docker Image from GHCR
         uses: dataaxiom/ghcr-cleanup-action@v1
         with:
           packages: signalk-server
           delete-untagged: true
-          delete-tags: |
-            *-${{ github.run_id }}
+          delete-tags: amd-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }},arm-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
           token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   slack:
     runs-on: ubuntu-latest
     needs: housekeeping
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v5
         with:
           name: tag
       - name: Set TAG for build-args
