@@ -1,0 +1,45 @@
+From 18d81d60cb8edbdb4a21b2150708e19d5fffd947 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 24 Dec 2025 13:59:23 +0000
+Subject: [PATCH] fix: add null checks to prevent TypeError in token security
+
+Fixes TypeError: Cannot read properties of null (reading 'path')
+that occurs when valuePath is null in shouldAllowWrite and
+filterReadDelta functions. Added null guards before accessing
+valuePath.path to handle null values in update.values and
+update.meta arrays.
+---
+ src/tokensecurity.js | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/tokensecurity.js b/src/tokensecurity.js
+index 88b4f31..f5c55bf 100644
+--- a/src/tokensecurity.js
++++ b/src/tokensecurity.js
+@@ -568,6 +568,7 @@ module.exports = function (app, config) {
+           (update.values &&
+             update.values.find((valuePath) => {
+               return (
++                valuePath &&
+                 strategy.checkACL(
+                   req.skPrincipal.identifier,
+                   context,
+@@ -580,6 +581,7 @@ module.exports = function (app, config) {
+           (update.meta &&
+             update.meta.find((valuePath) => {
+               return (
++                valuePath &&
+                 strategy.checkACL(
+                   req.skPrincipal.identifier,
+                   context,
+@@ -638,7 +640,7 @@ module.exports = function (app, config) {
+         .map((update) => {
+           let res = (update.values || update.meta)
+             .map((valuePath) => {
+-              return strategy.checkACL(
++              return valuePath && strategy.checkACL(
+                 principal.identifier,
+                 context,
+                 valuePath.path,
+-- 
+2.43.0
