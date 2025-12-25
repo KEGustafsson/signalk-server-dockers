@@ -42,7 +42,7 @@ index 88b4f31..f5c55bf 100644
                  principal.identifier,
                  context,
                  valuePath.path,
--- 
+--
 2.43.0
 
 
@@ -105,10 +105,10 @@ index 0000000..5e26d5a
 +                 principal.identifier,
 +                 context,
 +                 valuePath.path,
-+-- 
++--
 +2.43.0
 +
--- 
+--
 2.43.0
 
 
@@ -147,7 +147,7 @@ index f5c55bf..233eece 100644
                  ? valuePath
                  : null
              })
--- 
+--
 2.43.0
 
 
@@ -178,7 +178,7 @@ index 233eece..f70382b 100644
 @@ -559,6 +559,19 @@ module.exports = function (app, config) {
        const context =
          delta.context === app.selfContext ? 'vessels.self' : delta.context
- 
+
 +      // Check for null valuePath values and log the entire delta for debugging
 +      const hasNullValues = delta.updates.some((update) => {
 +        return (
@@ -252,7 +252,7 @@ index 233eece..f70382b 100644
                  ? valuePath
                  : null
              })
--- 
+--
 2.43.0
 
 
@@ -317,7 +317,7 @@ index 5e26d5a..0000000
 -                 principal.identifier,
 -                 context,
 -                 valuePath.path,
---- 
+---
 -2.43.0
 -
 diff --git a/0001-fix-token-security-null-checks-and-debugging.patch b/0001-fix-token-security-null-checks-and-debugging.patch
@@ -370,7 +370,7 @@ index 0000000..86eea83
 +                 principal.identifier,
 +                 context,
 +                 valuePath.path,
-+-- 
++--
 +2.43.0
 +
 +
@@ -433,10 +433,10 @@ index 0000000..86eea83
 ++                 principal.identifier,
 ++                 context,
 ++                 valuePath.path,
-++-- 
+++--
 ++2.43.0
 ++
-+-- 
++--
 +2.43.0
 +
 +
@@ -475,7 +475,7 @@ index 0000000..86eea83
 +                 ? valuePath
 +                 : null
 +             })
-+-- 
++--
 +2.43.0
 +
 +
@@ -506,7 +506,7 @@ index 0000000..86eea83
 +@@ -559,6 +559,19 @@ module.exports = function (app, config) {
 +       const context =
 +         delta.context === app.selfContext ? 'vessels.self' : delta.context
-+ 
++
 ++      // Check for null valuePath values and log the entire delta for debugging
 ++      const hasNullValues = delta.updates.some((update) => {
 ++        return (
@@ -580,10 +580,10 @@ index 0000000..86eea83
 +                 ? valuePath
 +                 : null
 +             })
-+-- 
++--
 +2.43.0
 +
--- 
+--
 2.43.0
 
 
@@ -626,7 +626,7 @@ index b399606..71f69eb 100644
              if (nvp) {
 @@ -703,6 +711,12 @@ function filterStaticSelfData(delta: any, selfContext: string) {
  }
- 
+
  function filterSelfDataKP(pathValue: any) {
 +  // Return null if pathValue is null or undefined
 +  if (!pathValue) {
@@ -637,7 +637,7 @@ index b399606..71f69eb 100644
    const deepKeys: { [key: string]: string[] } = {
      '': ['name', 'mmsi']
    }
--- 
+--
 2.43.0
 
 
@@ -704,7 +704,7 @@ index 0000000..e387820
 +                 principal.identifier,
 +                 context,
 +                 valuePath.path,
-+-- 
++--
 +2.43.0
 +
 +
@@ -767,10 +767,10 @@ index 0000000..e387820
 ++                 principal.identifier,
 ++                 context,
 ++                 valuePath.path,
-++-- 
+++--
 ++2.43.0
 ++
-+-- 
++--
 +2.43.0
 +
 +
@@ -809,7 +809,7 @@ index 0000000..e387820
 +                 ? valuePath
 +                 : null
 +             })
-+-- 
++--
 +2.43.0
 +
 +
@@ -840,7 +840,7 @@ index 0000000..e387820
 +@@ -559,6 +559,19 @@ module.exports = function (app, config) {
 +       const context =
 +         delta.context === app.selfContext ? 'vessels.self' : delta.context
-+ 
++
 ++      // Check for null valuePath values and log the entire delta for debugging
 ++      const hasNullValues = delta.updates.some((update) => {
 ++        return (
@@ -914,7 +914,7 @@ index 0000000..e387820
 +                 ? valuePath
 +                 : null
 +             })
-+-- 
++--
 +2.43.0
 +
 +
@@ -979,7 +979,7 @@ index 0000000..e387820
 +-                 principal.identifier,
 +-                 context,
 +-                 valuePath.path,
-+--- 
++---
 +-2.43.0
 +-
 +diff --git a/0001-fix-token-security-null-checks-and-debugging.patch b/0001-fix-token-security-null-checks-and-debugging.patch
@@ -1032,7 +1032,7 @@ index 0000000..e387820
 ++                 principal.identifier,
 ++                 context,
 ++                 valuePath.path,
-++-- 
+++--
 ++2.43.0
 ++
 ++
@@ -1095,10 +1095,10 @@ index 0000000..e387820
 +++                 principal.identifier,
 +++                 context,
 +++                 valuePath.path,
-+++-- 
++++--
 +++2.43.0
 +++
-++-- 
+++--
 ++2.43.0
 ++
 ++
@@ -1137,7 +1137,7 @@ index 0000000..e387820
 ++                 ? valuePath
 ++                 : null
 ++             })
-++-- 
+++--
 ++2.43.0
 ++
 ++
@@ -1168,7 +1168,7 @@ index 0000000..e387820
 ++@@ -559,6 +559,19 @@ module.exports = function (app, config) {
 ++       const context =
 ++         delta.context === app.selfContext ? 'vessels.self' : delta.context
-++ 
+++
 +++      // Check for null valuePath values and log the entire delta for debugging
 +++      const hasNullValues = delta.updates.some((update) => {
 +++        return (
@@ -1242,10 +1242,10 @@ index 0000000..e387820
 ++                 ? valuePath
 ++                 : null
 ++             })
-++-- 
+++--
 ++2.43.0
 ++
-+-- 
++--
 +2.43.0
 +
 +
@@ -1288,7 +1288,7 @@ index 0000000..e387820
 +             if (nvp) {
 +@@ -703,6 +711,12 @@ function filterStaticSelfData(delta: any, selfContext: string) {
 + }
-+ 
++
 + function filterSelfDataKP(pathValue: any) {
 ++  // Return null if pathValue is null or undefined
 ++  if (!pathValue) {
@@ -1299,7 +1299,7 @@ index 0000000..e387820
 +   const deepKeys: { [key: string]: string[] } = {
 +     '': ['name', 'mmsi']
 +   }
-+-- 
++--
 +2.43.0
 +
 diff --git a/0001-fix-token-security-null-checks-and-debugging.patch b/0001-fix-token-security-null-checks-and-debugging.patch
@@ -1352,7 +1352,7 @@ index 86eea83..0000000
 -                 principal.identifier,
 -                 context,
 -                 valuePath.path,
---- 
+---
 -2.43.0
 -
 -
@@ -1415,10 +1415,10 @@ index 86eea83..0000000
 -+                 principal.identifier,
 -+                 context,
 -+                 valuePath.path,
--+-- 
+-+--
 -+2.43.0
 -+
---- 
+---
 -2.43.0
 -
 -
@@ -1457,7 +1457,7 @@ index 86eea83..0000000
 -                 ? valuePath
 -                 : null
 -             })
---- 
+---
 -2.43.0
 -
 -
@@ -1488,7 +1488,7 @@ index 86eea83..0000000
 -@@ -559,6 +559,19 @@ module.exports = function (app, config) {
 -       const context =
 -         delta.context === app.selfContext ? 'vessels.self' : delta.context
-- 
+-
 -+      // Check for null valuePath values and log the entire delta for debugging
 -+      const hasNullValues = delta.updates.some((update) => {
 -+        return (
@@ -1562,10 +1562,10 @@ index 86eea83..0000000
 -                 ? valuePath
 -                 : null
 -             })
---- 
+---
 -2.43.0
 -
--- 
+--
 2.43.0
 
 
@@ -1606,7 +1606,7 @@ index 65d8506..4237b44 100644
 +++ b/packages/streams/keys-filter.js
 @@ -37,6 +37,10 @@ ToSignalK.prototype._transform = function (chunk, encoding, done) {
          const values = []
- 
+
          update.values.forEach((value) => {
 +          // Skip null/undefined value entries
 +          if (!value) {
@@ -1620,7 +1620,7 @@ index e427062..fea55c0 100644
 --- a/packages/streams/n2k-signalk.js
 +++ b/packages/streams/n2k-signalk.js
 @@ -139,6 +139,10 @@ ToSignalK.prototype._transform = function (chunk, encoding, done) {
- 
+
        delta.updates.forEach((update) => {
          update.values.forEach((kv) => {
 +          // Skip null/undefined kv entries
@@ -1676,7 +1676,7 @@ index 4a6f095..864f908 100644
 --- a/src/interfaces/ws.js
 +++ b/src/interfaces/ws.js
 @@ -504,6 +504,10 @@ function processUpdates(app, pathSources, spark, msg) {
- 
+
        if (source) {
          update.values.forEach((valuePath) => {
 +          // Skip null/undefined valuePath entries
@@ -1688,7 +1688,7 @@ index 4a6f095..864f908 100644
            }
 @@ -557,6 +561,10 @@ setInterval(
  )
- 
+
  function handleValuesMeta(kp) {
 +  // Skip null/undefined kp entries
 +  if (!kp) {
@@ -1702,7 +1702,7 @@ index 7881232..2daf3db 100644
 --- a/src/streambundle.ts
 +++ b/src/streambundle.ts
 @@ -65,6 +65,10 @@ export class StreamBundle implements IStreamBundle {
- 
+
            if ('meta' in update) {
              update.meta.forEach((meta) => {
 +              // Skip null/undefined meta entries
@@ -1713,7 +1713,7 @@ index 7881232..2daf3db 100644
                  ...base,
                  path: meta.path,
 @@ -76,6 +80,10 @@ export class StreamBundle implements IStreamBundle {
- 
+
            if ('values' in update) {
              update.values.forEach((pathValue) => {
 +              // Skip null/undefined pathValue entries
@@ -1723,5 +1723,5 @@ index 7881232..2daf3db 100644
                this.push(pathValue.path, {
                  ...base,
                  path: pathValue.path,
--- 
+--
 2.43.0
