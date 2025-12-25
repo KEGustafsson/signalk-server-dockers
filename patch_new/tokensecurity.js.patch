@@ -1,7 +1,7 @@
 From 18d81d60cb8edbdb4a21b2150708e19d5fffd947 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Wed, 24 Dec 2025 13:59:23 +0000
-Subject: [PATCH 1/4] fix: add null checks to prevent TypeError in token
+Subject: [PATCH 1/8] fix: add null checks to prevent TypeError in token
  security
 
 Fixes TypeError: Cannot read properties of null (reading 'path')
@@ -49,7 +49,7 @@ index 88b4f31..f5c55bf 100644
 From 6b7ef6597b03592ea9f3e028d68cf1b80a78330d Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Wed, 24 Dec 2025 14:07:33 +0000
-Subject: [PATCH 2/4] chore: add patch file for token security null check fixes
+Subject: [PATCH 2/8] chore: add patch file for token security null check fixes
 
 ---
  ...cks-to-prevent-TypeError-in-token-se.patch | 46 +++++++++++++++++++
@@ -115,7 +115,7 @@ index 0000000..5e26d5a
 From bc8e37e73f6154ad101b8f1f4d859f4be5a78164 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Wed, 24 Dec 2025 14:15:52 +0000
-Subject: [PATCH 3/4] style: apply prettier formatting to tokensecurity.js
+Subject: [PATCH 3/8] style: apply prettier formatting to tokensecurity.js
 
 ---
  src/tokensecurity.js | 15 ++++++++-------
@@ -154,7 +154,7 @@ index f5c55bf..233eece 100644
 From 0794ee28140ff9d00df63b9b934f627c1e77045c Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Wed, 24 Dec 2025 14:31:23 +0000
-Subject: [PATCH 4/4] feat: add debug logging to track null valuePath sources
+Subject: [PATCH 4/8] feat: add debug logging to track null valuePath sources
 
 Added comprehensive debug logging to identify the source and context
 when null valuePath values are encountered in shouldAllowWrite and
@@ -252,5 +252,1476 @@ index 233eece..f70382b 100644
                  ? valuePath
                  : null
              })
+-- 
+2.43.0
+
+
+From a4215c5244b8cf418b657ee25177452d2f4eb801 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 24 Dec 2025 14:33:51 +0000
+Subject: [PATCH 5/8] chore: update patch file with debug logging changes
+
+---
+ ...cks-to-prevent-TypeError-in-token-se.patch |  46 ----
+ ...n-security-null-checks-and-debugging.patch | 257 ++++++++++++++++++
+ 2 files changed, 257 insertions(+), 46 deletions(-)
+ delete mode 100644 0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
+ create mode 100644 0001-fix-token-security-null-checks-and-debugging.patch
+
+diff --git a/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch b/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
+deleted file mode 100644
+index 5e26d5a..0000000
+--- a/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
++++ /dev/null
+@@ -1,46 +0,0 @@
+-From 18d81d60cb8edbdb4a21b2150708e19d5fffd947 Mon Sep 17 00:00:00 2001
+-From: Claude <noreply@anthropic.com>
+-Date: Wed, 24 Dec 2025 13:59:23 +0000
+-Subject: [PATCH] fix: add null checks to prevent TypeError in token security
+-
+-Fixes TypeError: Cannot read properties of null (reading 'path')
+-that occurs when valuePath is null in shouldAllowWrite and
+-filterReadDelta functions. Added null guards before accessing
+-valuePath.path to handle null values in update.values and
+-update.meta arrays.
+----
+- src/tokensecurity.js | 4 +++-
+- 1 file changed, 3 insertions(+), 1 deletion(-)
+-
+-diff --git a/src/tokensecurity.js b/src/tokensecurity.js
+-index 88b4f31..f5c55bf 100644
+---- a/src/tokensecurity.js
+-+++ b/src/tokensecurity.js
+-@@ -568,6 +568,7 @@ module.exports = function (app, config) {
+-           (update.values &&
+-             update.values.find((valuePath) => {
+-               return (
+-+                valuePath &&
+-                 strategy.checkACL(
+-                   req.skPrincipal.identifier,
+-                   context,
+-@@ -580,6 +581,7 @@ module.exports = function (app, config) {
+-           (update.meta &&
+-             update.meta.find((valuePath) => {
+-               return (
+-+                valuePath &&
+-                 strategy.checkACL(
+-                   req.skPrincipal.identifier,
+-                   context,
+-@@ -638,7 +640,7 @@ module.exports = function (app, config) {
+-         .map((update) => {
+-           let res = (update.values || update.meta)
+-             .map((valuePath) => {
+--              return strategy.checkACL(
+-+              return valuePath && strategy.checkACL(
+-                 principal.identifier,
+-                 context,
+-                 valuePath.path,
+--- 
+-2.43.0
+-
+diff --git a/0001-fix-token-security-null-checks-and-debugging.patch b/0001-fix-token-security-null-checks-and-debugging.patch
+new file mode 100644
+index 0000000..86eea83
+--- /dev/null
++++ b/0001-fix-token-security-null-checks-and-debugging.patch
+@@ -0,0 +1,257 @@
++From 18d81d60cb8edbdb4a21b2150708e19d5fffd947 Mon Sep 17 00:00:00 2001
++From: Claude <noreply@anthropic.com>
++Date: Wed, 24 Dec 2025 13:59:23 +0000
++Subject: [PATCH 1/4] fix: add null checks to prevent TypeError in token
++ security
++
++Fixes TypeError: Cannot read properties of null (reading 'path')
++that occurs when valuePath is null in shouldAllowWrite and
++filterReadDelta functions. Added null guards before accessing
++valuePath.path to handle null values in update.values and
++update.meta arrays.
++---
++ src/tokensecurity.js | 4 +++-
++ 1 file changed, 3 insertions(+), 1 deletion(-)
++
++diff --git a/src/tokensecurity.js b/src/tokensecurity.js
++index 88b4f31..f5c55bf 100644
++--- a/src/tokensecurity.js
+++++ b/src/tokensecurity.js
++@@ -568,6 +568,7 @@ module.exports = function (app, config) {
++           (update.values &&
++             update.values.find((valuePath) => {
++               return (
+++                valuePath &&
++                 strategy.checkACL(
++                   req.skPrincipal.identifier,
++                   context,
++@@ -580,6 +581,7 @@ module.exports = function (app, config) {
++           (update.meta &&
++             update.meta.find((valuePath) => {
++               return (
+++                valuePath &&
++                 strategy.checkACL(
++                   req.skPrincipal.identifier,
++                   context,
++@@ -638,7 +640,7 @@ module.exports = function (app, config) {
++         .map((update) => {
++           let res = (update.values || update.meta)
++             .map((valuePath) => {
++-              return strategy.checkACL(
+++              return valuePath && strategy.checkACL(
++                 principal.identifier,
++                 context,
++                 valuePath.path,
++-- 
++2.43.0
++
++
++From 6b7ef6597b03592ea9f3e028d68cf1b80a78330d Mon Sep 17 00:00:00 2001
++From: Claude <noreply@anthropic.com>
++Date: Wed, 24 Dec 2025 14:07:33 +0000
++Subject: [PATCH 2/4] chore: add patch file for token security null check fixes
++
++---
++ ...cks-to-prevent-TypeError-in-token-se.patch | 46 +++++++++++++++++++
++ 1 file changed, 46 insertions(+)
++ create mode 100644 0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
++
++diff --git a/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch b/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
++new file mode 100644
++index 0000000..5e26d5a
++--- /dev/null
+++++ b/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
++@@ -0,0 +1,46 @@
+++From 18d81d60cb8edbdb4a21b2150708e19d5fffd947 Mon Sep 17 00:00:00 2001
+++From: Claude <noreply@anthropic.com>
+++Date: Wed, 24 Dec 2025 13:59:23 +0000
+++Subject: [PATCH] fix: add null checks to prevent TypeError in token security
+++
+++Fixes TypeError: Cannot read properties of null (reading 'path')
+++that occurs when valuePath is null in shouldAllowWrite and
+++filterReadDelta functions. Added null guards before accessing
+++valuePath.path to handle null values in update.values and
+++update.meta arrays.
+++---
+++ src/tokensecurity.js | 4 +++-
+++ 1 file changed, 3 insertions(+), 1 deletion(-)
+++
+++diff --git a/src/tokensecurity.js b/src/tokensecurity.js
+++index 88b4f31..f5c55bf 100644
+++--- a/src/tokensecurity.js
++++++ b/src/tokensecurity.js
+++@@ -568,6 +568,7 @@ module.exports = function (app, config) {
+++           (update.values &&
+++             update.values.find((valuePath) => {
+++               return (
++++                valuePath &&
+++                 strategy.checkACL(
+++                   req.skPrincipal.identifier,
+++                   context,
+++@@ -580,6 +581,7 @@ module.exports = function (app, config) {
+++           (update.meta &&
+++             update.meta.find((valuePath) => {
+++               return (
++++                valuePath &&
+++                 strategy.checkACL(
+++                   req.skPrincipal.identifier,
+++                   context,
+++@@ -638,7 +640,7 @@ module.exports = function (app, config) {
+++         .map((update) => {
+++           let res = (update.values || update.meta)
+++             .map((valuePath) => {
+++-              return strategy.checkACL(
++++              return valuePath && strategy.checkACL(
+++                 principal.identifier,
+++                 context,
+++                 valuePath.path,
+++-- 
+++2.43.0
+++
++-- 
++2.43.0
++
++
++From bc8e37e73f6154ad101b8f1f4d859f4be5a78164 Mon Sep 17 00:00:00 2001
++From: Claude <noreply@anthropic.com>
++Date: Wed, 24 Dec 2025 14:15:52 +0000
++Subject: [PATCH 3/4] style: apply prettier formatting to tokensecurity.js
++
++---
++ src/tokensecurity.js | 15 ++++++++-------
++ 1 file changed, 8 insertions(+), 7 deletions(-)
++
++diff --git a/src/tokensecurity.js b/src/tokensecurity.js
++index f5c55bf..233eece 100644
++--- a/src/tokensecurity.js
+++++ b/src/tokensecurity.js
++@@ -640,13 +640,14 @@ module.exports = function (app, config) {
++         .map((update) => {
++           let res = (update.values || update.meta)
++             .map((valuePath) => {
++-              return valuePath && strategy.checkACL(
++-                principal.identifier,
++-                context,
++-                valuePath.path,
++-                update.source,
++-                'read'
++-              )
+++              return valuePath &&
+++                strategy.checkACL(
+++                  principal.identifier,
+++                  context,
+++                  valuePath.path,
+++                  update.source,
+++                  'read'
+++                )
++                 ? valuePath
++                 : null
++             })
++-- 
++2.43.0
++
++
++From 0794ee28140ff9d00df63b9b934f627c1e77045c Mon Sep 17 00:00:00 2001
++From: Claude <noreply@anthropic.com>
++Date: Wed, 24 Dec 2025 14:31:23 +0000
++Subject: [PATCH 4/4] feat: add debug logging to track null valuePath sources
++
++Added comprehensive debug logging to identify the source and context
++when null valuePath values are encountered in shouldAllowWrite and
++filterReadDelta functions. This will help track down which data
++source or sentence is generating malformed delta updates with null
++values in the values or meta arrays.
++
++Logging includes:
++- Full delta structure when null values detected
++- Source identifier and update.source details
++- Context information
++- Separate logging for update.values vs update.meta
++---
++ src/tokensecurity.js | 46 +++++++++++++++++++++++++++++++++++---------
++ 1 file changed, 37 insertions(+), 9 deletions(-)
++
++diff --git a/src/tokensecurity.js b/src/tokensecurity.js
++index 233eece..f70382b 100644
++--- a/src/tokensecurity.js
+++++ b/src/tokensecurity.js
++@@ -559,6 +559,19 @@ module.exports = function (app, config) {
++       const context =
++         delta.context === app.selfContext ? 'vessels.self' : delta.context
++ 
+++      // Check for null valuePath values and log the entire delta for debugging
+++      const hasNullValues = delta.updates.some((update) => {
+++        return (
+++          (update.values && update.values.some((vp) => !vp)) ||
+++          (update.meta && update.meta.some((vp) => !vp))
+++        )
+++      })
+++      if (hasNullValues) {
+++        debug(
+++          `Delta contains null valuePath entries. Full delta: ${JSON.stringify(delta, null, 2)}`
+++        )
+++      }
+++
++       const notAllowed = delta.updates.find((update) => {
++         let source = update.$source
++         if (!source) {
++@@ -567,8 +580,13 @@ module.exports = function (app, config) {
++         return (
++           (update.values &&
++             update.values.find((valuePath) => {
+++              if (!valuePath) {
+++                debug(
+++                  `Null valuePath in update.values - source: ${source}, update.source: ${JSON.stringify(update.source)}, context: ${context}`
+++                )
+++                return false
+++              }
++               return (
++-                valuePath &&
++                 strategy.checkACL(
++                   req.skPrincipal.identifier,
++                   context,
++@@ -580,8 +598,13 @@ module.exports = function (app, config) {
++             })) ||
++           (update.meta &&
++             update.meta.find((valuePath) => {
+++              if (!valuePath) {
+++                debug(
+++                  `Null valuePath in update.meta - source: ${source}, update.source: ${JSON.stringify(update.source)}, context: ${context}`
+++                )
+++                return false
+++              }
++               return (
++-                valuePath &&
++                 strategy.checkACL(
++                   req.skPrincipal.identifier,
++                   context,
++@@ -640,14 +663,19 @@ module.exports = function (app, config) {
++         .map((update) => {
++           let res = (update.values || update.meta)
++             .map((valuePath) => {
++-              return valuePath &&
++-                strategy.checkACL(
++-                  principal.identifier,
++-                  context,
++-                  valuePath.path,
++-                  update.source,
++-                  'read'
+++              if (!valuePath) {
+++                debug(
+++                  `Null valuePath in filterReadDelta - update.source: ${JSON.stringify(update.source)}, context: ${context}`
++                 )
+++                return null
+++              }
+++              return strategy.checkACL(
+++                principal.identifier,
+++                context,
+++                valuePath.path,
+++                update.source,
+++                'read'
+++              )
++                 ? valuePath
++                 : null
++             })
++-- 
++2.43.0
++
+-- 
+2.43.0
+
+
+From 39de1b55c57c3c0cf119b56a23e8187c1c96fc03 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 25 Dec 2025 09:10:55 +0000
+Subject: [PATCH 6/8] fix: add null check in filterSelfDataKP to prevent
+ TypeError
+
+Fixes TypeError: Cannot read properties of null (reading 'path')
+that occurs in filterSelfDataKP when pathValue is null. Added
+null guard at the beginning of the function and debug logging
+to track when null pathValue entries are encountered in
+update.values arrays.
+
+This is the same issue as in tokensecurity.js but occurring in
+the filterStaticSelfData function which processes delta updates.
+---
+ src/index.ts | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/src/index.ts b/src/index.ts
+index b399606..71f69eb 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -686,6 +686,14 @@ function filterStaticSelfData(delta: any, selfContext: string) {
+     delta.updates &&
+       delta.updates.forEach((update: any) => {
+         if ('values' in update && update['$source'] !== 'defaults') {
++          // Check for null values and log the full update for debugging
++          const hasNullValues = update.values.some((pv: any) => !pv)
++          if (hasNullValues) {
++            debug(
++              `Update contains null pathValue entries. Update: ${JSON.stringify(update, null, 2)}`
++            )
++          }
++
+           update.values = update.values.reduce((acc: any, pathValue: any) => {
+             const nvp = filterSelfDataKP(pathValue)
+             if (nvp) {
+@@ -703,6 +711,12 @@ function filterStaticSelfData(delta: any, selfContext: string) {
+ }
+ 
+ function filterSelfDataKP(pathValue: any) {
++  // Return null if pathValue is null or undefined
++  if (!pathValue) {
++    debug('Null pathValue encountered in filterSelfDataKP')
++    return null
++  }
++
+   const deepKeys: { [key: string]: string[] } = {
+     '': ['name', 'mmsi']
+   }
+-- 
+2.43.0
+
+
+From 80db78c3c223f45a951746a036dc0485c1e1b8e9 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 25 Dec 2025 09:11:46 +0000
+Subject: [PATCH 7/8] chore: update patch file with filterSelfDataKP null check
+ fix
+
+---
+ ...l-pointer-errors-in-delta-processing.patch | 642 ++++++++++++++++++
+ ...n-security-null-checks-and-debugging.patch | 257 -------
+ 2 files changed, 642 insertions(+), 257 deletions(-)
+ create mode 100644 0001-fix-null-pointer-errors-in-delta-processing.patch
+ delete mode 100644 0001-fix-token-security-null-checks-and-debugging.patch
+
+diff --git a/0001-fix-null-pointer-errors-in-delta-processing.patch b/0001-fix-null-pointer-errors-in-delta-processing.patch
+new file mode 100644
+index 0000000..e387820
+--- /dev/null
++++ b/0001-fix-null-pointer-errors-in-delta-processing.patch
+@@ -0,0 +1,642 @@
++From 18d81d60cb8edbdb4a21b2150708e19d5fffd947 Mon Sep 17 00:00:00 2001
++From: Claude <noreply@anthropic.com>
++Date: Wed, 24 Dec 2025 13:59:23 +0000
++Subject: [PATCH 1/6] fix: add null checks to prevent TypeError in token
++ security
++
++Fixes TypeError: Cannot read properties of null (reading 'path')
++that occurs when valuePath is null in shouldAllowWrite and
++filterReadDelta functions. Added null guards before accessing
++valuePath.path to handle null values in update.values and
++update.meta arrays.
++---
++ src/tokensecurity.js | 4 +++-
++ 1 file changed, 3 insertions(+), 1 deletion(-)
++
++diff --git a/src/tokensecurity.js b/src/tokensecurity.js
++index 88b4f31..f5c55bf 100644
++--- a/src/tokensecurity.js
+++++ b/src/tokensecurity.js
++@@ -568,6 +568,7 @@ module.exports = function (app, config) {
++           (update.values &&
++             update.values.find((valuePath) => {
++               return (
+++                valuePath &&
++                 strategy.checkACL(
++                   req.skPrincipal.identifier,
++                   context,
++@@ -580,6 +581,7 @@ module.exports = function (app, config) {
++           (update.meta &&
++             update.meta.find((valuePath) => {
++               return (
+++                valuePath &&
++                 strategy.checkACL(
++                   req.skPrincipal.identifier,
++                   context,
++@@ -638,7 +640,7 @@ module.exports = function (app, config) {
++         .map((update) => {
++           let res = (update.values || update.meta)
++             .map((valuePath) => {
++-              return strategy.checkACL(
+++              return valuePath && strategy.checkACL(
++                 principal.identifier,
++                 context,
++                 valuePath.path,
++-- 
++2.43.0
++
++
++From 6b7ef6597b03592ea9f3e028d68cf1b80a78330d Mon Sep 17 00:00:00 2001
++From: Claude <noreply@anthropic.com>
++Date: Wed, 24 Dec 2025 14:07:33 +0000
++Subject: [PATCH 2/6] chore: add patch file for token security null check fixes
++
++---
++ ...cks-to-prevent-TypeError-in-token-se.patch | 46 +++++++++++++++++++
++ 1 file changed, 46 insertions(+)
++ create mode 100644 0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
++
++diff --git a/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch b/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
++new file mode 100644
++index 0000000..5e26d5a
++--- /dev/null
+++++ b/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
++@@ -0,0 +1,46 @@
+++From 18d81d60cb8edbdb4a21b2150708e19d5fffd947 Mon Sep 17 00:00:00 2001
+++From: Claude <noreply@anthropic.com>
+++Date: Wed, 24 Dec 2025 13:59:23 +0000
+++Subject: [PATCH] fix: add null checks to prevent TypeError in token security
+++
+++Fixes TypeError: Cannot read properties of null (reading 'path')
+++that occurs when valuePath is null in shouldAllowWrite and
+++filterReadDelta functions. Added null guards before accessing
+++valuePath.path to handle null values in update.values and
+++update.meta arrays.
+++---
+++ src/tokensecurity.js | 4 +++-
+++ 1 file changed, 3 insertions(+), 1 deletion(-)
+++
+++diff --git a/src/tokensecurity.js b/src/tokensecurity.js
+++index 88b4f31..f5c55bf 100644
+++--- a/src/tokensecurity.js
++++++ b/src/tokensecurity.js
+++@@ -568,6 +568,7 @@ module.exports = function (app, config) {
+++           (update.values &&
+++             update.values.find((valuePath) => {
+++               return (
++++                valuePath &&
+++                 strategy.checkACL(
+++                   req.skPrincipal.identifier,
+++                   context,
+++@@ -580,6 +581,7 @@ module.exports = function (app, config) {
+++           (update.meta &&
+++             update.meta.find((valuePath) => {
+++               return (
++++                valuePath &&
+++                 strategy.checkACL(
+++                   req.skPrincipal.identifier,
+++                   context,
+++@@ -638,7 +640,7 @@ module.exports = function (app, config) {
+++         .map((update) => {
+++           let res = (update.values || update.meta)
+++             .map((valuePath) => {
+++-              return strategy.checkACL(
++++              return valuePath && strategy.checkACL(
+++                 principal.identifier,
+++                 context,
+++                 valuePath.path,
+++-- 
+++2.43.0
+++
++-- 
++2.43.0
++
++
++From bc8e37e73f6154ad101b8f1f4d859f4be5a78164 Mon Sep 17 00:00:00 2001
++From: Claude <noreply@anthropic.com>
++Date: Wed, 24 Dec 2025 14:15:52 +0000
++Subject: [PATCH 3/6] style: apply prettier formatting to tokensecurity.js
++
++---
++ src/tokensecurity.js | 15 ++++++++-------
++ 1 file changed, 8 insertions(+), 7 deletions(-)
++
++diff --git a/src/tokensecurity.js b/src/tokensecurity.js
++index f5c55bf..233eece 100644
++--- a/src/tokensecurity.js
+++++ b/src/tokensecurity.js
++@@ -640,13 +640,14 @@ module.exports = function (app, config) {
++         .map((update) => {
++           let res = (update.values || update.meta)
++             .map((valuePath) => {
++-              return valuePath && strategy.checkACL(
++-                principal.identifier,
++-                context,
++-                valuePath.path,
++-                update.source,
++-                'read'
++-              )
+++              return valuePath &&
+++                strategy.checkACL(
+++                  principal.identifier,
+++                  context,
+++                  valuePath.path,
+++                  update.source,
+++                  'read'
+++                )
++                 ? valuePath
++                 : null
++             })
++-- 
++2.43.0
++
++
++From 0794ee28140ff9d00df63b9b934f627c1e77045c Mon Sep 17 00:00:00 2001
++From: Claude <noreply@anthropic.com>
++Date: Wed, 24 Dec 2025 14:31:23 +0000
++Subject: [PATCH 4/6] feat: add debug logging to track null valuePath sources
++
++Added comprehensive debug logging to identify the source and context
++when null valuePath values are encountered in shouldAllowWrite and
++filterReadDelta functions. This will help track down which data
++source or sentence is generating malformed delta updates with null
++values in the values or meta arrays.
++
++Logging includes:
++- Full delta structure when null values detected
++- Source identifier and update.source details
++- Context information
++- Separate logging for update.values vs update.meta
++---
++ src/tokensecurity.js | 46 +++++++++++++++++++++++++++++++++++---------
++ 1 file changed, 37 insertions(+), 9 deletions(-)
++
++diff --git a/src/tokensecurity.js b/src/tokensecurity.js
++index 233eece..f70382b 100644
++--- a/src/tokensecurity.js
+++++ b/src/tokensecurity.js
++@@ -559,6 +559,19 @@ module.exports = function (app, config) {
++       const context =
++         delta.context === app.selfContext ? 'vessels.self' : delta.context
++ 
+++      // Check for null valuePath values and log the entire delta for debugging
+++      const hasNullValues = delta.updates.some((update) => {
+++        return (
+++          (update.values && update.values.some((vp) => !vp)) ||
+++          (update.meta && update.meta.some((vp) => !vp))
+++        )
+++      })
+++      if (hasNullValues) {
+++        debug(
+++          `Delta contains null valuePath entries. Full delta: ${JSON.stringify(delta, null, 2)}`
+++        )
+++      }
+++
++       const notAllowed = delta.updates.find((update) => {
++         let source = update.$source
++         if (!source) {
++@@ -567,8 +580,13 @@ module.exports = function (app, config) {
++         return (
++           (update.values &&
++             update.values.find((valuePath) => {
+++              if (!valuePath) {
+++                debug(
+++                  `Null valuePath in update.values - source: ${source}, update.source: ${JSON.stringify(update.source)}, context: ${context}`
+++                )
+++                return false
+++              }
++               return (
++-                valuePath &&
++                 strategy.checkACL(
++                   req.skPrincipal.identifier,
++                   context,
++@@ -580,8 +598,13 @@ module.exports = function (app, config) {
++             })) ||
++           (update.meta &&
++             update.meta.find((valuePath) => {
+++              if (!valuePath) {
+++                debug(
+++                  `Null valuePath in update.meta - source: ${source}, update.source: ${JSON.stringify(update.source)}, context: ${context}`
+++                )
+++                return false
+++              }
++               return (
++-                valuePath &&
++                 strategy.checkACL(
++                   req.skPrincipal.identifier,
++                   context,
++@@ -640,14 +663,19 @@ module.exports = function (app, config) {
++         .map((update) => {
++           let res = (update.values || update.meta)
++             .map((valuePath) => {
++-              return valuePath &&
++-                strategy.checkACL(
++-                  principal.identifier,
++-                  context,
++-                  valuePath.path,
++-                  update.source,
++-                  'read'
+++              if (!valuePath) {
+++                debug(
+++                  `Null valuePath in filterReadDelta - update.source: ${JSON.stringify(update.source)}, context: ${context}`
++                 )
+++                return null
+++              }
+++              return strategy.checkACL(
+++                principal.identifier,
+++                context,
+++                valuePath.path,
+++                update.source,
+++                'read'
+++              )
++                 ? valuePath
++                 : null
++             })
++-- 
++2.43.0
++
++
++From a4215c5244b8cf418b657ee25177452d2f4eb801 Mon Sep 17 00:00:00 2001
++From: Claude <noreply@anthropic.com>
++Date: Wed, 24 Dec 2025 14:33:51 +0000
++Subject: [PATCH 5/6] chore: update patch file with debug logging changes
++
++---
++ ...cks-to-prevent-TypeError-in-token-se.patch |  46 ----
++ ...n-security-null-checks-and-debugging.patch | 257 ++++++++++++++++++
++ 2 files changed, 257 insertions(+), 46 deletions(-)
++ delete mode 100644 0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
++ create mode 100644 0001-fix-token-security-null-checks-and-debugging.patch
++
++diff --git a/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch b/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
++deleted file mode 100644
++index 5e26d5a..0000000
++--- a/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
+++++ /dev/null
++@@ -1,46 +0,0 @@
++-From 18d81d60cb8edbdb4a21b2150708e19d5fffd947 Mon Sep 17 00:00:00 2001
++-From: Claude <noreply@anthropic.com>
++-Date: Wed, 24 Dec 2025 13:59:23 +0000
++-Subject: [PATCH] fix: add null checks to prevent TypeError in token security
++-
++-Fixes TypeError: Cannot read properties of null (reading 'path')
++-that occurs when valuePath is null in shouldAllowWrite and
++-filterReadDelta functions. Added null guards before accessing
++-valuePath.path to handle null values in update.values and
++-update.meta arrays.
++----
++- src/tokensecurity.js | 4 +++-
++- 1 file changed, 3 insertions(+), 1 deletion(-)
++-
++-diff --git a/src/tokensecurity.js b/src/tokensecurity.js
++-index 88b4f31..f5c55bf 100644
++---- a/src/tokensecurity.js
++-+++ b/src/tokensecurity.js
++-@@ -568,6 +568,7 @@ module.exports = function (app, config) {
++-           (update.values &&
++-             update.values.find((valuePath) => {
++-               return (
++-+                valuePath &&
++-                 strategy.checkACL(
++-                   req.skPrincipal.identifier,
++-                   context,
++-@@ -580,6 +581,7 @@ module.exports = function (app, config) {
++-           (update.meta &&
++-             update.meta.find((valuePath) => {
++-               return (
++-+                valuePath &&
++-                 strategy.checkACL(
++-                   req.skPrincipal.identifier,
++-                   context,
++-@@ -638,7 +640,7 @@ module.exports = function (app, config) {
++-         .map((update) => {
++-           let res = (update.values || update.meta)
++-             .map((valuePath) => {
++--              return strategy.checkACL(
++-+              return valuePath && strategy.checkACL(
++-                 principal.identifier,
++-                 context,
++-                 valuePath.path,
++--- 
++-2.43.0
++-
++diff --git a/0001-fix-token-security-null-checks-and-debugging.patch b/0001-fix-token-security-null-checks-and-debugging.patch
++new file mode 100644
++index 0000000..86eea83
++--- /dev/null
+++++ b/0001-fix-token-security-null-checks-and-debugging.patch
++@@ -0,0 +1,257 @@
+++From 18d81d60cb8edbdb4a21b2150708e19d5fffd947 Mon Sep 17 00:00:00 2001
+++From: Claude <noreply@anthropic.com>
+++Date: Wed, 24 Dec 2025 13:59:23 +0000
+++Subject: [PATCH 1/4] fix: add null checks to prevent TypeError in token
+++ security
+++
+++Fixes TypeError: Cannot read properties of null (reading 'path')
+++that occurs when valuePath is null in shouldAllowWrite and
+++filterReadDelta functions. Added null guards before accessing
+++valuePath.path to handle null values in update.values and
+++update.meta arrays.
+++---
+++ src/tokensecurity.js | 4 +++-
+++ 1 file changed, 3 insertions(+), 1 deletion(-)
+++
+++diff --git a/src/tokensecurity.js b/src/tokensecurity.js
+++index 88b4f31..f5c55bf 100644
+++--- a/src/tokensecurity.js
++++++ b/src/tokensecurity.js
+++@@ -568,6 +568,7 @@ module.exports = function (app, config) {
+++           (update.values &&
+++             update.values.find((valuePath) => {
+++               return (
++++                valuePath &&
+++                 strategy.checkACL(
+++                   req.skPrincipal.identifier,
+++                   context,
+++@@ -580,6 +581,7 @@ module.exports = function (app, config) {
+++           (update.meta &&
+++             update.meta.find((valuePath) => {
+++               return (
++++                valuePath &&
+++                 strategy.checkACL(
+++                   req.skPrincipal.identifier,
+++                   context,
+++@@ -638,7 +640,7 @@ module.exports = function (app, config) {
+++         .map((update) => {
+++           let res = (update.values || update.meta)
+++             .map((valuePath) => {
+++-              return strategy.checkACL(
++++              return valuePath && strategy.checkACL(
+++                 principal.identifier,
+++                 context,
+++                 valuePath.path,
+++-- 
+++2.43.0
+++
+++
+++From 6b7ef6597b03592ea9f3e028d68cf1b80a78330d Mon Sep 17 00:00:00 2001
+++From: Claude <noreply@anthropic.com>
+++Date: Wed, 24 Dec 2025 14:07:33 +0000
+++Subject: [PATCH 2/4] chore: add patch file for token security null check fixes
+++
+++---
+++ ...cks-to-prevent-TypeError-in-token-se.patch | 46 +++++++++++++++++++
+++ 1 file changed, 46 insertions(+)
+++ create mode 100644 0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
+++
+++diff --git a/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch b/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
+++new file mode 100644
+++index 0000000..5e26d5a
+++--- /dev/null
++++++ b/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
+++@@ -0,0 +1,46 @@
++++From 18d81d60cb8edbdb4a21b2150708e19d5fffd947 Mon Sep 17 00:00:00 2001
++++From: Claude <noreply@anthropic.com>
++++Date: Wed, 24 Dec 2025 13:59:23 +0000
++++Subject: [PATCH] fix: add null checks to prevent TypeError in token security
++++
++++Fixes TypeError: Cannot read properties of null (reading 'path')
++++that occurs when valuePath is null in shouldAllowWrite and
++++filterReadDelta functions. Added null guards before accessing
++++valuePath.path to handle null values in update.values and
++++update.meta arrays.
++++---
++++ src/tokensecurity.js | 4 +++-
++++ 1 file changed, 3 insertions(+), 1 deletion(-)
++++
++++diff --git a/src/tokensecurity.js b/src/tokensecurity.js
++++index 88b4f31..f5c55bf 100644
++++--- a/src/tokensecurity.js
+++++++ b/src/tokensecurity.js
++++@@ -568,6 +568,7 @@ module.exports = function (app, config) {
++++           (update.values &&
++++             update.values.find((valuePath) => {
++++               return (
+++++                valuePath &&
++++                 strategy.checkACL(
++++                   req.skPrincipal.identifier,
++++                   context,
++++@@ -580,6 +581,7 @@ module.exports = function (app, config) {
++++           (update.meta &&
++++             update.meta.find((valuePath) => {
++++               return (
+++++                valuePath &&
++++                 strategy.checkACL(
++++                   req.skPrincipal.identifier,
++++                   context,
++++@@ -638,7 +640,7 @@ module.exports = function (app, config) {
++++         .map((update) => {
++++           let res = (update.values || update.meta)
++++             .map((valuePath) => {
++++-              return strategy.checkACL(
+++++              return valuePath && strategy.checkACL(
++++                 principal.identifier,
++++                 context,
++++                 valuePath.path,
++++-- 
++++2.43.0
++++
+++-- 
+++2.43.0
+++
+++
+++From bc8e37e73f6154ad101b8f1f4d859f4be5a78164 Mon Sep 17 00:00:00 2001
+++From: Claude <noreply@anthropic.com>
+++Date: Wed, 24 Dec 2025 14:15:52 +0000
+++Subject: [PATCH 3/4] style: apply prettier formatting to tokensecurity.js
+++
+++---
+++ src/tokensecurity.js | 15 ++++++++-------
+++ 1 file changed, 8 insertions(+), 7 deletions(-)
+++
+++diff --git a/src/tokensecurity.js b/src/tokensecurity.js
+++index f5c55bf..233eece 100644
+++--- a/src/tokensecurity.js
++++++ b/src/tokensecurity.js
+++@@ -640,13 +640,14 @@ module.exports = function (app, config) {
+++         .map((update) => {
+++           let res = (update.values || update.meta)
+++             .map((valuePath) => {
+++-              return valuePath && strategy.checkACL(
+++-                principal.identifier,
+++-                context,
+++-                valuePath.path,
+++-                update.source,
+++-                'read'
+++-              )
++++              return valuePath &&
++++                strategy.checkACL(
++++                  principal.identifier,
++++                  context,
++++                  valuePath.path,
++++                  update.source,
++++                  'read'
++++                )
+++                 ? valuePath
+++                 : null
+++             })
+++-- 
+++2.43.0
+++
+++
+++From 0794ee28140ff9d00df63b9b934f627c1e77045c Mon Sep 17 00:00:00 2001
+++From: Claude <noreply@anthropic.com>
+++Date: Wed, 24 Dec 2025 14:31:23 +0000
+++Subject: [PATCH 4/4] feat: add debug logging to track null valuePath sources
+++
+++Added comprehensive debug logging to identify the source and context
+++when null valuePath values are encountered in shouldAllowWrite and
+++filterReadDelta functions. This will help track down which data
+++source or sentence is generating malformed delta updates with null
+++values in the values or meta arrays.
+++
+++Logging includes:
+++- Full delta structure when null values detected
+++- Source identifier and update.source details
+++- Context information
+++- Separate logging for update.values vs update.meta
+++---
+++ src/tokensecurity.js | 46 +++++++++++++++++++++++++++++++++++---------
+++ 1 file changed, 37 insertions(+), 9 deletions(-)
+++
+++diff --git a/src/tokensecurity.js b/src/tokensecurity.js
+++index 233eece..f70382b 100644
+++--- a/src/tokensecurity.js
++++++ b/src/tokensecurity.js
+++@@ -559,6 +559,19 @@ module.exports = function (app, config) {
+++       const context =
+++         delta.context === app.selfContext ? 'vessels.self' : delta.context
+++ 
++++      // Check for null valuePath values and log the entire delta for debugging
++++      const hasNullValues = delta.updates.some((update) => {
++++        return (
++++          (update.values && update.values.some((vp) => !vp)) ||
++++          (update.meta && update.meta.some((vp) => !vp))
++++        )
++++      })
++++      if (hasNullValues) {
++++        debug(
++++          `Delta contains null valuePath entries. Full delta: ${JSON.stringify(delta, null, 2)}`
++++        )
++++      }
++++
+++       const notAllowed = delta.updates.find((update) => {
+++         let source = update.$source
+++         if (!source) {
+++@@ -567,8 +580,13 @@ module.exports = function (app, config) {
+++         return (
+++           (update.values &&
+++             update.values.find((valuePath) => {
++++              if (!valuePath) {
++++                debug(
++++                  `Null valuePath in update.values - source: ${source}, update.source: ${JSON.stringify(update.source)}, context: ${context}`
++++                )
++++                return false
++++              }
+++               return (
+++-                valuePath &&
+++                 strategy.checkACL(
+++                   req.skPrincipal.identifier,
+++                   context,
+++@@ -580,8 +598,13 @@ module.exports = function (app, config) {
+++             })) ||
+++           (update.meta &&
+++             update.meta.find((valuePath) => {
++++              if (!valuePath) {
++++                debug(
++++                  `Null valuePath in update.meta - source: ${source}, update.source: ${JSON.stringify(update.source)}, context: ${context}`
++++                )
++++                return false
++++              }
+++               return (
+++-                valuePath &&
+++                 strategy.checkACL(
+++                   req.skPrincipal.identifier,
+++                   context,
+++@@ -640,14 +663,19 @@ module.exports = function (app, config) {
+++         .map((update) => {
+++           let res = (update.values || update.meta)
+++             .map((valuePath) => {
+++-              return valuePath &&
+++-                strategy.checkACL(
+++-                  principal.identifier,
+++-                  context,
+++-                  valuePath.path,
+++-                  update.source,
+++-                  'read'
++++              if (!valuePath) {
++++                debug(
++++                  `Null valuePath in filterReadDelta - update.source: ${JSON.stringify(update.source)}, context: ${context}`
+++                 )
++++                return null
++++              }
++++              return strategy.checkACL(
++++                principal.identifier,
++++                context,
++++                valuePath.path,
++++                update.source,
++++                'read'
++++              )
+++                 ? valuePath
+++                 : null
+++             })
+++-- 
+++2.43.0
+++
++-- 
++2.43.0
++
++
++From 39de1b55c57c3c0cf119b56a23e8187c1c96fc03 Mon Sep 17 00:00:00 2001
++From: Claude <noreply@anthropic.com>
++Date: Thu, 25 Dec 2025 09:10:55 +0000
++Subject: [PATCH 6/6] fix: add null check in filterSelfDataKP to prevent
++ TypeError
++
++Fixes TypeError: Cannot read properties of null (reading 'path')
++that occurs in filterSelfDataKP when pathValue is null. Added
++null guard at the beginning of the function and debug logging
++to track when null pathValue entries are encountered in
++update.values arrays.
++
++This is the same issue as in tokensecurity.js but occurring in
++the filterStaticSelfData function which processes delta updates.
++---
++ src/index.ts | 14 ++++++++++++++
++ 1 file changed, 14 insertions(+)
++
++diff --git a/src/index.ts b/src/index.ts
++index b399606..71f69eb 100644
++--- a/src/index.ts
+++++ b/src/index.ts
++@@ -686,6 +686,14 @@ function filterStaticSelfData(delta: any, selfContext: string) {
++     delta.updates &&
++       delta.updates.forEach((update: any) => {
++         if ('values' in update && update['$source'] !== 'defaults') {
+++          // Check for null values and log the full update for debugging
+++          const hasNullValues = update.values.some((pv: any) => !pv)
+++          if (hasNullValues) {
+++            debug(
+++              `Update contains null pathValue entries. Update: ${JSON.stringify(update, null, 2)}`
+++            )
+++          }
+++
++           update.values = update.values.reduce((acc: any, pathValue: any) => {
++             const nvp = filterSelfDataKP(pathValue)
++             if (nvp) {
++@@ -703,6 +711,12 @@ function filterStaticSelfData(delta: any, selfContext: string) {
++ }
++ 
++ function filterSelfDataKP(pathValue: any) {
+++  // Return null if pathValue is null or undefined
+++  if (!pathValue) {
+++    debug('Null pathValue encountered in filterSelfDataKP')
+++    return null
+++  }
+++
++   const deepKeys: { [key: string]: string[] } = {
++     '': ['name', 'mmsi']
++   }
++-- 
++2.43.0
++
+diff --git a/0001-fix-token-security-null-checks-and-debugging.patch b/0001-fix-token-security-null-checks-and-debugging.patch
+deleted file mode 100644
+index 86eea83..0000000
+--- a/0001-fix-token-security-null-checks-and-debugging.patch
++++ /dev/null
+@@ -1,257 +0,0 @@
+-From 18d81d60cb8edbdb4a21b2150708e19d5fffd947 Mon Sep 17 00:00:00 2001
+-From: Claude <noreply@anthropic.com>
+-Date: Wed, 24 Dec 2025 13:59:23 +0000
+-Subject: [PATCH 1/4] fix: add null checks to prevent TypeError in token
+- security
+-
+-Fixes TypeError: Cannot read properties of null (reading 'path')
+-that occurs when valuePath is null in shouldAllowWrite and
+-filterReadDelta functions. Added null guards before accessing
+-valuePath.path to handle null values in update.values and
+-update.meta arrays.
+----
+- src/tokensecurity.js | 4 +++-
+- 1 file changed, 3 insertions(+), 1 deletion(-)
+-
+-diff --git a/src/tokensecurity.js b/src/tokensecurity.js
+-index 88b4f31..f5c55bf 100644
+---- a/src/tokensecurity.js
+-+++ b/src/tokensecurity.js
+-@@ -568,6 +568,7 @@ module.exports = function (app, config) {
+-           (update.values &&
+-             update.values.find((valuePath) => {
+-               return (
+-+                valuePath &&
+-                 strategy.checkACL(
+-                   req.skPrincipal.identifier,
+-                   context,
+-@@ -580,6 +581,7 @@ module.exports = function (app, config) {
+-           (update.meta &&
+-             update.meta.find((valuePath) => {
+-               return (
+-+                valuePath &&
+-                 strategy.checkACL(
+-                   req.skPrincipal.identifier,
+-                   context,
+-@@ -638,7 +640,7 @@ module.exports = function (app, config) {
+-         .map((update) => {
+-           let res = (update.values || update.meta)
+-             .map((valuePath) => {
+--              return strategy.checkACL(
+-+              return valuePath && strategy.checkACL(
+-                 principal.identifier,
+-                 context,
+-                 valuePath.path,
+--- 
+-2.43.0
+-
+-
+-From 6b7ef6597b03592ea9f3e028d68cf1b80a78330d Mon Sep 17 00:00:00 2001
+-From: Claude <noreply@anthropic.com>
+-Date: Wed, 24 Dec 2025 14:07:33 +0000
+-Subject: [PATCH 2/4] chore: add patch file for token security null check fixes
+-
+----
+- ...cks-to-prevent-TypeError-in-token-se.patch | 46 +++++++++++++++++++
+- 1 file changed, 46 insertions(+)
+- create mode 100644 0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
+-
+-diff --git a/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch b/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
+-new file mode 100644
+-index 0000000..5e26d5a
+---- /dev/null
+-+++ b/0001-fix-add-null-checks-to-prevent-TypeError-in-token-se.patch
+-@@ -0,0 +1,46 @@
+-+From 18d81d60cb8edbdb4a21b2150708e19d5fffd947 Mon Sep 17 00:00:00 2001
+-+From: Claude <noreply@anthropic.com>
+-+Date: Wed, 24 Dec 2025 13:59:23 +0000
+-+Subject: [PATCH] fix: add null checks to prevent TypeError in token security
+-+
+-+Fixes TypeError: Cannot read properties of null (reading 'path')
+-+that occurs when valuePath is null in shouldAllowWrite and
+-+filterReadDelta functions. Added null guards before accessing
+-+valuePath.path to handle null values in update.values and
+-+update.meta arrays.
+-+---
+-+ src/tokensecurity.js | 4 +++-
+-+ 1 file changed, 3 insertions(+), 1 deletion(-)
+-+
+-+diff --git a/src/tokensecurity.js b/src/tokensecurity.js
+-+index 88b4f31..f5c55bf 100644
+-+--- a/src/tokensecurity.js
+-++++ b/src/tokensecurity.js
+-+@@ -568,6 +568,7 @@ module.exports = function (app, config) {
+-+           (update.values &&
+-+             update.values.find((valuePath) => {
+-+               return (
+-++                valuePath &&
+-+                 strategy.checkACL(
+-+                   req.skPrincipal.identifier,
+-+                   context,
+-+@@ -580,6 +581,7 @@ module.exports = function (app, config) {
+-+           (update.meta &&
+-+             update.meta.find((valuePath) => {
+-+               return (
+-++                valuePath &&
+-+                 strategy.checkACL(
+-+                   req.skPrincipal.identifier,
+-+                   context,
+-+@@ -638,7 +640,7 @@ module.exports = function (app, config) {
+-+         .map((update) => {
+-+           let res = (update.values || update.meta)
+-+             .map((valuePath) => {
+-+-              return strategy.checkACL(
+-++              return valuePath && strategy.checkACL(
+-+                 principal.identifier,
+-+                 context,
+-+                 valuePath.path,
+-+-- 
+-+2.43.0
+-+
+--- 
+-2.43.0
+-
+-
+-From bc8e37e73f6154ad101b8f1f4d859f4be5a78164 Mon Sep 17 00:00:00 2001
+-From: Claude <noreply@anthropic.com>
+-Date: Wed, 24 Dec 2025 14:15:52 +0000
+-Subject: [PATCH 3/4] style: apply prettier formatting to tokensecurity.js
+-
+----
+- src/tokensecurity.js | 15 ++++++++-------
+- 1 file changed, 8 insertions(+), 7 deletions(-)
+-
+-diff --git a/src/tokensecurity.js b/src/tokensecurity.js
+-index f5c55bf..233eece 100644
+---- a/src/tokensecurity.js
+-+++ b/src/tokensecurity.js
+-@@ -640,13 +640,14 @@ module.exports = function (app, config) {
+-         .map((update) => {
+-           let res = (update.values || update.meta)
+-             .map((valuePath) => {
+--              return valuePath && strategy.checkACL(
+--                principal.identifier,
+--                context,
+--                valuePath.path,
+--                update.source,
+--                'read'
+--              )
+-+              return valuePath &&
+-+                strategy.checkACL(
+-+                  principal.identifier,
+-+                  context,
+-+                  valuePath.path,
+-+                  update.source,
+-+                  'read'
+-+                )
+-                 ? valuePath
+-                 : null
+-             })
+--- 
+-2.43.0
+-
+-
+-From 0794ee28140ff9d00df63b9b934f627c1e77045c Mon Sep 17 00:00:00 2001
+-From: Claude <noreply@anthropic.com>
+-Date: Wed, 24 Dec 2025 14:31:23 +0000
+-Subject: [PATCH 4/4] feat: add debug logging to track null valuePath sources
+-
+-Added comprehensive debug logging to identify the source and context
+-when null valuePath values are encountered in shouldAllowWrite and
+-filterReadDelta functions. This will help track down which data
+-source or sentence is generating malformed delta updates with null
+-values in the values or meta arrays.
+-
+-Logging includes:
+-- Full delta structure when null values detected
+-- Source identifier and update.source details
+-- Context information
+-- Separate logging for update.values vs update.meta
+----
+- src/tokensecurity.js | 46 +++++++++++++++++++++++++++++++++++---------
+- 1 file changed, 37 insertions(+), 9 deletions(-)
+-
+-diff --git a/src/tokensecurity.js b/src/tokensecurity.js
+-index 233eece..f70382b 100644
+---- a/src/tokensecurity.js
+-+++ b/src/tokensecurity.js
+-@@ -559,6 +559,19 @@ module.exports = function (app, config) {
+-       const context =
+-         delta.context === app.selfContext ? 'vessels.self' : delta.context
+- 
+-+      // Check for null valuePath values and log the entire delta for debugging
+-+      const hasNullValues = delta.updates.some((update) => {
+-+        return (
+-+          (update.values && update.values.some((vp) => !vp)) ||
+-+          (update.meta && update.meta.some((vp) => !vp))
+-+        )
+-+      })
+-+      if (hasNullValues) {
+-+        debug(
+-+          `Delta contains null valuePath entries. Full delta: ${JSON.stringify(delta, null, 2)}`
+-+        )
+-+      }
+-+
+-       const notAllowed = delta.updates.find((update) => {
+-         let source = update.$source
+-         if (!source) {
+-@@ -567,8 +580,13 @@ module.exports = function (app, config) {
+-         return (
+-           (update.values &&
+-             update.values.find((valuePath) => {
+-+              if (!valuePath) {
+-+                debug(
+-+                  `Null valuePath in update.values - source: ${source}, update.source: ${JSON.stringify(update.source)}, context: ${context}`
+-+                )
+-+                return false
+-+              }
+-               return (
+--                valuePath &&
+-                 strategy.checkACL(
+-                   req.skPrincipal.identifier,
+-                   context,
+-@@ -580,8 +598,13 @@ module.exports = function (app, config) {
+-             })) ||
+-           (update.meta &&
+-             update.meta.find((valuePath) => {
+-+              if (!valuePath) {
+-+                debug(
+-+                  `Null valuePath in update.meta - source: ${source}, update.source: ${JSON.stringify(update.source)}, context: ${context}`
+-+                )
+-+                return false
+-+              }
+-               return (
+--                valuePath &&
+-                 strategy.checkACL(
+-                   req.skPrincipal.identifier,
+-                   context,
+-@@ -640,14 +663,19 @@ module.exports = function (app, config) {
+-         .map((update) => {
+-           let res = (update.values || update.meta)
+-             .map((valuePath) => {
+--              return valuePath &&
+--                strategy.checkACL(
+--                  principal.identifier,
+--                  context,
+--                  valuePath.path,
+--                  update.source,
+--                  'read'
+-+              if (!valuePath) {
+-+                debug(
+-+                  `Null valuePath in filterReadDelta - update.source: ${JSON.stringify(update.source)}, context: ${context}`
+-                 )
+-+                return null
+-+              }
+-+              return strategy.checkACL(
+-+                principal.identifier,
+-+                context,
+-+                valuePath.path,
+-+                update.source,
+-+                'read'
+-+              )
+-                 ? valuePath
+-                 : null
+-             })
+--- 
+-2.43.0
+-
+-- 
+2.43.0
+
+
+From 8e6ff711967dca4340b0b7b1a35385cea4108704 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 25 Dec 2025 09:38:07 +0000
+Subject: [PATCH 8/8] fix: add null checks across codebase for delta processing
+
+Fixed 9 additional null pointer vulnerabilities across the codebase
+where code was accessing properties on potentially null array elements
+during delta processing. These are the same pattern as the original
+tokensecurity.js and index.ts fixes.
+
+HIGH SEVERITY fixes (hot path/critical):
+- src/deltaPriority.ts: null check in reduce callback for pathValue
+- src/streambundle.ts: null checks in forEach for meta and values
+- src/interfaces/ws.js: null checks in pathSources forEach and handleValuesMeta
+
+MEDIUM SEVERITY fixes (stream/API processing):
+- packages/streams/keys-filter.js: null check in values forEach
+- packages/streams/n2k-signalk.js: null check in notification handling forEach
+- src/api/course/index.ts: null checks in two forEach callbacks (resource delta and V1 destination)
+
+All fixes follow the same pattern: early return when encountering null
+entries to prevent TypeError when accessing .path, .value properties.
+---
+ packages/streams/keys-filter.js | 4 ++++
+ packages/streams/n2k-signalk.js | 4 ++++
+ src/api/course/index.ts         | 8 ++++++++
+ src/deltaPriority.ts            | 4 ++++
+ src/interfaces/ws.js            | 8 ++++++++
+ src/streambundle.ts             | 8 ++++++++
+ 6 files changed, 36 insertions(+)
+
+diff --git a/packages/streams/keys-filter.js b/packages/streams/keys-filter.js
+index 65d8506..4237b44 100644
+--- a/packages/streams/keys-filter.js
++++ b/packages/streams/keys-filter.js
+@@ -37,6 +37,10 @@ ToSignalK.prototype._transform = function (chunk, encoding, done) {
+         const values = []
+ 
+         update.values.forEach((value) => {
++          // Skip null/undefined value entries
++          if (!value) {
++            return
++          }
+           if (this.exclude.includes(value.path) !== true) {
+             values.push(value)
+           }
+diff --git a/packages/streams/n2k-signalk.js b/packages/streams/n2k-signalk.js
+index e427062..fea55c0 100644
+--- a/packages/streams/n2k-signalk.js
++++ b/packages/streams/n2k-signalk.js
+@@ -139,6 +139,10 @@ ToSignalK.prototype._transform = function (chunk, encoding, done) {
+ 
+       delta.updates.forEach((update) => {
+         update.values.forEach((kv) => {
++          // Skip null/undefined kv entries
++          if (!kv) {
++            return
++          }
+           if (kv.path && kv.path.startsWith('notifications.')) {
+             if (
+               kv.value.state === 'normal' &&
+diff --git a/src/api/course/index.ts b/src/api/course/index.ts
+index 375c012..d54277c 100644
+--- a/src/api/course/index.ts
++++ b/src/api/course/index.ts
+@@ -187,6 +187,10 @@ export class CourseApi {
+     delta.updates.forEach((update: Update) => {
+       if (hasValues(update)) {
+         update.values.forEach(async (pathValue: PathValue) => {
++          // Skip null/undefined pathValue entries
++          if (!pathValue) {
++            return
++          }
+           if (ref === pathValue.path) {
+             if (refType === 'routes') {
+               if (this.courseInfo.activeRoute) {
+@@ -277,6 +281,10 @@ export class CourseApi {
+     delta.updates.forEach((update: Update) => {
+       if (hasValues(update)) {
+         update.values.forEach((pathValue: PathValue) => {
++          // Skip null/undefined pathValue entries
++          if (!pathValue) {
++            return
++          }
+           if (
+             update.source &&
+             update.source.type &&
+diff --git a/src/deltaPriority.ts b/src/deltaPriority.ts
+index b66b738..e84d0ac 100644
+--- a/src/deltaPriority.ts
++++ b/src/deltaPriority.ts
+@@ -148,6 +148,10 @@ export const getToPreferredDelta = (
+           if ('values' in update) {
+             update.values = update.values.reduce(
+               (acc: any, pathValue: PathValue) => {
++                // Skip null/undefined pathValue entries
++                if (!pathValue) {
++                  return acc
++                }
+                 const latest = getLatest(
+                   delta.context as Context,
+                   pathValue.path as Path
+diff --git a/src/interfaces/ws.js b/src/interfaces/ws.js
+index 4a6f095..864f908 100644
+--- a/src/interfaces/ws.js
++++ b/src/interfaces/ws.js
+@@ -504,6 +504,10 @@ function processUpdates(app, pathSources, spark, msg) {
+ 
+       if (source) {
+         update.values.forEach((valuePath) => {
++          // Skip null/undefined valuePath entries
++          if (!valuePath) {
++            return
++          }
+           if (!pathSources[valuePath.path]) {
+             pathSources[valuePath.path] = {}
+           }
+@@ -557,6 +561,10 @@ setInterval(
+ )
+ 
+ function handleValuesMeta(kp) {
++  // Skip null/undefined kp entries
++  if (!kp) {
++    return
++  }
+   const fullContextPathKey = getContextPathMetaKey(this.context, kp.path)
+   if (kp.path && !this.spark.sentMetaData[fullContextPathKey]) {
+     const split = kp.path.split('.')
+diff --git a/src/streambundle.ts b/src/streambundle.ts
+index 7881232..2daf3db 100644
+--- a/src/streambundle.ts
++++ b/src/streambundle.ts
+@@ -65,6 +65,10 @@ export class StreamBundle implements IStreamBundle {
+ 
+           if ('meta' in update) {
+             update.meta.forEach((meta) => {
++              // Skip null/undefined meta entries
++              if (!meta) {
++                return
++              }
+               this.push(meta.path, {
+                 ...base,
+                 path: meta.path,
+@@ -76,6 +80,10 @@ export class StreamBundle implements IStreamBundle {
+ 
+           if ('values' in update) {
+             update.values.forEach((pathValue) => {
++              // Skip null/undefined pathValue entries
++              if (!pathValue) {
++                return
++              }
+               this.push(pathValue.path, {
+                 ...base,
+                 path: pathValue.path,
 -- 
 2.43.0
