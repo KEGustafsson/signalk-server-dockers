@@ -1,5 +1,5 @@
 diff --git a/src/deltaPriority.ts b/src/deltaPriority.ts
-index 8f0d620..ad663ea 100644
+index e84d0ac..ad663ea 100644
 --- a/src/deltaPriority.ts
 +++ b/src/deltaPriority.ts
 @@ -67,7 +67,7 @@ export const getToPreferredDelta = (
