@@ -1,60 +1,49 @@
+diff --git a/src/deltaPriority.ts b/src/deltaPriority.ts
+index b66b738..d6a0931 100644
 --- a/src/deltaPriority.ts
 +++ b/src/deltaPriority.ts
-@@ -69,6 +69,10 @@ export const getToPreferredDelta = (
- 
-   const contextPathTimestamps = new Map<Context, PathLatestTimestamps>()
- 
+@@ -67,6 +67,9 @@ export const getToPreferredDelta = (
+   }
+   const precedences = toPrecedences(sourcePrioritiesData)
+
 +  // Lazy-initialize boot time on first delta to avoid timing issues
-+  // where constructor runs before data flows
 +  let filterStartTime: number | null = null
 +
+   const contextPathTimestamps = new Map<Context, PathLatestTimestamps>()
+
    const setLatest = (
-     context: Context,
-     path: Path,
-@@ -123,6 +127,49 @@ export const getToPreferredDelta = (
+@@ -123,6 +126,37 @@ export const getToPreferredDelta = (
        return true
      }
- 
+
 +    // Special case: no value received yet for this path (boot time)
-+    // Respect priority list and timeouts to avoid accepting all sources immediately
 +    if (latest.sourceRef === '') {
-+      // Initialize filter start time on first delta to avoid timing issues
++      // Initialize filter start time on first delta
 +      if (filterStartTime === null) {
 +        filterStartTime = millis
 +      }
 +
 +      const incomingPrecedence = pathPrecedences.get(sourceRef)
-+      if (incomingPrecedence) {
-+        // Source is in priority list - check if enough time has elapsed
-+        // based on cumulative timeouts of higher priority sources
-+
-+        // Calculate cumulative timeout: sum of timeouts for all higher precedence sources
-+        let cumulativeTimeout = 0
-+        for (const [, precedenceData] of pathPrecedences) {
-+          if (precedenceData.precedence < incomingPrecedence.precedence) {
-+            cumulativeTimeout += precedenceData.timeout
-+          }
-+        }
-+
-+        const timeSinceBoot = millis - filterStartTime
-+        const isPreferred = timeSinceBoot >= cumulativeTimeout
-+
-+        if (debug.enabled) {
-+          debug(
-+            `${path}:${sourceRef}:${isPreferred}:boot-time:precedence=${incomingPrecedence.precedence}:cumulative-timeout=${cumulativeTimeout}:time-since-boot=${timeSinceBoot}`
-+          )
-+        }
-+        return isPreferred
-+      }
-+
-+      // Source not in priority list - apply unknown source timeout
 +      const timeSinceBoot = millis - filterStartTime
-+      const isPreferred = timeSinceBoot >= unknownSourceTimeout
++
++      // Calculate cumulative timeout for sources in priority list
++      const cumulativeTimeout = incomingPrecedence
++        ? Array.from(pathPrecedences.values())
++            .filter((p) => p.precedence < incomingPrecedence.precedence)
++            .reduce((sum, p) => sum + p.timeout, 0)
++        : unknownSourceTimeout
++
++      const isPreferred = timeSinceBoot >= cumulativeTimeout
++
 +      if (debug.enabled) {
++        const status = incomingPrecedence
++          ? `precedence=${incomingPrecedence.precedence}:cumulative-timeout=${cumulativeTimeout}`
++          : `unknown-source:timeout=${unknownSourceTimeout}`
 +        debug(
-+          `${path}:${sourceRef}:${isPreferred}:boot-time:unknown-source:timeout=${unknownSourceTimeout}:time-since-boot=${timeSinceBoot}`
++          `${path}:${sourceRef}:${isPreferred}:boot-time:${status}:time-since-boot=${timeSinceBoot}`
 +        )
 +      }
++
 +      return isPreferred
 +    }
 +
