@@ -1,18 +1,17 @@
-diff --git a/src/deltaPriority.ts b/src/deltaPriority.ts
-index b66b738..ad663ea 100644
 --- a/src/deltaPriority.ts
 +++ b/src/deltaPriority.ts
-@@ -67,6 +67,9 @@ export const getToPreferredDelta = (
-   }
-   const precedences = toPrecedences(sourcePrioritiesData)
+@@ -69,6 +69,10 @@ export const getToPreferredDelta = (
  
-+  // Lazy-initialize boot time on first delta to avoid timing issues
-+  let filterStartTime: number | null = null
-+
    const contextPathTimestamps = new Map<Context, PathLatestTimestamps>()
  
++  // Lazy-initialize boot time on first delta to avoid timing issues
++  // where constructor runs before data flows
++  let filterStartTime: number | null = null
++
    const setLatest = (
-@@ -113,6 +116,46 @@ export const getToPreferredDelta = (
+     context: Context,
+     path: Path,
+@@ -123,6 +127,49 @@ export const getToPreferredDelta = (
        return true
      }
  
