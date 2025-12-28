@@ -82,8 +82,8 @@ jobs:
       - name: signalk-server download and patch
         id: git
         run: |
-          # git clone https://github.com/SignalK/signalk-server.git
-          git clone -b webpack-to-vite-test https://github.com/KEGustafsson/signalk-server.git
+          git clone https://github.com/SignalK/signalk-server.git
+          # git clone -b webpack-to-vite-test https://github.com/KEGustafsson/signalk-server.git
           # git clone -b vite https://github.com/KEGustafsson/signalk-server.git
           cd signalk-server
           #if [ -d "./../patch_new" ] && [ "$(ls -A ./../patch_new/*.patch 2>/dev/null)" ]; then
