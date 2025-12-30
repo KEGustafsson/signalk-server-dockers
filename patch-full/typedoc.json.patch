@@ -1,0 +1,14 @@
+diff --git a/typedoc.json b/typedoc.json
+index 6c1b19d..dcb18c5 100644
+--- a/typedoc.json
++++ b/typedoc.json
+@@ -70,7 +70,8 @@
+     "sh",
+     "json",
+     "javascript",
+-    "typescript"
++    "typescript",
++    "nginx"
+   ],
+   "cacheBust": true
+ }

@@ -1,0 +1,67 @@
+diff --git a/src/tokensecurity.js b/src/tokensecurity.js
+index 5a533f7..74ee1b4 100644
+--- a/src/tokensecurity.js
++++ b/src/tokensecurity.js
+@@ -227,7 +227,11 @@ module.exports = function (app, config) {
+       message: {
+         message:
+           'Too many login attempts from this IP, please try again after 10 minutes'
+-      }
++      },
++      // Disable X-Forwarded-For validation - we handle trust proxy configuration
++      // ourselves and this avoids error log output when trust proxy isn't configured
++      // trustProxy: false prevents ERR_ERL_PERMISSIVE_TRUST_PROXY when trustProxy is true
++      validate: { xForwardedForHeader: false, trustProxy: false }
+     })
+
+     app.use(require('body-parser').urlencoded({ extended: true }))
+@@ -648,27 +652,31 @@ module.exports = function (app, config) {
+         return (
+           (update.values &&
+             update.values.find((valuePath) => {
+-              return (
+-                strategy.checkACL(
+-                  req.skPrincipal.identifier,
+-                  context,
+-                  valuePath.path,
+-                  source,
+-                  'write'
+-                ) === false
+-              )
++              if (valuePath != null) {
++                return (
++                  strategy.checkACL(
++                    req.skPrincipal.identifier,
++                    context,
++                    valuePath.path,
++                    source,
++                    'write'
++                  ) === false
++                )
++              }
+             })) ||
+           (update.meta &&
+             update.meta.find((valuePath) => {
+-              return (
+-                strategy.checkACL(
+-                  req.skPrincipal.identifier,
+-                  context,
+-                  valuePath.path,
+-                  source,
+-                  'write'
+-                ) === false
+-              )
++              if (valuePath != null) {
++                return (
++                  strategy.checkACL(
++                    req.skPrincipal.identifier,
++                    context,
++                    valuePath.path,
++                    source,
++                    'write'
++                  ) === false
++                )
++              }
+             }))
+         )
+       })

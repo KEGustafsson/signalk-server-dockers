@@ -1,0 +1,14 @@
+diff --git a/packages/server-admin-ui/src/bootstrap.js b/packages/server-admin-ui/src/bootstrap.js
+index fdcc45a..0661977 100644
+--- a/packages/server-admin-ui/src/bootstrap.js
++++ b/packages/server-admin-ui/src/bootstrap.js
+@@ -297,9 +297,6 @@ function nameCollator(left, right) {
+
+ window.serverRoutesPrefix = '/skServer'
+
+-// eslint-disable-next-line no-undef
+-__webpack_init_sharing__('default')
+-
+ ReactDOM.render(
+   <HashRouter>
+     <Switch>

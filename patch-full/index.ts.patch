@@ -1,0 +1,17 @@
+diff --git a/src/index.ts b/src/index.ts
+index 74b14eb..b07e67e 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -117,6 +117,12 @@ class Server {
+     _.merge(app, opts)
+
+     load(app)
++
++    // Apply trust proxy setting if configured
++    if (app.config.settings.trustProxy !== undefined) {
++      app.set('trust proxy', app.config.settings.trustProxy)
++    }
++
+     app.logging = require('./logging')(app)
+     app.version = '0.0.1'
+

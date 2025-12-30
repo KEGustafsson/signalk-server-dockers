@@ -1,0 +1,89 @@
+diff --git a/src/serverroutes.ts b/src/serverroutes.ts
+index 0e469b6..f205d04 100644
+--- a/src/serverroutes.ts
++++ b/src/serverroutes.ts
+@@ -154,7 +154,11 @@ module.exports = function (
+     message: {
+       message:
+         'Too many requests from this IP, please try again after 10 minutes'
+-    }
++    },
++    // We use Express' trust proxy that sets the actual client's ip in req.ip
++    // so rateLimit need not complain about the presence of x-forwarded-for
++    // trustProxy: false prevents ERR_ERL_PERMISSIVE_TRUST_PROXY when trustProxy is true
++    validate: { xForwardedForHeader: false, trustProxy: false }
+   })
+
+   const loginStatusLimiter = rateLimit({
+@@ -163,7 +167,8 @@ module.exports = function (
+     message: {
+       message:
+         'Too many requests from this IP, please try again after 10 minutes'
+-    }
++    },
++    validate: { xForwardedForHeader: false, trustProxy: false }
+   })
+
+   let securityWasEnabled = false
+@@ -172,10 +177,15 @@ module.exports = function (
+   const logopath = path.resolve(app.config.configPath, 'logo.svg')
+   if (fs.existsSync(logopath)) {
+     debug(`Found custom logo at ${logopath}, adding route for it`)
++    // Intercept both Webpack (fonts/) and Vite (assets/) paths for the main logo
+     app.use(
+       '/admin/fonts/signal-k-logo-image-text.*',
+       (req: Request, res: Response) => res.sendFile(logopath)
+     )
++    app.use(
++      '/admin/assets/signal-k-logo-image-text*.svg',
++      (req: Request, res: Response) => res.sendFile(logopath)
++    )
+
+     // Check for custom logo for minimized sidebar, otherwise use the existing logo.
+     const minimizedLogoPath = path.resolve(
+@@ -185,10 +195,15 @@ module.exports = function (
+     const minimizedLogo = fs.existsSync(minimizedLogoPath)
+       ? minimizedLogoPath
+       : logopath
++    // Intercept both Webpack (fonts/) and Vite (assets/) paths for the minimized logo
+     app.use(
+       '/admin/fonts/signal-k-logo-image.*',
+       (req: Request, res: Response) => res.sendFile(minimizedLogo)
+     )
++    app.use(
++      '/admin/assets/signal-k-logo-image*.svg',
++      (req: Request, res: Response) => res.sendFile(minimizedLogo)
++    )
+   }
+
+   // mount before the main /admin
+@@ -548,7 +563,7 @@ module.exports = function (
+         return
+       }
+       const config = getSecurityConfig(app)
+-      const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress
++      const ip = req.ip
+       if (!app.securityStrategy.requestAccess) {
+         res.status(404).json({
+           message:
+@@ -601,7 +616,8 @@ module.exports = function (
+           app.config.settings.accessLogging,
+         enablePluginLogging:
+           isUndefined(app.config.settings.enablePluginLogging) ||
+-          app.config.settings.enablePluginLogging
++          app.config.settings.enablePluginLogging,
++        trustProxy: app.config.settings.trustProxy || false
+       },
+       loggingDirectory: app.config.settings.loggingDirectory,
+       pruneContextsMinutes: app.config.settings.pruneContextsMinutes || 60,
+@@ -729,6 +745,10 @@ module.exports = function (
+         settings.options.enablePluginLogging
+     }
+
++    if (!isUndefined(settings.options.trustProxy)) {
++      app.config.settings.trustProxy = settings.options.trustProxy
++    }
++
+     if (!isUndefined(settings.port)) {
+       app.config.settings.port = Number(settings.port)
+     }

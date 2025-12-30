@@ -1,0 +1,44 @@
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
+index 684378c..2f8b0c1 100644
+--- a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
++++ b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
+@@ -17,6 +17,7 @@ import moment from 'moment'
+ import { CopyToClipboard } from 'react-copy-to-clipboard'
+ import Meta from './Meta'
+ import { getValueRenderer, DefaultValueRenderer } from './ValueRenderers'
++import { getDeviceDisplayLabel } from '../../util/deviceUtils'
+
+ const TIMESTAMP_FORMAT = 'MM/DD HH:mm:ss'
+ const TIME_ONLY_FORMAT = 'HH:mm:ss'
+@@ -340,6 +341,12 @@ class DataBrowser extends Component {
+     })
+   }
+
++  getSourceDisplayName(source) {
++    const { serverStatistics } = this.props
++    const devices = serverStatistics?.devices || []
++    return getDeviceDisplayLabel(source, devices)
++  }
++
+   render() {
+     const contextOptions = this.getContextOptions()
+     const currentContext = this.getCurrentContextValue()
+@@ -736,7 +743,8 @@ class DataBrowser extends Component {
+                                   }}
+                                 />
+                                 <CopyToClipboardWithFade text={data.$source}>
+-                                  {data.$source} <i className="far fa-copy"></i>
++                                  {this.getSourceDisplayName(data.$source)}{' '}
++                                  <i className="far fa-copy"></i>
+                                 </CopyToClipboardWithFade>{' '}
+                                 {data.pgn || ''}
+                                 {data.sentence || ''}
+@@ -896,4 +904,7 @@ class CopyToClipboardWithFade extends Component {
+   }
+ }
+
+-export default connect(({ webSocket }) => ({ webSocket }))(DataBrowser)
++export default connect(({ webSocket, serverStatistics }) => ({
++  webSocket,
++  serverStatistics
++}))(DataBrowser)

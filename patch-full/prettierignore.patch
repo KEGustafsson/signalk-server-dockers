@@ -1,0 +1,9 @@
+diff --git a/.prettierignore b/.prettierignore
+index 1ece09c..17fba36 100644
+--- a/.prettierignore
++++ b/.prettierignore
+@@ -3,3 +3,4 @@ public
+
+ **/*.mbtiles
+ **/*.pmtiles
++**/.__mf__temp

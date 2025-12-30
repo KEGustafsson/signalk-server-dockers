@@ -1,0 +1,12 @@
+diff --git a/packages/server-admin-ui/.gitignore b/packages/server-admin-ui/.gitignore
+index 4667e0c..9f44842 100644
+--- a/packages/server-admin-ui/.gitignore
++++ b/packages/server-admin-ui/.gitignore
+@@ -9,6 +9,7 @@ coverage
+
+ # production
+ public
++.__mf__temp
+
+ # misc
+ .DS_Store

@@ -1,0 +1,13 @@
+diff --git a/packages/server-admin-ui/scss/style.scss b/packages/server-admin-ui/scss/style.scss
+index 0062c72..f569a77 100644
+--- a/packages/server-admin-ui/scss/style.scss
++++ b/packages/server-admin-ui/scss/style.scss
+@@ -10,7 +10,7 @@
+ @import 'bootstrap-variables';
+
+ // Import Bootstrap source files
+-@import '~bootstrap/scss/bootstrap';
++@import 'bootstrap/scss/bootstrap';
+
+ // Override core variables
+ @import 'core-variables';
