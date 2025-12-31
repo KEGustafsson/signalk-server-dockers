@@ -24,6 +24,9 @@ RUN mkdir -p /var/run/dbus/ /var/run/avahi-daemon/ \
   && chmod -R 777 /var/run/dbus/ /var/run/avahi-daemon/ \
   && chown -R avahi:avahi /var/run/avahi-daemon/
 
+RUN npm -v
+RUN node -v
+
 RUN curl -fsSL https://deb.nodesource.com/setup_$NODE | bash - \
   && DEBIAN_FRONTEND=noninteractive apt-get -y install --no-install-recommends nodejs \
   && npm config rm proxy \
