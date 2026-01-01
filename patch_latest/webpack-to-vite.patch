@@ -1,0 +1,506 @@
+diff --git a/.prettierignore b/.prettierignore
+index 1ece09ce1..17fba36cc 100644
+--- a/.prettierignore
++++ b/.prettierignore
+@@ -3,3 +3,4 @@ public
+ 
+ **/*.mbtiles
+ **/*.pmtiles
++**/.__mf__temp
+diff --git a/eslint.config.js b/eslint.config.js
+index 8437dadbe..87fe65da2 100644
+--- a/eslint.config.js
++++ b/eslint.config.js
+@@ -7,7 +7,7 @@ const react = require('eslint-plugin-react')
+ const chai = require('eslint-plugin-chai-friendly')
+ 
+ module.exports = defineConfig([
+-  globalIgnores(['**/public', '**/dist']),
++  globalIgnores(['**/public', '**/dist', '**/.__mf__temp']),
+ 
+   // TypeScript options
+   {
+diff --git a/package.json b/package.json
+index a85115109..ba25b283c 100644
+--- a/package.json
++++ b/package.json
+@@ -140,7 +140,7 @@
+     "@eslint-react/eslint-plugin": "^1.45.1",
+     "@eslint/js": "^9.24.0",
+     "@signalk/typedoc-signalk-theme": "^0.3.0",
+-    "@tsconfig/node20": "^20.1.5",
++    "@tsconfig/node20": "^20.1.8",
+     "@types/baconjs": "^0.7.34",
+     "@types/busboy": "^1.5.0",
+     "@types/chai": "^4.2.15",
+diff --git a/packages/server-admin-ui/.gitignore b/packages/server-admin-ui/.gitignore
+index 4667e0cb6..9f4484289 100644
+--- a/packages/server-admin-ui/.gitignore
++++ b/packages/server-admin-ui/.gitignore
+@@ -9,6 +9,7 @@ coverage
+ 
+ # production
+ public
++.__mf__temp
+ 
+ # misc
+ .DS_Store
+diff --git a/packages/server-admin-ui/index.html b/packages/server-admin-ui/index.html
+new file mode 100644
+index 000000000..568571ec9
+--- /dev/null
++++ b/packages/server-admin-ui/index.html
+@@ -0,0 +1,23 @@
++<!doctype html>
++<html lang="en">
++  <head>
++    <meta charset="utf-8" />
++    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
++    <meta
++      name="viewport"
++      content="width=device-width, initial-scale=1, shrink-to-fit=no"
++    />
++    <meta name="description" content="Signal K Node Server" />
++
++    %ADDONSCRIPTS%
++
++    <link rel="shortcut icon" href="img/favicon.ico" />
++    <title>Signal K Server</title>
++  </head>
++  <body
++    class="app header-fixed sidebar-fixed aside-menu-fixed aside-menu-hidden"
++  >
++    <div id="root"></div>
++    <script type="module" src="/src/index.js"></script>
++  </body>
++</html>
+diff --git a/packages/server-admin-ui/package.json b/packages/server-admin-ui/package.json
+index dcdae71a2..baddcc5cb 100644
+--- a/packages/server-admin-ui/package.json
++++ b/packages/server-admin-ui/package.json
+@@ -20,19 +20,17 @@
+     "@fortawesome/free-regular-svg-icons": "^6.5.1",
+     "@fortawesome/free-solid-svg-icons": "^6.5.1",
+     "@fortawesome/react-fontawesome": "^0.2.0",
++    "@module-federation/vite": "^1.0.10",
+     "@rjsf/bootstrap-4": "^5.24.13",
+     "@rjsf/core": "^5.24.13",
+     "@rjsf/utils": "^5.24.13",
+     "@rjsf/validator-ajv8": "^5.24.13",
+     "@signalk/server-admin-ui-dependencies": "1.0.1",
++    "@vitejs/plugin-react": "^4.3.4",
+     "ansi-to-html": "^0.6.14",
+-    "babel-loader": "^8.1.0",
+     "bootstrap": "^4.5.3",
+     "buffer": "^6.0.3",
+-    "copy-webpack-plugin": "^11.0.0",
+-    "css-loader": "^5.0.0",
+-    "file-loader": "^6.1.1",
++    "escape-html": "^1.0.3",
+     "font-awesome": "^4.7.0",
+-    "html-webpack-plugin": "^5.0.0-alpha.6",
+     "jsonlint-mod": "^1.7.6",
+     "lodash.remove": "^4.7.0",
+@@ -54,21 +52,20 @@
+     "reconnecting-websocket": "^4.4.0",
+     "redux": "^3.7.2",
+     "redux-thunk": "2.3.0",
++    "rollup-plugin-visualizer": "^5.12.0",
+     "sass": "^1.81.0",
+-    "sass-loader": "^16.0.3",
+     "simple-line-icons": "^2.5.5",
+-    "style-loader": "^2.0.0",
+-    "webpack": "^5.96.1",
+-    "webpack-bundle-analyzer": "^3.9.0",
+-    "webpack-cli": "^4.2.0"
++    "vite": "^6.0.5"
+   },
+   "scripts": {
+     "prepublishOnly": "npm run build",
+-    "watch": "webpack --watch --mode development",
+-    "build": "webpack --mode=production",
++    "dev": "vite",
++    "watch": "vite build --watch",
++    "build": "vite build",
++    "preview": "vite preview",
+     "format": "prettier --write src/",
+     "lint": "eslint --fix",
+     "clean": "rimraf ./public",
+-    "bundle-analyzer": "webpack-bundle-analyzer --port 4200 public/stats.json"
++    "bundle-analyzer": "vite-bundle-visualizer"
+   }
+ }
+diff --git a/packages/server-admin-ui/scss/core/_card.scss b/packages/server-admin-ui/scss/core/_card.scss
+index cd0bf444a..6581fdb4c 100644
+--- a/packages/server-admin-ui/scss/core/_card.scss
++++ b/packages/server-admin-ui/scss/core/_card.scss
+@@ -1,13 +1,16 @@
++@use 'sass:color';
++@use 'sass:math';
++
+ .card {
+   margin-bottom: 1.5 * $spacer;
+ 
+   // Cards with color accent
+   @each $color, $value in $theme-colors {
+     &.bg-#{$color} {
+-      border-color: darken($value, 12.5%);
++      border-color: color.adjust($value, $lightness: -12.5%);
+       .card-header {
+-        background-color: darken($value, 3%);
+-        border-color: darken($value, 12.5%);
++        background-color: color.adjust($value, $lightness: -3%);
++        border-color: color.adjust($value, $lightness: -12.5%);
+       }
+     }
+   }
+@@ -42,7 +45,7 @@
+     }
+ 
+     .nav-link {
+-      padding: $card-spacer-y $card-spacer-x / 2;
++      padding: $card-spacer-y math.div($card-spacer-x, 2);
+       color: $text-muted;
+       border-top: 0;
+ 
+@@ -107,7 +110,7 @@
+ // Card Actions
+ .card-header {
+   > i {
+-    margin-right: $spacer / 2;
++    margin-right: math.div($spacer, 2);
+   }
+   .card-actions {
+     position: absolute;
+@@ -166,8 +169,8 @@
+ 
+ .card-full {
+   margin-top: -$spacer;
+-  margin-right: -$grid-gutter-width / 2;
+-  margin-left: -$grid-gutter-width / 2;
++  margin-right: math.div(-$grid-gutter-width, 2);
++  margin-left: math.div(-$grid-gutter-width, 2);
+   border: 0;
+   border-bottom: $card-border-width solid $border-color;
+ }
+diff --git a/packages/server-admin-ui/scss/core/_grid.scss b/packages/server-admin-ui/scss/core/_grid.scss
+index c373d46ca..c2ffcfe0a 100644
+--- a/packages/server-admin-ui/scss/core/_grid.scss
++++ b/packages/server-admin-ui/scss/core/_grid.scss
+@@ -1,12 +1,14 @@
++@use 'sass:math';
++
+ .row.row-equal {
+-  padding-right: ($grid-gutter-width / 4);
+-  padding-left: ($grid-gutter-width / 4);
+-  margin-right: ($grid-gutter-width / -2);
+-  margin-left: ($grid-gutter-width / -2);
++  padding-right: math.div($grid-gutter-width, 4);
++  padding-left: math.div($grid-gutter-width, 4);
++  margin-right: math.div($grid-gutter-width, -2);
++  margin-left: math.div($grid-gutter-width, -2);
+ 
+   [class*='col-'] {
+-    padding-right: ($grid-gutter-width / 4);
+-    padding-left: ($grid-gutter-width / 4);
++    padding-right: math.div($grid-gutter-width, 4);
++    padding-left: math.div($grid-gutter-width, 4);
+   }
+ }
+ 
+diff --git a/packages/server-admin-ui/scss/style.scss b/packages/server-admin-ui/scss/style.scss
+index 0062c7272..f569a7755 100644
+--- a/packages/server-admin-ui/scss/style.scss
++++ b/packages/server-admin-ui/scss/style.scss
+@@ -10,7 +10,7 @@
+ @import 'bootstrap-variables';
+ 
+ // Import Bootstrap source files
+-@import '~bootstrap/scss/bootstrap';
++@import 'bootstrap/scss/bootstrap';
+ 
+ // Override core variables
+ @import 'core-variables';
+diff --git a/packages/server-admin-ui/src/bootstrap.js b/packages/server-admin-ui/src/bootstrap.js
+index fdcc45a3a..0661977c1 100644
+--- a/packages/server-admin-ui/src/bootstrap.js
++++ b/packages/server-admin-ui/src/bootstrap.js
+@@ -297,9 +297,6 @@ function nameCollator(left, right) {
+ 
+ window.serverRoutesPrefix = '/skServer'
+ 
+-// eslint-disable-next-line no-undef
+-__webpack_init_sharing__('default')
+-
+ ReactDOM.render(
+   <HashRouter>
+     <Switch>
+diff --git a/packages/server-admin-ui/src/views/Webapps/dynamicutilities.js b/packages/server-admin-ui/src/views/Webapps/dynamicutilities.js
+index 8637ea582..bda6a192a 100644
+--- a/packages/server-admin-ui/src/views/Webapps/dynamicutilities.js
++++ b/packages/server-admin-ui/src/views/Webapps/dynamicutilities.js
+@@ -1,27 +1,137 @@
+ import React from 'react'
++import ReactDOM from 'react-dom'
+ 
+-export const toLazyDynamicComponent = (moduleName, component) =>
+-  React.lazy(
+-    () =>
+-      new Promise((resolve, reject) => {
+-        const container = window[toSafeModuleId(moduleName)]
+-        if (container === undefined) {
+-          console.error(`Could not load module ${moduleName}`)
+-          resolve(import('./loadingerror'))
+-          return
++// Shared scope cache to ensure consistency across loads
++let cachedShareScope = null
++
++// Track which containers have been initialized to avoid calling init() twice
++const initializedContainers = new Set()
++
++// Get share scope from Vite's Module Federation runtime or Webpack
++const getShareScope = () => {
++  // Return cached scope if available
++  if (cachedShareScope) {
++    return cachedShareScope
++  }
++
++  /* eslint-disable no-undef */
++  // First check for Webpack's share scope (for Webpack-built hosts)
++  if (typeof __webpack_share_scopes__ !== 'undefined') {
++    cachedShareScope = __webpack_share_scopes__.default
++    return cachedShareScope
++  }
++
++  // For Vite Module Federation, get share scope from the runtime instance
++  // The __FEDERATION__ global is set up by @module-federation/vite runtime
++  if (
++    typeof __FEDERATION__ !== 'undefined' &&
++    __FEDERATION__.__INSTANCES__ &&
++    __FEDERATION__.__INSTANCES__.length > 0
++  ) {
++    // Get the first (host) instance's share scope
++    const hostInstance = __FEDERATION__.__INSTANCES__[0]
++    if (hostInstance && hostInstance.shareScopeMap) {
++      // Ensure the default scope exists
++      if (!hostInstance.shareScopeMap.default) {
++        hostInstance.shareScopeMap.default = {}
++      }
++      cachedShareScope = hostInstance.shareScopeMap.default
++      return cachedShareScope
++    }
++  }
++
++  // Fallback: create a share scope with react and react-dom for Webpack remotes
++  // This ensures external Webpack-built webapps can access shared dependencies
++  // Format matches Webpack's expected share scope structure
++  cachedShareScope = {
++    react: {
++      [React.version]: {
++        get: () => Promise.resolve(() => React),
++        loaded: true,
++        from: 'adminUI',
++        eager: true,
++        shareConfig: {
++          singleton: true,
++          requiredVersion: `^${React.version}`
+         }
+-        // eslint-disable-next-line no-undef
+-        container.init(__webpack_share_scopes__.default)
+-        try {
+-          const module = container.get(component)
+-          module.then((factory) => {
+-            resolve(factory())
+-          })
+-        } catch (ex) {
+-          console.error(moduleName)
+-          reject(ex)
++      }
++    },
++    'react-dom': {
++      [ReactDOM.version]: {
++        get: () => Promise.resolve(() => ReactDOM),
++        loaded: true,
++        from: 'adminUI',
++        eager: true,
++        shareConfig: {
++          singleton: true,
++          requiredVersion: `^${ReactDOM.version}`
++        }
++      }
++    }
++  }
++  return cachedShareScope
++  /* eslint-enable no-undef */
++}
++
++// Initialize container safely - handles async init and prevents double initialization
++const initializeContainer = async (container, moduleName) => {
++  const containerId = toSafeModuleId(moduleName)
++
++  // Skip if already initialized - Webpack containers throw if init() is called twice
++  if (initializedContainers.has(containerId)) {
++    return
++  }
++
++  const shareScope = getShareScope()
++
++  // container.init() may return a promise (especially in Vite Module Federation)
++  // We need to await it to ensure initialization completes before calling get()
++  try {
++    const initResult = container.init(shareScope)
++    if (initResult && typeof initResult.then === 'function') {
++      await initResult
++    }
++    initializedContainers.add(containerId)
++  } catch (error) {
++    // Some containers throw "already initialized" errors - that's OK
++    if (error.message && error.message.includes('already been initialized')) {
++      initializedContainers.add(containerId)
++    } else {
++      throw error
++    }
++  }
++}
++
++export const toLazyDynamicComponent = (moduleName, component) =>
++  React.lazy(() =>
++    (async () => {
++      const container = window[toSafeModuleId(moduleName)]
++      if (container === undefined) {
++        console.error(`Could not load module ${moduleName}`)
++        return import('./loadingerror')
++      }
++
++      try {
++        // Initialize container with shared scope from the host's Module Federation runtime
++        await initializeContainer(container, moduleName)
++
++        // container.get() returns a promise that resolves to a factory function
++        const factory = await container.get(component)
++        if (!factory) {
++          console.error(
++            `Module ${moduleName} does not export component ${component}`
++          )
++          return import('./loadingerror')
+         }
+-      })
++
++        // Factory returns the actual module
++        const Module = factory()
++        return Module
++      } catch (ex) {
++        console.error(`Error loading ${component} from ${moduleName}:`, ex)
++        return import('./loadingerror')
++      }
++    })()
+   )
+ 
+ export const toSafeModuleId = (moduleName) => moduleName.replace(/[-@/]/g, '_')
+diff --git a/packages/server-admin-ui/vite.config.js b/packages/server-admin-ui/vite.config.js
+new file mode 100644
+index 000000000..46c0b07ee
+--- /dev/null
++++ b/packages/server-admin-ui/vite.config.js
+@@ -0,0 +1,65 @@
++import { defineConfig } from 'vite'
++import react from '@vitejs/plugin-react'
++import { federation } from '@module-federation/vite'
++
++// Validate peer dependencies for Module Federation compatibility
++import '@signalk/server-admin-ui-dependencies'
++
++export default defineConfig({
++  base: './',
++  publicDir: 'public_src',
++  plugins: [
++    react({
++      babel: {
++        presets: ['@babel/preset-react']
++      }
++    }),
++    federation({
++      name: 'adminUI',
++      filename: 'remoteEntry.js',
++      remotes: {},
++      shared: {
++        react: {
++          singleton: true,
++          requiredVersion: '^16.14.0'
++        },
++        'react-dom': {
++          singleton: true,
++          requiredVersion: '^16.14.0'
++        }
++      }
++    })
++  ],
++  css: {
++    preprocessorOptions: {
++      scss: {
++        // Silence deprecation warnings from Bootstrap 4 (legacy dependency)
++        // These warnings are from Bootstrap's old Sass code and will be resolved when upgrading to Bootstrap 5
++        quietDeps: true,
++        silenceDeprecations: [
++          'import',
++          'global-builtin',
++          'color-functions',
++          'slash-div',
++          'if-function',
++          'abs-percent'
++        ]
++      }
++    }
++  },
++  build: {
++    outDir: 'public',
++    sourcemap: true,
++    target: 'es2022',
++    assetsInlineLimit: 0, // Prevent inlining assets to allow server-side logo override
++    cssCodeSplit: false // Generate single CSS file to ensure it's always loaded
++  },
++  resolve: {
++    alias: {
++      path: false,
++      // Polyfill Node.js modules for browser compatibility
++      events: 'events',
++      buffer: 'buffer'
++    }
++  }
++})
+diff --git a/src/serverroutes.ts b/src/serverroutes.ts
+index 0e469b6fb..6aed30faf 100644
+--- a/src/serverroutes.ts
++++ b/src/serverroutes.ts
+@@ -172,10 +172,15 @@ module.exports = function (
+   const logopath = path.resolve(app.config.configPath, 'logo.svg')
+   if (fs.existsSync(logopath)) {
+     debug(`Found custom logo at ${logopath}, adding route for it`)
++    // Intercept both Webpack (fonts/) and Vite (assets/) paths for the main logo
+     app.use(
+       '/admin/fonts/signal-k-logo-image-text.*',
+       (req: Request, res: Response) => res.sendFile(logopath)
+     )
++    app.use(
++      '/admin/assets/signal-k-logo-image-text*.svg',
++      (req: Request, res: Response) => res.sendFile(logopath)
++    )
+ 
+     // Check for custom logo for minimized sidebar, otherwise use the existing logo.
+     const minimizedLogoPath = path.resolve(
+@@ -185,10 +190,15 @@ module.exports = function (
+     const minimizedLogo = fs.existsSync(minimizedLogoPath)
+       ? minimizedLogoPath
+       : logopath
++    // Intercept both Webpack (fonts/) and Vite (assets/) paths for the minimized logo
+     app.use(
+       '/admin/fonts/signal-k-logo-image.*',
+       (req: Request, res: Response) => res.sendFile(minimizedLogo)
+     )
++    app.use(
++      '/admin/assets/signal-k-logo-image*.svg',
++      (req: Request, res: Response) => res.sendFile(minimizedLogo)
++    )
+   }
+ 
+   // mount before the main /admin
