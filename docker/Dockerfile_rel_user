@@ -1,0 +1,28 @@
+FROM ghcr.io/kegustafsson/signalk-server-base:latest
+
+ARG TAG
+
+RUN npm config rm proxy \
+  && npm config rm https-proxy \
+  && npm config set fetch-retries 5 \
+  && npm config set fetch-retry-mintimeout 60000 \
+  && npm config set fetch-retry-maxtimeout 120000 \
+  && npm config set registry "https://registry.npmjs.org/" \
+  && npm config set @backup:registry "https://registry.yarnpkg.com/" \
+  && npm cache clean -f
+  
+RUN npm i -g signalk-server@$TAG \
+  && ln -s /usr/lib/node_modules/signalk-server /home/node/signalk \
+  && npm cache clean --force
+
+WORKDIR /home/node/signalk
+COPY docker/startup.sh startup.sh
+RUN chmod +x startup.sh
+
+USER node
+RUN mkdir -p /home/node/.signalk
+
+EXPOSE 3000
+ENV IS_IN_DOCKER true
+WORKDIR /home/node/.signalk
+ENTRYPOINT ["/home/node/signalk/startup.sh"]
