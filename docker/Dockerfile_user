@@ -12,17 +12,19 @@ RUN npm config rm proxy \
   && npm config set fetch-retries 5 \
   && npm config set fetch-retry-mintimeout 60000 \
   && npm config set fetch-retry-maxtimeout 120000 \
-  && npm config set registry "https://registry.npmjs.org/" \
-  && npm config set @backup:registry "https://registry.yarnpkg.com/" \
   && npm cache clean -f
 
 FROM base AS tarballs_installed
 WORKDIR /home/node/signalk
 COPY --chown=node:node *.tgz .
-RUN npm install ./*.tgz
-RUN mv /home/node/signalk/node_modules/@signalk /home/node/signalk/node_modules/signalk-server/node_modules/
 
-FROM base AS production
+# Install all tarballs locally (not globally) to avoid permission issues
+# npm will resolve dependencies between the local tarballs
+RUN npm install ./*.tgz
+
+FROM base
+
+# Copy locally installed modules from tarballs_installed stage
 COPY --from=tarballs_installed --chown=node:node /home/node/signalk /home/node/signalk
 
 USER node
