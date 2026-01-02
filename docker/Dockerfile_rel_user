@@ -1,6 +1,11 @@
 FROM ghcr.io/kegustafsson/signalk-server-base:latest
 
 ARG TAG
+USER node
+RUN mkdir -p /home/node/.signalk/ \
+  && mkdir -p /home/node/signalk/
+
+WORKDIR /home/node/signalk
 
 RUN npm config rm proxy \
   && npm config rm https-proxy \
@@ -10,19 +15,15 @@ RUN npm config rm proxy \
   && npm config set registry "https://registry.npmjs.org/" \
   && npm config set @backup:registry "https://registry.yarnpkg.com/" \
   && npm cache clean -f
-  
-RUN npm i -g signalk-server@$TAG \
-  && ln -s /usr/lib/node_modules/signalk-server /home/node/signalk \
-  && npm cache clean --force
 
-WORKDIR /home/node/signalk
-COPY docker/startup.sh startup.sh
+RUN npm i signalk-server@$TAG \
+  && mkdir -p node_modules/signalk-server/node_modules \
+  && ln -s /home/node/signalk/node_modules/@signalk node_modules/signalk-server/node_modules/@signalk
+
+COPY --chown=node docker/startup.sh startup.sh
 RUN chmod +x startup.sh
 
-USER node
-RUN mkdir -p /home/node/.signalk
-
 EXPOSE 3000
-ENV IS_IN_DOCKER true
+ENV IS_IN_DOCKER=true
 WORKDIR /home/node/.signalk
 ENTRYPOINT ["/home/node/signalk/startup.sh"]

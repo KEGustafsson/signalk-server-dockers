@@ -36,6 +36,4 @@ RUN curl -fsSL https://deb.nodesource.com/setup_$NODE | bash - \
   && npm cache clean -f \
   && npm install npm@latest -g \
   && npm install pm2 -g \
-  && npm install yarn -g \
-  && sudo setcap cap_net_raw+eip $(eval readlink -f `which node`) \
   && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
