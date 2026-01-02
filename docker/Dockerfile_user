@@ -20,6 +20,7 @@ FROM base AS tarballs_installed
 WORKDIR /home/node/signalk
 COPY --chown=node:node *.tgz .
 RUN npm install ./*.tgz
+RUN mv /home/node/signalk/node_modules/@signalk /home/node/signalk/node_modules/signalk-server/node_modules/
 
 FROM base AS production
 COPY --from=tarballs_installed --chown=node:node /home/node/signalk /home/node/signalk
