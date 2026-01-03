@@ -18,11 +18,16 @@ FROM base AS tarballs_installed
 WORKDIR /home/node/signalk
 COPY --chown=node:node *.tgz .
 
-# Install all hoisted first
-RUN npm install ./*.tgz
+# Install signalk-server nested (matches signalk-server-X.X.X.tgz, not signalk-server-admin, signalk-server-api, etc.)
+RUN npm install $(ls signalk-server-[0-9]*.tgz) --install-strategy=nested
 
-# Reinstall signalk-server nested (overwrites with nested deps)
-RUN npm install ./signalk-server-[0-9]*.tgz --install-strategy=nested
+# Install all other tarballs hoisted
+RUN for tgz in *.tgz; do \
+      case "$tgz" in \
+        signalk-server-[0-9]*) ;; \
+        *) npm install "./$tgz" ;; \
+      esac \
+    done
 
 FROM base
 
