@@ -29,7 +29,8 @@ RUN for tgz in *.tgz; do \
       esac \
     done
 
-RUN mv /home/node/signalk/node_modules/@signalk/* /home/node/signalk/node_modules/signalk-server/node_modules/@signalk/
+RUN mkdir -p /home/node/signalk/node_modules/signalk-server/node_modules/@signalk/ \
+  && mv /home/node/signalk/node_modules/@signalk/* /home/node/signalk/node_modules/signalk-server/node_modules/@signalk/
 
 FROM base
 
