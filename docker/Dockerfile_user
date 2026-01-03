@@ -12,20 +12,21 @@ RUN npm config rm proxy \
   && npm config set fetch-retries 5 \
   && npm config set fetch-retry-mintimeout 60000 \
   && npm config set fetch-retry-maxtimeout 120000 \
-  && npm config set install-strategy nested \
   && npm cache clean -f
 
 FROM base AS tarballs_installed
 WORKDIR /home/node/signalk
 COPY --chown=node:node *.tgz .
 
-# Install all tarballs locally (not globally) to avoid permission issues
-# npm will resolve dependencies between the local tarballs
-RUN npm install ./*.tgz --install-strategy=nested
+# Install normally (hoisted)
+RUN npm install ./*.tgz
+
+# Create symlinks so Signal K finds @signalk packages where it expects them
+RUN mkdir -p /home/node/signalk/node_modules/signalk-server/node_modules \
+  && ln -s /home/node/signalk/node_modules/@signalk /home/node/signalk/node_modules/signalk-server/node_modules/@signalk
 
 FROM base
 
-# Copy locally installed modules from tarballs_installed stage
 COPY --from=tarballs_installed --chown=node:node /home/node/signalk /home/node/signalk
 
 USER node
