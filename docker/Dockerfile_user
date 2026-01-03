@@ -12,6 +12,7 @@ RUN npm config rm proxy \
   && npm config set fetch-retries 5 \
   && npm config set fetch-retry-mintimeout 60000 \
   && npm config set fetch-retry-maxtimeout 120000 \
+  && npm config set install-strategy nested \
   && npm cache clean -f
 
 FROM base AS tarballs_installed
@@ -20,7 +21,7 @@ COPY --chown=node:node *.tgz .
 
 # Install all tarballs locally (not globally) to avoid permission issues
 # npm will resolve dependencies between the local tarballs
-RUN npm install ./*.tgz
+RUN npm install ./*.tgz --install-strategy=nested
 
 FROM base
 
