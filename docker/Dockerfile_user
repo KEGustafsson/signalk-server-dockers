@@ -29,6 +29,8 @@ RUN for tgz in *.tgz; do \
       esac \
     done
 
+RUN mv node_modules/@signalk/* node_modules/signalk-server/@signalk/
+
 FROM base
 
 COPY --from=tarballs_installed --chown=node:node /home/node/signalk /home/node/signalk
