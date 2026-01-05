@@ -1,104 +1,196 @@
-From af1295c3e1f55876685a8ba9a56fa6576e844638 Mon Sep 17 00:00:00 2001
-From: KE Gustafsson <ke.gustafsson@gmail.com>
-Date: Mon, 5 Jan 2026 19:53:06 +0200
-Subject: [PATCH] fix: use atomic writes for config files
+From 9e0389b275014b6b942ebd0bd0a283023a4e7f28 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 5 Jan 2026 22:13:25 +0000
+Subject: [PATCH] refactor: extract atomic write operations into helper
+ functions
 
-Write to temp file then rename to prevent partial writes on
-crash or power loss. Affects settings.json, defaults.json,
-and baseDeltas.json.
+Created reusable atomic write helper functions to reduce code
+duplication. The helpers implement write-then-rename pattern
+to prevent partial writes on crash or power loss.
+
+Changes:
+- Added src/atomicWrite.ts with three helper functions:
+  - atomicWriteFile (callback-based)
+  - atomicWriteFileSync (synchronous)
+  - atomicWriteFileAsync (async/await)
+- Refactored config.ts to use atomicWriteFile helper in:
+  - writeDefaultsFile
+  - writeSettingsFile
+- Refactored deltaeditor.ts to use helpers in:
+  - saveSync (uses atomicWriteFileSync)
+  - save (uses atomicWriteFileAsync)
+
+This reduces code duplication and makes the atomic write pattern
+more maintainable and consistent across the codebase.
 ---
- src/config/config.ts | 31 +++++++++++++++++++++++++++++--
- src/deltaeditor.ts   | 28 ++++++++++++++++++++++++----
- 2 files changed, 53 insertions(+), 6 deletions(-)
+ src/atomicWrite.ts   | 97 ++++++++++++++++++++++++++++++++++++++++++++
+ src/config/config.ts |  8 +++-
+ src/deltaeditor.ts   |  9 ++--
+ 3 files changed, 109 insertions(+), 5 deletions(-)
+ create mode 100644 src/atomicWrite.ts
 
-diff --git a/src/config/config.ts b/src/config/config.ts
-index dd3dd320..2fc65bb3 100644
---- a/src/config/config.ts
-+++ b/src/config/config.ts
-@@ -354,7 +354,21 @@ export function sendBaseDeltas(app: ConfigApp) {
- }
-
- export function writeDefaultsFile(app: ConfigApp, defaults: any, cb: any) {
--  fs.writeFile(getDefaultsPath(app), JSON.stringify(defaults, null, 2), cb)
-+  const defaultsPath = getDefaultsPath(app)
-+  const tempPath = defaultsPath + '.tmp'
-+  const data = JSON.stringify(defaults, null, 2)
+diff --git a/src/atomicWrite.ts b/src/atomicWrite.ts
+new file mode 100644
+index 000000000..f1bf64fdd
+--- /dev/null
++++ b/src/atomicWrite.ts
+@@ -0,0 +1,97 @@
++/* eslint-disable @typescript-eslint/no-explicit-any */
++/*
++ * Copyright 2026 Signal K Contributors
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++import fs from 'fs'
++
++/**
++ * Atomically write data to a file using write-then-rename pattern.
++ * Writes to a temporary file first, then renames to the target path.
++ * This prevents partial writes on crash or power loss.
++ *
++ * @param filePath - The target file path
++ * @param data - The data to write
++ * @param callback - Callback function (err) => void
++ */
++export function atomicWriteFile(
++  filePath: string,
++  data: string | Buffer,
++  callback: (err?: Error) => void
++): void {
++  const tempPath = filePath + '.tmp'
 +  fs.writeFile(tempPath, data, (writeErr) => {
 +    if (writeErr) {
-+      return cb(writeErr)
++      return callback(writeErr)
 +    }
-+    fs.rename(tempPath, defaultsPath, (renameErr) => {
++    fs.rename(tempPath, filePath, (renameErr) => {
 +      if (renameErr) {
-+        fs.unlink(tempPath, () => cb(renameErr))
++        fs.unlink(tempPath, () => callback(renameErr))
 +      } else {
-+        cb()
++        callback()
 +      }
 +    })
 +  })
++}
++
++/**
++ * Synchronously atomically write data to a file using write-then-rename pattern.
++ * Writes to a temporary file first, then renames to the target path.
++ * This prevents partial writes on crash or power loss.
++ *
++ * @param filePath - The target file path
++ * @param data - The data to write
++ * @throws Error if write or rename fails
++ */
++export function atomicWriteFileSync(
++  filePath: string,
++  data: string | Buffer
++): void {
++  const tempPath = filePath + '.tmp'
++  try {
++    fs.writeFileSync(tempPath, data)
++    fs.renameSync(tempPath, filePath)
++  } catch (err) {
++    try {
++      fs.unlinkSync(tempPath)
++    } catch {}
++    throw err
++  }
++}
++
++/**
++ * Atomically write data to a file using write-then-rename pattern (async/await).
++ * Writes to a temporary file first, then renames to the target path.
++ * This prevents partial writes on crash or power loss.
++ *
++ * @param filePath - The target file path
++ * @param data - The data to write
++ * @throws Error if write or rename fails
++ */
++export async function atomicWriteFileAsync(
++  filePath: string,
++  data: string | Buffer
++): Promise<void> {
++  const tempPath = filePath + '.tmp'
++  try {
++    await fs.promises.writeFile(tempPath, data)
++    await fs.promises.rename(tempPath, filePath)
++  } catch (err) {
++    try {
++      await fs.promises.unlink(tempPath)
++    } catch {}
++    throw err
++  }
++}
+diff --git a/src/config/config.ts b/src/config/config.ts
+index dd3dd320f..268ce5084 100644
+--- a/src/config/config.ts
++++ b/src/config/config.ts
+@@ -28,6 +28,7 @@ import { ServerApp, SignalKMessageHub, WithConfig } from '../app'
+ import { createDebug } from '../debug'
+ import DeltaEditor from '../deltaeditor'
+ import { getExternalPort } from '../ports'
++import { atomicWriteFile } from '../atomicWrite'
+ const debug = createDebug('signalk-server:config')
+ 
+ let disableWriteSettings = false
+@@ -354,7 +355,9 @@ export function sendBaseDeltas(app: ConfigApp) {
  }
-
+ 
+ export function writeDefaultsFile(app: ConfigApp, defaults: any, cb: any) {
+-  fs.writeFile(getDefaultsPath(app), JSON.stringify(defaults, null, 2), cb)
++  const defaultsPath = getDefaultsPath(app)
++  const data = JSON.stringify(defaults, null, 2)
++  atomicWriteFile(defaultsPath, data, cb)
+ }
+ 
  export function writeBaseDeltasFileSync(app: ConfigApp) {
-@@ -430,7 +444,20 @@ function readSettingsFile(app: ConfigApp) {
+@@ -430,7 +433,8 @@ function readSettingsFile(app: ConfigApp) {
  export function writeSettingsFile(app: ConfigApp, settings: any, cb: any) {
    if (!disableWriteSettings) {
      const settingsPath = getSettingsFilename(app)
 -    fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), cb)
-+    const tempPath = settingsPath + '.tmp'
 +    const data = JSON.stringify(settings, null, 2)
-+    fs.writeFile(tempPath, data, (writeErr) => {
-+      if (writeErr) {
-+        return cb(writeErr)
-+      }
-+      fs.rename(tempPath, settingsPath, (renameErr) => {
-+        if (renameErr) {
-+          fs.unlink(tempPath, () => cb(renameErr))
-+        } else {
-+          cb()
-+        }
-+      })
-+    })
++    atomicWriteFile(settingsPath, data, cb)
    } else {
      cb()
    }
 diff --git a/src/deltaeditor.ts b/src/deltaeditor.ts
-index e6e7d406..fc6979a3 100644
+index e6e7d406f..85671f6ea 100644
 --- a/src/deltaeditor.ts
 +++ b/src/deltaeditor.ts
-@@ -40,10 +40,30 @@ class DeltaEditor {
+@@ -17,6 +17,7 @@
+ 
+ import fs from 'fs'
+ import _ from 'lodash'
++import { atomicWriteFileSync, atomicWriteFileAsync } from './atomicWrite'
+ 
+ const VALUES = 'values'
+ const META = 'meta'
+@@ -40,11 +41,13 @@ class DeltaEditor {
    }
-
+ 
    saveSync(filename: string) {
 -    fs.writeFileSync(filename, JSON.stringify(this.deltas, null, 2))
-+    const tempPath = filename + '.tmp'
 +    const data = JSON.stringify(this.deltas, null, 2)
-+    try {
-+      fs.writeFileSync(tempPath, data)
-+      fs.renameSync(tempPath, filename)
-+    } catch (err) {
-+      try {
-+        fs.unlinkSync(tempPath)
-+      } catch {}
-+      throw err
-+    }
++    atomicWriteFileSync(filename, data)
    }
-
+ 
 -  save(filename: string): Promise<any> {
 -    return fs.promises.writeFile(filename, JSON.stringify(this.deltas, null, 2))
 +  async save(filename: string): Promise<void> {
-+    const tempPath = filename + '.tmp'
 +    const data = JSON.stringify(this.deltas, null, 2)
-+    try {
-+      await fs.promises.writeFile(tempPath, data)
-+      await fs.promises.rename(tempPath, filename)
-+    } catch (err) {
-+      try {
-+        await fs.promises.unlink(tempPath)
-+      } catch {}
-+      throw err
-+    }
++    await atomicWriteFileAsync(filename, data)
    }
-
+ 
    setValue(context: string, path: string, value: any) {
---
-2.51.0.windows.2
-
