@@ -1,51 +1,30 @@
-From 0bde9744aa3fed5262f36af54af78bb0db31ef89 Mon Sep 17 00:00:00 2001
+From 27234a9c3949bfcfab75e4f0b7d94ed1808d74f6 Mon Sep 17 00:00:00 2001
 From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
-Date: Tue, 6 Jan 2026 01:14:19 +0200
-Subject: [PATCH] Claude/atomic helper function q i uat (#52)
+Date: Tue, 6 Jan 2026 10:42:17 +0200
+Subject: [PATCH] Atomic writes (#53)
 
-* refactor: extract atomic write operations into helper functions
+* fix: use atomic writes for config files
 
-Created reusable atomic write helper functions to reduce code
-duplication. The helpers implement write-then-rename pattern
-to prevent partial writes on crash or power loss.
+Write to temp file then rename to prevent partial writes on
+crash or power loss. Affects settings.json, defaults.json,
+and baseDeltas.json.
 
-Changes:
-- Added src/atomicWrite.ts with three helper functions:
-  - atomicWriteFile (callback-based)
-  - atomicWriteFileSync (synchronous)
-  - atomicWriteFileAsync (async/await)
-- Refactored config.ts to use atomicWriteFile helper in:
-  - writeDefaultsFile
-  - writeSettingsFile
-- Refactored deltaeditor.ts to use helpers in:
-  - saveSync (uses atomicWriteFileSync)
-  - save (uses atomicWriteFileAsync)
+* fix: atomicWrite as helper function
 
-This reduces code duplication and makes the atomic write pattern
-more maintainable and consistent across the codebase.
-
-* refactor: simplify atomic write helpers
-
-* refactor: use single atomic write helper
-
-* fix: restore async behavior for atomic writes
-
----------
-
-Co-authored-by: Claude <noreply@anthropic.com>
+* fix: format
 ---
- src/atomicWrite.ts   | 23 +++++++++++++++++++++++
+ src/atomicWrite.ts   | 30 ++++++++++++++++++++++++++++++
  src/config/config.ts | 10 +++++++---
  src/deltaeditor.ts   |  8 +++++---
- 3 files changed, 35 insertions(+), 6 deletions(-)
+ 3 files changed, 42 insertions(+), 6 deletions(-)
  create mode 100644 src/atomicWrite.ts
 
 diff --git a/src/atomicWrite.ts b/src/atomicWrite.ts
 new file mode 100644
-index 000000000..faf6227a8
+index 000000000..583f8adbf
 --- /dev/null
 +++ b/src/atomicWrite.ts
-@@ -0,0 +1,23 @@
+@@ -0,0 +1,30 @@
 +import fs from 'fs'
 +
 +export function atomicWriteFileSync(filePath: string, data: string): void {
@@ -54,18 +33,25 @@ index 000000000..faf6227a8
 +    fs.writeFileSync(tmp, data)
 +    fs.renameSync(tmp, filePath)
 +  } catch (err) {
-+    try { fs.unlinkSync(tmp) } catch {}
++    try {
++      fs.unlinkSync(tmp)
++    } catch {}
 +    throw err
 +  }
 +}
 +
-+export async function atomicWriteFile(filePath: string, data: string): Promise<void> {
++export async function atomicWriteFile(
++  filePath: string,
++  data: string
++): Promise<void> {
 +  const tmp = filePath + '.tmp'
 +  try {
 +    await fs.promises.writeFile(tmp, data)
 +    await fs.promises.rename(tmp, filePath)
 +  } catch (err) {
-+    try { await fs.promises.unlink(tmp) } catch {}
++    try {
++      await fs.promises.unlink(tmp)
++    } catch {}
 +    throw err
 +  }
 +}
