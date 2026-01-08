@@ -7,9 +7,9 @@ RUN userdel -r ubuntu \
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get -y install --no-install-recommends apt-utils sudo git \
-  python3 python3-venv python3-pip build-essential \
-  sysstat procps nano curl libcap2-bin dbus bluez \
-  festival mpg123 \
+  && python3 python3-venv python3-pip build-essential \
+  && sysstat procps nano curl libcap2-bin dbus bluez \
+  && festival mpg123 \
   && groupadd -r docker -g 991 \
   && groupadd -r i2c -g 990 \
   && groupadd -r spi -g 989 \
@@ -29,8 +29,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
 #  && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
 #  && chmod u+s /usr/bin/date
 
-COPY avahi/avahi-dbus.conf /etc/dbus-1/system.d/avahi-dbus.conf
-#COPY bluez/bluezuser.conf /etc/dbus-1/system.d/bluezuser.conf
+#COPY avahi/avahi-dbus.conf /etc/dbus-1/system.d/avahi-dbus.conf
+COPY bluez/bluezuser.conf /etc/dbus-1/system.d/bluezuser.conf
 
 #RUN mkdir -p /var/run/dbus/ /var/run/avahi-daemon/ \
 #  && chmod -R 777 /var/run/dbus/ /var/run/avahi-daemon/ \
