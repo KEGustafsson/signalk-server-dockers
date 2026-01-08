@@ -1,0 +1,120 @@
+From 27234a9c3949bfcfab75e4f0b7d94ed1808d74f6 Mon Sep 17 00:00:00 2001
+From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
+Date: Tue, 6 Jan 2026 10:42:17 +0200
+Subject: [PATCH] Atomic writes (#53)
+
+* fix: use atomic writes for config files
+
+Write to temp file then rename to prevent partial writes on
+crash or power loss. Affects settings.json, defaults.json,
+and baseDeltas.json.
+
+* fix: atomicWrite as helper function
+
+* fix: format
+---
+ src/atomicWrite.ts   | 30 ++++++++++++++++++++++++++++++
+ src/config/config.ts | 10 +++++++---
+ src/deltaeditor.ts   |  8 +++++---
+ 3 files changed, 42 insertions(+), 6 deletions(-)
+ create mode 100644 src/atomicWrite.ts
+
+diff --git a/src/atomicWrite.ts b/src/atomicWrite.ts
+new file mode 100644
+index 000000000..583f8adbf
+--- /dev/null
++++ b/src/atomicWrite.ts
+@@ -0,0 +1,30 @@
++import fs from 'fs'
++
++export function atomicWriteFileSync(filePath: string, data: string): void {
++  const tmp = filePath + '.tmp'
++  try {
++    fs.writeFileSync(tmp, data)
++    fs.renameSync(tmp, filePath)
++  } catch (err) {
++    try {
++      fs.unlinkSync(tmp)
++    } catch {}
++    throw err
++  }
++}
++
++export async function atomicWriteFile(
++  filePath: string,
++  data: string
++): Promise<void> {
++  const tmp = filePath + '.tmp'
++  try {
++    await fs.promises.writeFile(tmp, data)
++    await fs.promises.rename(tmp, filePath)
++  } catch (err) {
++    try {
++      await fs.promises.unlink(tmp)
++    } catch {}
++    throw err
++  }
++}
+diff --git a/src/config/config.ts b/src/config/config.ts
+index dd3dd320f..aa79c7528 100644
+--- a/src/config/config.ts
++++ b/src/config/config.ts
+@@ -28,6 +28,7 @@ import { ServerApp, SignalKMessageHub, WithConfig } from '../app'
+ import { createDebug } from '../debug'
+ import DeltaEditor from '../deltaeditor'
+ import { getExternalPort } from '../ports'
++import { atomicWriteFile } from '../atomicWrite'
+ const debug = createDebug('signalk-server:config')
+ 
+ let disableWriteSettings = false
+@@ -354,7 +355,9 @@ export function sendBaseDeltas(app: ConfigApp) {
+ }
+ 
+ export function writeDefaultsFile(app: ConfigApp, defaults: any, cb: any) {
+-  fs.writeFile(getDefaultsPath(app), JSON.stringify(defaults, null, 2), cb)
++  atomicWriteFile(getDefaultsPath(app), JSON.stringify(defaults, null, 2))
++    .then(() => cb())
++    .catch(cb)
+ }
+ 
+ export function writeBaseDeltasFileSync(app: ConfigApp) {
+@@ -429,8 +432,9 @@ function readSettingsFile(app: ConfigApp) {
+ 
+ export function writeSettingsFile(app: ConfigApp, settings: any, cb: any) {
+   if (!disableWriteSettings) {
+-    const settingsPath = getSettingsFilename(app)
+-    fs.writeFile(settingsPath, JSON.stringify(settings, null, 2), cb)
++    atomicWriteFile(getSettingsFilename(app), JSON.stringify(settings, null, 2))
++      .then(() => cb())
++      .catch(cb)
+   } else {
+     cb()
+   }
+diff --git a/src/deltaeditor.ts b/src/deltaeditor.ts
+index e6e7d406f..9afdc15b9 100644
+--- a/src/deltaeditor.ts
++++ b/src/deltaeditor.ts
+@@ -17,6 +17,7 @@
+ 
+ import fs from 'fs'
+ import _ from 'lodash'
++import { atomicWriteFileSync, atomicWriteFile } from './atomicWrite'
+ 
+ const VALUES = 'values'
+ const META = 'meta'
+@@ -40,11 +41,12 @@ class DeltaEditor {
+   }
+ 
+   saveSync(filename: string) {
+-    fs.writeFileSync(filename, JSON.stringify(this.deltas, null, 2))
++    const data = JSON.stringify(this.deltas, null, 2)
++    atomicWriteFileSync(filename, data)
+   }
+ 
+-  save(filename: string): Promise<any> {
+-    return fs.promises.writeFile(filename, JSON.stringify(this.deltas, null, 2))
++  save(filename: string): Promise<void> {
++    return atomicWriteFile(filename, JSON.stringify(this.deltas, null, 2))
+   }
+ 
+   setValue(context: string, path: string, value: any) {
