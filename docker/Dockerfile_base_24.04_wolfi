@@ -26,6 +26,10 @@ RUN apk add --no-cache \
     nodejs-${NODEVER} \
     npm
 
+# Create avahi user and group if they don't exist
+RUN addgroup -S avahi 2>/dev/null || true && \
+    adduser -S -D -H -h /var/run/avahi-daemon -s /sbin/nologin -G avahi -g avahi avahi 2>/dev/null || true
+
 # Create groups and add node user to them
 RUN addgroup -g 991 docker 2>/dev/null || true && \
     addgroup -g 990 i2c 2>/dev/null || true && \
