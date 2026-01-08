@@ -16,8 +16,6 @@ RUN apk add --no-cache \
     py3-pip \
     build-base \
     avahi \
-    avahi-tools \
-    avahi-compat-libdns_sd \
     sysstat \
     procps \
     nano \
@@ -25,8 +23,6 @@ RUN apk add --no-cache \
     libcap \
     dbus \
     bluez \
-    festival \
-    mpg123 \
     nodejs-${NODEVER} \
     npm
 
