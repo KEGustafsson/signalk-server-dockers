@@ -30,7 +30,7 @@ RUN for tgz in *.tgz; do \
     done
 
 RUN mkdir -p /home/node/signalk/node_modules/signalk-server/node_modules/@signalk/ \
-  && mv /home/node/signalk/node_modules/@signalk/* /home/node/signalk/node_modules/signalk-server/node_modules/@signalk/
+  && cp -rf /home/node/signalk/node_modules/@signalk/* /home/node/signalk/node_modules/signalk-server/node_modules/@signalk/
 
 FROM base
 
