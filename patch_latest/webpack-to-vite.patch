@@ -2,47 +2,36 @@ diff --git a/.prettierignore b/.prettierignore
 index 1ece09ce1..17fba36cc 100644
 --- a/.prettierignore
 +++ b/.prettierignore
-@@ -3,3 +3,4 @@ public
- 
- **/*.mbtiles
- **/*.pmtiles
+@@ -7,3 +7,4 @@ examples/wasm-plugins/*/assembly
+ packages/assemblyscript-plugin-sdk/assembly
+ # AssemblyScript build outputs
+ packages/assemblyscript-plugin-sdk/build
 +**/.__mf__temp
 diff --git a/eslint.config.js b/eslint.config.js
 index 8437dadbe..87fe65da2 100644
 --- a/eslint.config.js
 +++ b/eslint.config.js
-@@ -7,7 +7,7 @@ const react = require('eslint-plugin-react')
- const chai = require('eslint-plugin-chai-friendly')
- 
- module.exports = defineConfig([
--  globalIgnores(['**/public', '**/dist']),
-+  globalIgnores(['**/public', '**/dist', '**/.__mf__temp']),
- 
+@@ -17,7 +17,8 @@ module.exports = defineConfig([
+     // Auto-generated WASM bindings (created by AssemblyScript compiler)
+     'examples/wasm-plugins/**/build/**',
+     'examples/wasm-plugins/**/plugin.js',
+     'examples/wasm-plugins/**/plugin.d.ts',
+-    'packages/assemblyscript-plugin-sdk/build/**'
++    'packages/assemblyscript-plugin-sdk/build/**',
++    '**/.__mf__temp'
+   ]),
+
    // TypeScript options
-   {
-diff --git a/package.json b/package.json
-index a85115109..ba25b283c 100644
---- a/package.json
-+++ b/package.json
-@@ -140,7 +140,7 @@
-     "@eslint-react/eslint-plugin": "^1.45.1",
-     "@eslint/js": "^9.24.0",
-     "@signalk/typedoc-signalk-theme": "^0.3.0",
--    "@tsconfig/node20": "^20.1.5",
-+    "@tsconfig/node20": "^20.1.8",
-     "@types/baconjs": "^0.7.34",
-     "@types/busboy": "^1.5.0",
-     "@types/chai": "^4.2.15",
 diff --git a/packages/server-admin-ui/.gitignore b/packages/server-admin-ui/.gitignore
 index 4667e0cb6..9f4484289 100644
 --- a/packages/server-admin-ui/.gitignore
 +++ b/packages/server-admin-ui/.gitignore
 @@ -9,6 +9,7 @@ coverage
- 
+
  # production
  public
 +.__mf__temp
- 
+
  # misc
  .DS_Store
 diff --git a/packages/server-admin-ui/index.html b/packages/server-admin-ui/index.html
@@ -140,7 +129,7 @@ index cd0bf444a..6581fdb4c 100644
 +
  .card {
    margin-bottom: 1.5 * $spacer;
- 
+
    // Cards with color accent
    @each $color, $value in $theme-colors {
      &.bg-#{$color} {
@@ -156,13 +145,13 @@ index cd0bf444a..6581fdb4c 100644
    }
 @@ -42,7 +45,7 @@
      }
- 
+
      .nav-link {
 -      padding: $card-spacer-y $card-spacer-x / 2;
 +      padding: $card-spacer-y math.div($card-spacer-x, 2);
        color: $text-muted;
        border-top: 0;
- 
+
 @@ -107,7 +110,7 @@
  // Card Actions
  .card-header {
@@ -173,7 +162,7 @@ index cd0bf444a..6581fdb4c 100644
    .card-actions {
      position: absolute;
 @@ -166,8 +169,8 @@
- 
+
  .card-full {
    margin-top: -$spacer;
 -  margin-right: -$grid-gutter-width / 2;
@@ -199,7 +188,7 @@ index c373d46ca..c2ffcfe0a 100644
 +  padding-left: math.div($grid-gutter-width, 4);
 +  margin-right: math.div($grid-gutter-width, -2);
 +  margin-left: math.div($grid-gutter-width, -2);
- 
+
    [class*='col-'] {
 -    padding-right: ($grid-gutter-width / 4);
 -    padding-left: ($grid-gutter-width / 4);
@@ -207,18 +196,18 @@ index c373d46ca..c2ffcfe0a 100644
 +    padding-left: math.div($grid-gutter-width, 4);
    }
  }
- 
+
 diff --git a/packages/server-admin-ui/scss/style.scss b/packages/server-admin-ui/scss/style.scss
 index 0062c7272..f569a7755 100644
 --- a/packages/server-admin-ui/scss/style.scss
 +++ b/packages/server-admin-ui/scss/style.scss
 @@ -10,7 +10,7 @@
  @import 'bootstrap-variables';
- 
+
  // Import Bootstrap source files
 -@import '~bootstrap/scss/bootstrap';
 +@import 'bootstrap/scss/bootstrap';
- 
+
  // Override core variables
  @import 'core-variables';
 diff --git a/packages/server-admin-ui/src/bootstrap.js b/packages/server-admin-ui/src/bootstrap.js
@@ -226,9 +215,9 @@ index fdcc45a3a..0661977c1 100644
 --- a/packages/server-admin-ui/src/bootstrap.js
 +++ b/packages/server-admin-ui/src/bootstrap.js
 @@ -297,9 +297,6 @@ function nameCollator(left, right) {
- 
+
  window.serverRoutesPrefix = '/skServer'
- 
+
 -// eslint-disable-next-line no-undef
 -__webpack_init_sharing__('default')
 -
@@ -242,7 +231,7 @@ index 8637ea582..bda6a192a 100644
 @@ -1,27 +1,137 @@
  import React from 'react'
 +import ReactDOM from 'react-dom'
- 
+
 -export const toLazyDynamicComponent = (moduleName, component) =>
 -  React.lazy(
 -    () =>
@@ -395,7 +384,7 @@ index 8637ea582..bda6a192a 100644
 +      }
 +    })()
    )
- 
+
  export const toSafeModuleId = (moduleName) => moduleName.replace(/[-@/]/g, '_')
 diff --git a/packages/server-admin-ui/vite.config.js b/packages/server-admin-ui/vite.config.js
 new file mode 100644
@@ -472,7 +461,7 @@ diff --git a/src/serverroutes.ts b/src/serverroutes.ts
 index 0e469b6fb..6aed30faf 100644
 --- a/src/serverroutes.ts
 +++ b/src/serverroutes.ts
-@@ -172,10 +172,15 @@ module.exports = function (
+@@ -201,10 +201,15 @@ module.exports = function (
    const logopath = path.resolve(app.config.configPath, 'logo.svg')
    if (fs.existsSync(logopath)) {
      debug(`Found custom logo at ${logopath}, adding route for it`)
@@ -485,10 +474,10 @@ index 0e469b6fb..6aed30faf 100644
 +      '/admin/assets/signal-k-logo-image-text*.svg',
 +      (req: Request, res: Response) => res.sendFile(logopath)
 +    )
- 
+
      // Check for custom logo for minimized sidebar, otherwise use the existing logo.
      const minimizedLogoPath = path.resolve(
-@@ -185,10 +190,15 @@ module.exports = function (
+@@ -214,10 +219,15 @@ module.exports = function (
      const minimizedLogo = fs.existsSync(minimizedLogoPath)
        ? minimizedLogoPath
        : logopath
@@ -502,5 +491,5 @@ index 0e469b6fb..6aed30faf 100644
 +      (req: Request, res: Response) => res.sendFile(minimizedLogo)
 +    )
    }
- 
+
    // mount before the main /admin

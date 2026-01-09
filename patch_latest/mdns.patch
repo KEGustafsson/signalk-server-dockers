@@ -35,18 +35,18 @@ Tested with full test suite (136 passing) on Node 18, 20, 22, and 24.
  4 files changed, 167 insertions(+), 103 deletions(-)
 
 diff --git a/package.json b/package.json
-index b0b37ee81..cde3a1a6d 100644
+index dd00bc9..61e0adf 100644
 --- a/package.json
 +++ b/package.json
-@@ -69,6 +69,7 @@
-     "packages/typedoc-theme"
-   ],
+@@ -72,6 +72,7 @@
    "dependencies": {
+     "@assemblyscript/loader": "^0.28.9",
+     "@bytecodealliance/jco": "^1.4.0",
 +    "@homebridge/ciao": "^1.3.4",
-     "@js-temporal/polyfill": "^0.5.1",
      "@signalk/course-provider": "^1.0.0",
      "@signalk/n2k-signalk": ">=4.1.0-beta",
-@@ -91,7 +92,6 @@
+     "@signalk/nmea0183-signalk": "^3.0.0",
+@@ -95,7 +96,6 @@
      "cookie-parser": "^1.4.3",
      "cors": "^2.5.2",
      "debug": "^4.3.3",
@@ -54,7 +54,7 @@ index b0b37ee81..cde3a1a6d 100644
      "errorhandler": "^1.3.0",
      "esm-resolve": "^1.0.11",
      "express": "^4.10.4",
-@@ -131,7 +131,6 @@
+@@ -136,7 +136,6 @@
      "@signalk/signalk-to-nmea0183": "^1.0.0",
      "@signalk/udp-nmea-plugin": "^2.0.0",
      "@signalk/vesselpositions": "^1.0.0",
@@ -63,21 +63,31 @@ index b0b37ee81..cde3a1a6d 100644
      "signalk-n2kais-to-nmea0183": "^1.3.1",
      "signalk-to-nmea2000": "^2.16.0"
 diff --git a/src/index.ts b/src/index.ts
-index b07e67ed5..a0995eea8 100644
+index 113a411..e7f7bde 100644
 --- a/src/index.ts
 +++ b/src/index.ts
-@@ -549,51 +549,64 @@ class Server {
-       if (!this.app.started) {
-         resolve(this)
-       } else {
--        try {
--          _.each(this.app.interfaces, (intf: any) => {
--            if (
--              intf !== null &&
--              typeof intf === 'object' &&
--              typeof intf.stop === 'function'
--            ) {
--              intf.stop()
+@@ -544,58 +544,71 @@ class Server {
+     return this
+   }
+
+-  async stop(cb?: () => void) {
+-    if (!this.app.started) {
+-      return this
+-    }
+-
+-    try {
+-      _.each(this.app.interfaces, (intf: any) => {
+-        if (
+-          intf !== null &&
+-          typeof intf === 'object' &&
+-          typeof intf.stop === 'function'
+-        ) {
+-          intf.stop()
++  stop(cb?: () => void) {
++    return new Promise((resolve, reject) => {
++      if (!this.app.started) {
++        resolve(this)
++      } else {
 +        // Stop all interfaces (some may be async)
 +        const stopInterfaces = async () => {
 +          const stopPromises = Object.values(this.app.interfaces).map(
@@ -92,30 +102,21 @@ index b07e67ed5..a0995eea8 100644
 +                return result instanceof Promise ? result : Promise.resolve()
 +              }
 +              return Promise.resolve()
-             }
--          })
--
--          this.app.intervals.forEach((interval) => {
--            clearInterval(interval)
--          })
--
--          this.app.providers.forEach((providerHolder) => {
--            providerHolder.pipeElements[0].end()
--          })
--
--          debug('Closing server...')
++            }
 +          )
 +          await Promise.all(stopPromises)
-+        }
- 
--          const that = this
--          this.app.server.close(() => {
--            debug('Server closed')
--            if (that.app.redirectServer) {
--              try {
--                that.app.redirectServer.close(() => {
--                  debug('Redirect server closed')
--                  delete that.app.redirectServer
+         }
+-      })
+-
+-      this.app.intervals.forEach((interval) => {
+-        clearInterval(interval)
+-      })
+-
+-      this.app.providers.forEach((providerHolder) => {
+-        providerHolder.pipeElements[0].end()
+-      })
+
+-      debug('Closing server...')
 +        stopInterfaces()
 +          .catch((err) => debug('Error stopping interfaces:', err))
 +          .then(() => {
@@ -123,7 +124,19 @@ index b07e67ed5..a0995eea8 100644
 +              this.app.intervals.forEach((interval) => {
 +                clearInterval(interval)
 +              })
-+
+
+-      const that = this
+-      return new Promise((resolve, reject) => {
+-        this.app.server.close(() => {
+-          debug('Server closed')
+-          if (that.app.redirectServer) {
+-            try {
+-              that.app.redirectServer.close(() => {
+-                debug('Redirect server closed')
+-                delete that.app.redirectServer
+-                that.app.started = false
+-                cb && cb()
+-                resolve(that)
 +              this.app.providers.forEach((providerHolder) => {
 +                providerHolder.pipeElements[0].end()
 +              })
@@ -146,31 +159,32 @@ index b07e67ed5..a0995eea8 100644
 +                    reject(err)
 +                  }
 +                } else {
-                   that.app.started = false
-                   cb && cb()
-                   resolve(that)
--                })
--              } catch (err) {
--                reject(err)
--              }
--            } else {
--              that.app.started = false
--              cb && cb()
--              resolve(that)
++                  that.app.started = false
++                  cb && cb()
++                  resolve(that)
 +                }
-+              })
-+            } catch (err) {
-+              reject(err)
+               })
+             } catch (err) {
+               reject(err)
              }
-           })
--        } catch (err) {
--          reject(err)
--        }
-       }
-     })
+-          } else {
+-            that.app.started = false
+-            cb && cb()
+-            resolve(that)
+-          }
+-        })
+-      })
+-    } catch (err) {
+-      throw err
+-    }
++          })
++      }
++    })
    }
+ }
+
 diff --git a/src/mdns.js b/src/mdns.js
-index 3d366b681..2d4a6d5d2 100644
+index 3d366b6..2d4a6d5 100644
 --- a/src/mdns.js
 +++ b/src/mdns.js
 @@ -19,112 +19,164 @@
@@ -180,10 +194,10 @@ index 3d366b681..2d4a6d5d2 100644
 -const dnssd = require('dnssd2')
 +const ciao = require('@homebridge/ciao')
  const ports = require('./ports')
- 
+
  module.exports = function mdnsResponder(app) {
    const config = app.config
- 
+
 -  let mdns = dnssd
 -
 -  try {
@@ -198,7 +212,7 @@ index 3d366b681..2d4a6d5d2 100644
      debug('Mdns disabled by configuration')
      return
    }
- 
+
 +  // Create a single responder instance for all services
 +  const responder = ciao.getResponder()
 +
@@ -217,7 +231,7 @@ index 3d366b681..2d4a6d5d2 100644
 -
 -  // Strip all the null or empty props in txtRecord
    txtRecord = _.pickBy(txtRecord, _.identity)
- 
+
 -  const types = []
 -  types.push({
 -    type: app.config.settings.ssl ? mdns.tcp('https') : mdns.tcp('http'),
@@ -232,7 +246,7 @@ index 3d366b681..2d4a6d5d2 100644
 +    port: ports.getExternalPort(app),
 +    txt: txtRecord
    })
- 
+
 +  // Additional services from interfaces
    for (const key in app.interfaces) {
      if (
@@ -268,7 +282,7 @@ index 3d366b681..2d4a6d5d2 100644
        }
      }
    }
- 
+
 -  const options = {
 -    txtRecord,
 -    txt: txtRecord
@@ -293,7 +307,7 @@ index 3d366b681..2d4a6d5d2 100644
 +        debug('Stopping flag set, skipping remaining services')
 +        break
 +      }
- 
+
 -  if (host !== require('os').hostname()) {
 -    options.host = host
 -  }
@@ -307,7 +321,7 @@ index 3d366b681..2d4a6d5d2 100644
 +          txt: svc.txt,
 +          ...serviceOptions
 +        })
- 
+
 -  debug(options)
 -
 -  const ads = []
@@ -348,7 +362,7 @@ index 3d366b681..2d4a6d5d2 100644
 +      }
 +    }
    }
- 
+
 +  // Start advertising (track the promise so we can wait for it on stop)
 +  advertisingPromise = startAdvertising().catch((err) => {
 +    if (!stopping) {
@@ -401,15 +415,15 @@ index 3d366b681..2d4a6d5d2 100644
    }
  }
 diff --git a/src/types.ts b/src/types.ts
-index d29977a05..7b65674dc 100644
+index d29977a..7b65674 100644
 --- a/src/types.ts
 +++ b/src/types.ts
 @@ -24,7 +24,7 @@ export interface SignalKServer extends ServerAPI {
- 
+
  export class Interface {
    start?: () => void
 -  stop?: () => void
 +  stop?: () => void | Promise<void>
    mdns?: MdnsAdvertisement
  }
- 
+
