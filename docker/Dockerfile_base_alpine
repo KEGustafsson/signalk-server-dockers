@@ -2,11 +2,13 @@ FROM alpine:latest
 ARG NODE
 RUN addgroup -g 1000 node \
   && adduser -u 1000 -G node -s /bin/bash -D node
+
 RUN apk add --no-cache \
   sudo git bash \
   python3 py3-pip build-base \
   avahi avahi-tools dbus \
   sysstat procps nano curl libcap bluez
+
 RUN addgroup -g 991 docker \
   && addgroup -g 990 i2c \
   && addgroup -g 989 spi \
@@ -17,11 +19,14 @@ RUN addgroup -g 991 docker \
   && addgroup node docker \
   && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
   && chmod u+s /bin/date
+
 COPY avahi/avahi-dbus.conf /etc/dbus-1/system.d/avahi-dbus.conf
 COPY bluez/bluezuser.conf /etc/dbus-1/system.d/bluezuser.conf
+
 RUN mkdir -p /var/run/dbus/ /var/run/avahi-daemon/ \
   && chmod -R 777 /var/run/dbus/ /var/run/avahi-daemon/ \
   && chown -R avahi:avahi /var/run/avahi-daemon/
+
 RUN apk add --no-cache nodejs~${NODE} npm \
   && npm config rm proxy \
   && npm config rm https-proxy \
