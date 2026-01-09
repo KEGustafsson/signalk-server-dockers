@@ -1,8 +1,6 @@
-name: Build Docker base images user
+name: Build Docker base images alpine
 
 on:
-  schedule:
-    - cron: "0 0 * * 1"
   workflow_dispatch:
 
 jobs:
