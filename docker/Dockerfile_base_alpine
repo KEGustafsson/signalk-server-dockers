@@ -27,15 +27,17 @@ RUN mkdir -p /var/run/dbus/ /var/run/avahi-daemon/ \
   && chmod -R 777 /var/run/dbus/ /var/run/avahi-daemon/ \
   && chown -R avahi:avahi /var/run/avahi-daemon/
 
-RUN apk add --no-cache nodejs~${NODE} npm \
-  && npm config rm proxy \
+RUN apk add --no-cache nodejs~${NODE} npm
+
+RUN npm config rm proxy \
   && npm config rm https-proxy \
   && npm config set fetch-retries 5 \
   && npm config set fetch-retry-mintimeout 60000 \
   && npm config set fetch-retry-maxtimeout 120000 \
   && npm config set registry "https://registry.npmjs.org/" \
   && npm config set @backup:registry "https://registry.yarnpkg.com/" \
-  && npm cache clean -f \
-  && npm install npm@latest -g \
+  && npm cache clean -f
+
+RUN npm install npm@latest -g \
   && npm install pm2 -g \
   && rm -rf /tmp/* /var/tmp/*
