@@ -21,11 +21,6 @@ jobs:
           - vm: ubuntu-24.04-arm
             os: 24.04
             arch: arm
-            node: 22
-            platform: linux/arm64,linux/arm/v7
-          - vm: ubuntu-24.04-arm
-            os: 24.04
-            arch: arm
             node: 24
             platform: linux/arm64
     runs-on: ${{ matrix.vm }}
