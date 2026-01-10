@@ -232,15 +232,9 @@ jobs:
             "docker://ghcr.io/kegustafsson/signalk-server-base:latest-alpine-${{ matrix.node }}" \
             "docker://docker.io/kgustafs/signalk-server-base:latest-alpine-${{ matrix.node }}"
 
-  housekeeping-ubuntu:
-    needs: copy-ubuntu-to-dockerhub
+  housekeeping:
+    needs: [copy-ubuntu-to-dockerhub, copy-alpine-to-dockerhub]
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        os: [24.04]
-        node: [22.x, 24.x]
-#        exclude:
-#          - node: 22.x
     permissions:
       packages: write
     steps:
@@ -249,26 +243,7 @@ jobs:
         with:
           packages: signalk-server-base
           delete-untagged: true
-          delete-tags: amd-${{ matrix.os }}-${{ matrix.node }},arm-${{ matrix.os }}-${{ matrix.node }}
-          token: ${{ secrets.GHCR_TOKEN_NEW }}
-
-  housekeeping-alpine:
-    needs: copy-alpine-to-dockerhub
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node: [22, 24]
-#        exclude:
-#          - node: 22
-    permissions:
-      packages: write
-    steps:
-      - name: Remove Docker Image from GHCR
-        uses: dataaxiom/ghcr-cleanup-action@v1
-        with:
-          packages: signalk-server-base
-          delete-untagged: true
-          delete-tags: amd-alpine-${{ matrix.node }},arm-alpine-${{ matrix.node }}
+          delete-tags: amd-*,arm-*
           token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   slack:
