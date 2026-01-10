@@ -189,15 +189,9 @@ jobs:
             ghcr.io/kegustafsson/signalk-server-base:amd-alpine-${{ matrix.node }}
             ghcr.io/kegustafsson/signalk-server-base:arm-alpine-${{ matrix.node }}
 
-  housekeeping-ubuntu:
-    needs: create-and-push-ubuntu-manifest
+  housekeeping:
+    needs: [create-and-push-ubuntu-manifest, create-and-push-alpine-manifest]
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        os: [24.04]
-        node: [22.x, 24.x]
-#        exclude:
-#          - node: 22.x
     permissions:
       packages: write
     steps:
@@ -209,28 +203,9 @@ jobs:
           delete-tags: amd-*,arm-*
           token: ${{ secrets.GHCR_TOKEN_NEW }}
 
-  housekeeping-alpine:
-    needs: create-and-push-alpine-manifest
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node: [22, 24]
-#        exclude:
-#          - node: 22
-    permissions:
-      packages: write
-    steps:
-      - name: Remove Docker Image from GHCR
-        uses: dataaxiom/ghcr-cleanup-action@v1
-        with:
-          packages: signalk-server-base
-          delete-untagged: true
-          delete-tags: amd-alpine-${{ matrix.node }},arm-alpine-${{ matrix.node }}
-          token: ${{ secrets.GHCR_TOKEN_NEW }}
-
   slack:
     runs-on: ubuntu-latest
-    needs: [housekeeping-ubuntu, housekeeping-alpine]
+    needs: [housekeeping]
     steps:
       - name: Slack notification
         run: |
