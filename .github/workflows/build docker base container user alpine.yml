@@ -141,21 +141,43 @@ jobs:
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-
-      - name: Create and push multi-arch manifest to GHCR and Docker Hub
+      - name: Create and push multi-arch manifest to GHCR
         uses: int128/docker-manifest-create-action@v2
         with:
           tags: |
             ghcr.io/kegustafsson/signalk-server-base:latest-${{ matrix.os }}-${{ matrix.node }}
-#            kgustafs/signalk-server-base:latest-${{ matrix.os }}-${{ matrix.node }}
           sources: |
             ghcr.io/kegustafsson/signalk-server-base:amd-${{ matrix.os }}-${{ matrix.node }}
             ghcr.io/kegustafsson/signalk-server-base:arm-${{ matrix.os }}-${{ matrix.node }}
+
+  copy-ubuntu-to-dockerhub:
+    needs: create-and-push-ubuntu-manifest
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [24.04]
+        node: [22.x, 24.x]
+#        exclude:
+#          - node: 22.x
+    steps:
+      - name: Install skopeo
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+      - name: Copy images from GHCR to Docker Hub
+        shell: bash
+        env:
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_HUB_ACCESS_TOKEN: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          skopeo copy --all \
+            --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
+            --dest-creds "${DOCKER_HUB_USERNAME}:${DOCKER_HUB_ACCESS_TOKEN}" \
+            "docker://ghcr.io/kegustafsson/signalk-server-base:latest-${{ matrix.os }}-${{ matrix.node }}" \
+            "docker://docker.io/kgustafs/signalk-server-base:latest-${{ matrix.os }}-${{ matrix.node }}"
 
   create-and-push-alpine-manifest:
     needs: [build-alpine-images]
@@ -173,25 +195,52 @@ jobs:
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-
-      - name: Create and push multi-arch manifest to GHCR and Docker Hub
+      - name: Create and push multi-arch manifest to GHCR
         uses: int128/docker-manifest-create-action@v2
         with:
           tags: |
             ghcr.io/kegustafsson/signalk-server-base:latest-alpine-${{ matrix.node }}
-#            kgustafs/signalk-server-base:latest-alpine-${{ matrix.node }}
           sources: |
             ghcr.io/kegustafsson/signalk-server-base:amd-alpine-${{ matrix.node }}
             ghcr.io/kegustafsson/signalk-server-base:arm-alpine-${{ matrix.node }}
 
-  housekeeping:
-    needs: [create-and-push-ubuntu-manifest, create-and-push-alpine-manifest]
+  copy-alpine-to-dockerhub:
+    needs: create-and-push-alpine-manifest
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+#        exclude:
+#          - node: 22
+    steps:
+      - name: Install skopeo
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+      - name: Copy images from GHCR to Docker Hub
+        shell: bash
+        env:
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_HUB_ACCESS_TOKEN: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          skopeo copy --all \
+            --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
+            --dest-creds "${DOCKER_HUB_USERNAME}:${DOCKER_HUB_ACCESS_TOKEN}" \
+            "docker://ghcr.io/kegustafsson/signalk-server-base:latest-alpine-${{ matrix.node }}" \
+            "docker://docker.io/kgustafs/signalk-server-base:latest-alpine-${{ matrix.node }}"
+
+  housekeeping-ubuntu:
+    needs: copy-ubuntu-to-dockerhub
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [24.04]
+        node: [22.x, 24.x]
+#        exclude:
+#          - node: 22.x
     permissions:
       packages: write
     steps:
@@ -200,12 +249,31 @@ jobs:
         with:
           packages: signalk-server-base
           delete-untagged: true
-          delete-tags: amd-*,arm-*
+          delete-tags: amd-${{ matrix.os }}-${{ matrix.node }},arm-${{ matrix.os }}-${{ matrix.node }}
+          token: ${{ secrets.GHCR_TOKEN_NEW }}
+
+  housekeeping-alpine:
+    needs: copy-alpine-to-dockerhub
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+#        exclude:
+#          - node: 22
+    permissions:
+      packages: write
+    steps:
+      - name: Remove Docker Image from GHCR
+        uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          packages: signalk-server-base
+          delete-untagged: true
+          delete-tags: amd-alpine-${{ matrix.node }},arm-alpine-${{ matrix.node }}
           token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   slack:
     runs-on: ubuntu-latest
-    needs: [housekeeping]
+    needs: [housekeeping-ubuntu, housekeeping-alpine]
     steps:
       - name: Slack notification
         run: |
