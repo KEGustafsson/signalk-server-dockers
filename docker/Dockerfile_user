@@ -15,23 +15,18 @@ RUN npm config rm proxy \
   && npm cache clean -f
 
 FROM base AS tarballs_installed
-WORKDIR /home/node/signalk
 COPY --chown=node:node *.tgz .
 
-# Install signalk-server nested (matches signalk-server-X.X.X.tgz, not signalk-server-admin, signalk-server-api, etc.)
-RUN npm install $(ls signalk-server-[0-9]*.tgz) --install-strategy=nested
-
-# Install all other tarballs hoisted
-RUN for tgz in *.tgz; do \
-      case "$tgz" in \
-        signalk-server-[0-9]*) ;; \
-        *) npm install "./$tgz" ;; \
-      esac \
-    done
-
-RUN mkdir -p /home/node/signalk/node_modules/signalk-server/node_modules/@signalk/ \
-  && cp -rf /home/node/signalk/node_modules/@signalk/* /home/node/signalk/node_modules/signalk-server/node_modules/@signalk/ \
-  && rm -rf /home/node/signalk/node_modules/@signalk/
+# Install signalk-server nested, then all other tarballs hoisted in a single npm install,
+# and finally copy @signalk packages into the nested node_modules
+RUN npm install $(ls signalk-server-[0-9]*.tgz) --install-strategy=nested \
+  && other_tarballs=$(ls *.tgz 2>/dev/null | grep -v '^signalk-server-[0-9]' || true) \
+  && if [ -n "$other_tarballs" ]; then npm install $other_tarballs; fi \
+  && if [ -d node_modules/@signalk ]; then \
+       mkdir -p node_modules/signalk-server/node_modules/@signalk/ \
+       && cp -rf node_modules/@signalk/* node_modules/signalk-server/node_modules/@signalk/ \
+       && rm -rf node_modules/@signalk/; \
+     fi
 
 FROM base
 
