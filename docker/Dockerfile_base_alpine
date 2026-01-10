@@ -14,7 +14,6 @@ RUN apk add --no-cache \
   && addgroup -g 991 docker \
   && addgroup -g 990 i2c \
   && addgroup -g 989 spi \
-  && addgroup -g 988 netdev \
   && addgroup node dialout \
   && addgroup node i2c \
   && addgroup node spi \
@@ -36,6 +35,5 @@ RUN apk add --no-cache nodejs~${NODE} \
   && npm config set registry "https://registry.npmjs.org/" \
   && npm config set @backup:registry "https://registry.yarnpkg.com/" \
   && npm cache clean -f \
-  && npm install npm@latest -g \
   && npm install pm2 -g \
   && rm -rf /tmp/* /var/tmp/*
