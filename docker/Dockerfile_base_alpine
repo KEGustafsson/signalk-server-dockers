@@ -9,7 +9,7 @@ COPY avahi/avahi-dbus.conf bluez/bluezuser.conf /etc/dbus-1/system.d/
 RUN apk add --no-cache \
   sudo git bash \
   python3 py3-virtualenv py3-pip build-base \
-  avahi avahi-tools avahi2dns \
+  avahi avahi2dns \
   procps-ng nano curl libcap-setcap dbus bluez \
   && addgroup -g 991 docker \
   && addgroup -g 990 i2c \
