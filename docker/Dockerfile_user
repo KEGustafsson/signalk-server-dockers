@@ -1,5 +1,5 @@
-ARG UBUNTU_VERSION
-FROM ghcr.io/kegustafsson/signalk-server-base:latest-${UBUNTU_VERSION} AS base
+ARG BASE_IMAGE
+FROM ghcr.io/kegustafsson/signalk-server-base:latest-${BASE_IMAGE} AS base
 
 USER node
 WORKDIR /home/node/signalk
