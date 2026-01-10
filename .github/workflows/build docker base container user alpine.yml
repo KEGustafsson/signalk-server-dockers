@@ -72,14 +72,23 @@ jobs:
   build-alpine-images:
     strategy:
       matrix:
+        node: [22, 24]
+        exclude:
+          - node: 22
         vm: [ubuntu-latest, ubuntu-24.04-arm]
         include:
           - vm: ubuntu-latest
+            node: 24
             arch: amd
             platform: linux/amd64
           - vm: ubuntu-24.04-arm
             arch: arm
+            node: 22
             platform: linux/arm64,linux/arm/v7
+          - vm: ubuntu-24.04-arm
+            arch: arm
+            node: 24
+            platform: linux/arm64
     runs-on: ${{ matrix.vm }}
     steps:
       - uses: actions/checkout@v6
@@ -100,7 +109,9 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           tags: |
-            ghcr.io/kegustafsson/signalk-server-base:${{ matrix.arch }}-alpine
+            ghcr.io/kegustafsson/signalk-server-base:${{ matrix.arch }}-alpine-${{ matrix.node }}
+          build-args: |
+            NODE=${{ matrix.node }}
 
   create-and-push-ubuntu-manifest:
     needs: [build-ubuntu-images]
@@ -139,6 +150,11 @@ jobs:
   create-and-push-alpine-manifest:
     needs: [build-alpine-images]
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+        exclude:
+          - node: 22
     steps:
       - name: Login to ghcr.io
         uses: docker/login-action@v3
@@ -157,11 +173,11 @@ jobs:
         uses: int128/docker-manifest-create-action@v2
         with:
           tags: |
-            ghcr.io/kegustafsson/signalk-server-base:latest-alpine
-            kgustafs/signalk-server-base:latest-alpine
+            ghcr.io/kegustafsson/signalk-server-base:latest-alpine-${{ matrix.node }}
+            kgustafs/signalk-server-base:latest-alpine-${{ matrix.node }}
           sources: |
-            ghcr.io/kegustafsson/signalk-server-base:amd-alpine
-            ghcr.io/kegustafsson/signalk-server-base:arm-alpine
+            ghcr.io/kegustafsson/signalk-server-base:amd-alpine-${{ matrix.node }}
+            ghcr.io/kegustafsson/signalk-server-base:arm-alpine-${{ matrix.node }}
 
   housekeeping-ubuntu:
     needs: create-and-push-ubuntu-manifest
@@ -186,6 +202,11 @@ jobs:
   housekeeping-alpine:
     needs: create-and-push-alpine-manifest
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+        exclude:
+          - node: 22
     permissions:
       packages: write
     steps:
@@ -194,7 +215,7 @@ jobs:
         with:
           packages: signalk-server-base
           delete-untagged: true
-          delete-tags: amd-alpine,arm-alpine
+          delete-tags: amd-alpine-${{ matrix.node }},arm-alpine-${{ matrix.node }}
           token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   slack:

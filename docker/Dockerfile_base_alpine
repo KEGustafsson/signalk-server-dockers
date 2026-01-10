@@ -10,7 +10,7 @@ RUN apk add --no-cache \
   sudo git bash \
   python3 py3-virtualenv py3-pip build-base \
   avahi avahi-compat-libdns_sd \
-  procps-ng nano curl libcap-setcap dbus bluez \
+  procps-ng nano curl xz libcap-setcap dbus bluez \
   && addgroup -g 991 docker \
   && addgroup -g 990 i2c \
   && addgroup -g 989 spi \
@@ -25,7 +25,14 @@ RUN apk add --no-cache \
   && chmod -R 777 /var/run/dbus/ /var/run/avahi-daemon/ \
   && chown -R avahi:avahi /var/run/avahi-daemon/
 
-RUN apk add --no-cache nodejs npm \
+RUN ARCH=$(uname -m) \
+  && case "$ARCH" in \
+       x86_64) ARCH="x64" ;; \
+       aarch64) ARCH="arm64" ;; \
+       armv7l) ARCH="armv7l" ;; \
+     esac \
+  && curl -fsSL https://unofficial-builds.nodejs.org/download/release/v${NODE}.0/node-v${NODE}.0-linux-${ARCH}-musl.tar.xz \
+    | tar -xJ -C /usr/local --strip-components=1 \
   && npm config rm proxy \
   && npm config rm https-proxy \
   && npm config set fetch-retries 5 \
