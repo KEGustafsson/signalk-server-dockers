@@ -2,12 +2,10 @@ ARG UBUNTU_VERSION
 FROM ghcr.io/kegustafsson/signalk-server-base:latest-${UBUNTU_VERSION} AS base
 
 USER node
-RUN mkdir -p /home/node/.signalk/ \
-  && mkdir -p /home/node/signalk/
-
 WORKDIR /home/node/signalk
 
-RUN npm config rm proxy \
+RUN mkdir -p /home/node/.signalk/ /home/node/signalk/ \
+  && npm config rm proxy \
   && npm config rm https-proxy \
   && npm config set fetch-retries 5 \
   && npm config set fetch-retry-mintimeout 60000 \
@@ -32,9 +30,7 @@ FROM base
 
 COPY --from=tarballs_installed --chown=node:node /home/node/signalk /home/node/signalk
 
-USER node
-COPY --chown=node docker/startup.sh startup.sh
-RUN chmod +x startup.sh
+COPY --chown=node:node --chmod=755 docker/startup.sh startup.sh
 
 EXPOSE 3000
 ENV IS_IN_DOCKER=true
