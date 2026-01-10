@@ -339,8 +339,215 @@ jobs:
             "docker://ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }}" \
             "docker://docker.io/kgustafs/signalk-server:${{ matrix.tag }}"
 
+  build_docker_tags_alpine:
+    needs: [signalk-server]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+#        exclude:
+#          - node: 22
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - uses: actions/download-artifact@v7
+        with:
+          name: tag
+      - name: Set TAG for build-args
+        id: vars
+        run: |
+          tag=$(cat tag.txt)
+          echo "Extracted tag: $tag"
+          echo "TAG=$tag" >> $GITHUB_OUTPUT
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$tag"
+          echo "MAJOR=$MAJOR" >> $GITHUB_OUTPUT
+          echo "MINOR=$MAJOR.$MINOR" >> $GITHUB_OUTPUT
+          echo "ghcr=ghcr.io/kegustafsson/signalk-server" >> $GITHUB_OUTPUT
+          echo "hub=kgustafs/signalk-server" >> $GITHUB_OUTPUT
+      - name: Set tags
+        id: set-tags
+        run: |
+          if [[ "${{ steps.vars.outputs.tag }}" == *beta* ]]; then
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-alpine-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-alpine-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-alpine-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:latest-alpine-${{ matrix.node }}"
+          else
+            tags="${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.TAG }}-alpine-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MAJOR }}-alpine-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:${{ steps.vars.outputs.MINOR }}-alpine-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.ghcr }}:latest-alpine-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.TAG }}-alpine-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MAJOR }}-alpine-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:${{ steps.vars.outputs.MINOR }}-alpine-${{ matrix.node }}"
+            tags="$tags,${{ steps.vars.outputs.hub }}:latest-alpine-${{ matrix.node }}"
+          fi
+          echo "tags=$tags" >> $GITHUB_OUTPUT
+      - name: Save docker tags to artifact
+        run: echo ${{ steps.set-tags.outputs.tags }} > docker_tags_alpine_${{ matrix.node }}.txt
+      - name: Upload tag
+        uses: actions/upload-artifact@v6
+        with:
+          retention-days: 1
+          name: docker_tags_alpine_${{ matrix.node }}
+          path: docker_tags_alpine_${{ matrix.node }}.txt
+
+  build-alpine-images:
+    needs: [signalk-server]
+    strategy:
+      matrix:
+        node: [22, 24]
+#        exclude:
+#          - node: 22
+        vm: [ubuntu-latest, ubuntu-24.04-arm]
+        include:
+          - vm: ubuntu-latest
+            node: 24
+            arch: amd
+            platform: linux/amd64
+          - vm: ubuntu-latest
+            node: 22
+            arch: amd
+            platform: linux/amd64
+          - vm: ubuntu-24.04-arm
+            arch: arm
+            node: 22
+            platform: linux/arm64,linux/arm/v7
+          - vm: ubuntu-24.04-arm
+            arch: arm
+            node: 24
+            platform: linux/arm64
+    runs-on: ${{ matrix.vm }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - uses: actions/download-artifact@v7
+        with:
+          name: packed-modules
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile_user_alpine
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: |
+            ghcr.io/kegustafsson/signalk-server:${{ matrix.arch }}-alpine-${{ matrix.node }}-${{ github.run_id }}
+          build-args: |
+            ALPINE_VERSION=alpine-${{ matrix.node }}
+
+  create-and-push-alpine-manifest:
+    needs: [build_docker_tags_alpine, build-alpine-images]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+#        exclude:
+#          - node: 22
+        include:
+          - node: 24
+            tag: latest-alpine
+          - node: 22
+            tag: latest-alpine-22
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Download Docker tag artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker_tags_alpine_${{ matrix.node }}
+      - name: Normalize and filter GHCR tags (multiline output)
+        id: ghcr_tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo 'IMAGES<<EOF'
+            sed 's/,/\n/g' docker_tags_alpine_${{ matrix.node }}.txt \
+              | grep '^ghcr\.io/'
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      - name: Login to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
+      - name: Create and push multi-arch manifest to GHCR
+        uses: int128/docker-manifest-create-action@v2
+        with:
+          tags: |
+            ${{ steps.ghcr_tags.outputs.IMAGES }}
+            ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }}
+          sources: |
+            ghcr.io/kegustafsson/signalk-server:amd-alpine-${{ matrix.node }}-${{ github.run_id }}
+            ghcr.io/kegustafsson/signalk-server:arm-alpine-${{ matrix.node }}-${{ github.run_id }}
+
+  copy-alpine-to-dockerhub:
+    needs: create-and-push-alpine-manifest
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+#        exclude:
+#          - node: 22
+        include:
+          - node: 24
+            tag: latest-alpine
+          - node: 22
+            tag: latest-alpine-22
+    steps:
+      - name: Download Docker tag artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: docker_tags_alpine_${{ matrix.node }}
+      - name: Install skopeo
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+      - name: Normalize and filter GHCR tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed 's/,/\n/g' docker_tags_alpine_${{ matrix.node }}.txt \
+            | grep '^ghcr\.io/' \
+            > tags.txt
+      - name: Copy images from GHCR to Docker Hub
+        shell: bash
+        env:
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_HUB_ACCESS_TOKEN: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r ghcr_image; do
+            [ -z "$ghcr_image" ] && continue
+            hub_image="${ghcr_image/ghcr.io\/kegustafsson\/signalk-server/docker.io\/kgustafs\/signalk-server}"
+            skopeo copy --all \
+              --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
+              --dest-creds "${DOCKER_HUB_USERNAME}:${DOCKER_HUB_ACCESS_TOKEN}" \
+              "docker://${ghcr_image}" \
+              "docker://${hub_image}"
+          done < tags.txt
+          skopeo copy --all \
+            --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
+            --dest-creds "${DOCKER_HUB_USERNAME}:${DOCKER_HUB_ACCESS_TOKEN}" \
+            "docker://ghcr.io/kegustafsson/signalk-server:${{ matrix.tag }}" \
+            "docker://docker.io/kgustafs/signalk-server:${{ matrix.tag }}"
+
   housekeeping:
-    needs: copy-to-dockerhub
+    needs: [copy-to-dockerhub, copy-alpine-to-dockerhub]
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -369,4 +576,4 @@ jobs:
           echo "TAG=$tag" >> $GITHUB_OUTPUT
       - name: Slack notification
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"Manually triggered image ready, ${{ steps.vars.outputs.TAG }}"}' https://hooks.slack.com/services/${{ secrets.SLACK }}
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"Manually triggered Ubuntu + Alpine images ready, ${{ steps.vars.outputs.TAG }}"}' https://hooks.slack.com/services/${{ secrets.SLACK }}
