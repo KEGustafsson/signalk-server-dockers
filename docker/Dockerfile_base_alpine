@@ -1,5 +1,12 @@
-FROM alpine:latest
 ARG NODE
+FROM node:${NODE}-alpine AS node-base
+
+FROM alpine:latest
+
+COPY --from=node-base /usr/local/bin/node /usr/local/bin/
+COPY --from=node-base /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+  && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 RUN addgroup -g 1000 node \
   && adduser -u 1000 -G node -s /bin/bash -D node
@@ -10,7 +17,7 @@ RUN apk add --no-cache \
   sudo git bash \
   python3 py3-virtualenv py3-pip build-base \
   avahi avahi-compat-libdns_sd \
-  procps-ng nano curl xz libcap-setcap dbus bluez \
+  procps-ng nano curl libcap-setcap dbus bluez \
   && addgroup -g 991 docker \
   && addgroup -g 990 i2c \
   && addgroup -g 989 spi \
@@ -25,15 +32,7 @@ RUN apk add --no-cache \
   && chmod -R 777 /var/run/dbus/ /var/run/avahi-daemon/ \
   && chown -R avahi:avahi /var/run/avahi-daemon/
 
-RUN ARCH=$(uname -m) \
-  && case "$ARCH" in \
-       x86_64) ARCH="x64" ;; \
-       aarch64) ARCH="arm64" ;; \
-       armv7l) ARCH="armv7l" ;; \
-     esac \
-  && curl -fsSL https://unofficial-builds.nodejs.org/download/release/v${NODE}.0/node-v${NODE}.0-linux-${ARCH}-musl.tar.xz \
-    | tar -xJ -C /usr/local --strip-components=1 \
-  && npm config rm proxy \
+RUN npm config rm proxy \
   && npm config rm https-proxy \
   && npm config set fetch-retries 5 \
   && npm config set fetch-retry-mintimeout 60000 \
