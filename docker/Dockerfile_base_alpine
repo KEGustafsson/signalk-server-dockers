@@ -25,8 +25,7 @@ RUN apk add --no-cache \
   && chmod -R 777 /var/run/dbus/ /var/run/avahi-daemon/ \
   && chown -R avahi:avahi /var/run/avahi-daemon/
 
-RUN apk add --no-cache nodejs~${NODE} \
-  && wget -qO- https://www.npmjs.com/install.sh | sh \
+RUN apk add --no-cache nodejs npm \
   && npm config rm proxy \
   && npm config rm https-proxy \
   && npm config set fetch-retries 5 \
