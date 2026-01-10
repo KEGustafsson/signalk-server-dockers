@@ -155,7 +155,6 @@ jobs:
         node: [22, 24]
         exclude:
           - node: 22
-
     steps:
       - name: Login to ghcr.io
         uses: docker/login-action@v3
