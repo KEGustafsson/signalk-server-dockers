@@ -248,7 +248,7 @@ jobs:
 
   slack:
     runs-on: ubuntu-latest
-    needs: [housekeeping-ubuntu, housekeeping-alpine]
+    needs: [housekeeping]
     steps:
       - name: Slack notification
         run: |
