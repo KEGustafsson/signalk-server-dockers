@@ -20,6 +20,11 @@ jobs:
             node: 24.x
             arch: amd
             platform: linux/amd64
+          - vm: ubuntu-latest
+            os: 24.04
+            node: 22.x
+            arch: amd
+            platform: linux/amd64
           - vm: ubuntu-24.04-arm
             os: 24.04
             arch: arm
@@ -79,6 +84,11 @@ jobs:
         include:
           - vm: ubuntu-latest
             node: 24
+            arch: amd
+            platform: linux/amd64
+          - vm: ubuntu-latest
+            os: 24.04
+            node: 22
             arch: amd
             platform: linux/amd64
           - vm: ubuntu-24.04-arm
