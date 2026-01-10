@@ -34,6 +34,5 @@ RUN apk add --no-cache nodejs~${NODE} npm \
   && npm config set registry "https://registry.npmjs.org/" \
   && npm config set @backup:registry "https://registry.yarnpkg.com/" \
   && npm cache clean -f \
-  && npm install npm@latest -g \
   && npm install pm2 -g \
   && rm -rf /tmp/* /var/tmp/*
