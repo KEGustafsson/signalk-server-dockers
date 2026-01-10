@@ -229,7 +229,7 @@ jobs:
           tags: |
             ghcr.io/kegustafsson/signalk-server:${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
           build-args: |
-            UBUNTU_VERSION=${{ matrix.os }}-${{ matrix.node }}
+            BASE_IMAGE=${{ matrix.os }}-${{ matrix.node }}
 
   create-and-push-manifest:
     needs: [build_docker_tags, build-images]
@@ -436,13 +436,13 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./docker/Dockerfile_user_alpine
+          file: ./docker/Dockerfile_user
           platforms: ${{ matrix.platform }}
           push: true
           tags: |
             ghcr.io/kegustafsson/signalk-server:${{ matrix.arch }}-alpine-${{ matrix.node }}-${{ github.run_id }}
           build-args: |
-            ALPINE_VERSION=alpine-${{ matrix.node }}
+            BASE_IMAGE=alpine-${{ matrix.node }}
 
   create-and-push-alpine-manifest:
     needs: [build_docker_tags_alpine, build-alpine-images]
