@@ -1,8 +1,8 @@
 From b30ff2d3f6a1f9bd064ef7f215a784e8760ddded Mon Sep 17 00:00:00 2001
 From: dirkwa <dirkwahrheit@gmail.com>
 Date: Thu, 8 Jan 2026 10:06:38 +1200
-Subject: [PATCH] fix: replace native mdns with @homebridge/ciao to eliminate
- Avahi warnings
+Subject: [PATCH 1/2] fix: replace native mdns with @homebridge/ciao to
+ eliminate Avahi warnings
 
 Replace the optional native `mdns` package with pure JavaScript
 `@homebridge/ciao` library to eliminate Avahi Bonjour compatibility
@@ -426,3 +426,38 @@ index d29977a05..7b65674dc 100644
    mdns?: MdnsAdvertisement
  }
  
+
+From d2daa9e32dd0d98b1efb35c0ca064bf2c44207ec Mon Sep 17 00:00:00 2001
+From: dirkwa <dirkwahrheit@gmail.com>
+Date: Sun, 11 Jan 2026 03:31:11 +1200
+Subject: [PATCH 2/2] fix: use correct port getter for WASM interface mDNS
+ advertisement
+
+The WASM interface was using app.config.port which does not exist.
+Use getExternalPort() helper which correctly resolves the port from
+settings, environment variables, or proxy configuration.
+---
+ src/interfaces/wasm.ts | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/interfaces/wasm.ts b/src/interfaces/wasm.ts
+index 641f34735..3757cbc3f 100644
+--- a/src/interfaces/wasm.ts
++++ b/src/interfaces/wasm.ts
+@@ -8,6 +8,7 @@
+ 
+ import Debug from 'debug'
+ import { initializeWasm, shutdownAllWasmPlugins } from '../wasm'
++import { getExternalPort } from '../ports'
+ 
+ const debug = Debug('signalk:interfaces:wasm')
+ 
+@@ -17,7 +18,7 @@ module.exports = (app: any) => {
+   api.mdns = {
+     name: '_signalk-wasm',
+     type: 'tcp',
+-    port: app.config.port
++    port: getExternalPort(app)
+   }
+ 
+   api.start = () => {
