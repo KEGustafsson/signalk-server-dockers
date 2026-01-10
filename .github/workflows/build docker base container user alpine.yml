@@ -152,7 +152,7 @@ jobs:
         with:
           tags: |
             ghcr.io/kegustafsson/signalk-server-base:latest-${{ matrix.os }}-${{ matrix.node }}
-            kgustafs/signalk-server-base:latest-${{ matrix.os }}-${{ matrix.node }}
+#            kgustafs/signalk-server-base:latest-${{ matrix.os }}-${{ matrix.node }}
           sources: |
             ghcr.io/kegustafsson/signalk-server-base:amd-${{ matrix.os }}-${{ matrix.node }}
             ghcr.io/kegustafsson/signalk-server-base:arm-${{ matrix.os }}-${{ matrix.node }}
@@ -184,7 +184,7 @@ jobs:
         with:
           tags: |
             ghcr.io/kegustafsson/signalk-server-base:latest-alpine-${{ matrix.node }}
-            kgustafs/signalk-server-base:latest-alpine-${{ matrix.node }}
+#            kgustafs/signalk-server-base:latest-alpine-${{ matrix.node }}
           sources: |
             ghcr.io/kegustafsson/signalk-server-base:amd-alpine-${{ matrix.node }}
             ghcr.io/kegustafsson/signalk-server-base:arm-alpine-${{ matrix.node }}
@@ -206,7 +206,7 @@ jobs:
         with:
           packages: signalk-server-base
           delete-untagged: true
-          delete-tags: amd-${{ matrix.os }}-${{ matrix.node }},arm-${{ matrix.os }}-${{ matrix.node }}
+          delete-tags: amd-*,arm-*
           token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   housekeeping-alpine:
