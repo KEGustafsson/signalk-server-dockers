@@ -5,30 +5,31 @@ on:
     - cron: "0 0 * * 1"
   workflow_dispatch:
 
+env:
+  UBUNTU_VERSION: "24.04"
+  NODE_VERSION_UBUNTU: "24.x"
+  NODE_VERSION_ALPINE: "24"
+  NODE_VERSION_ARM_EXTRA: "22"
+
 jobs:
   build-ubuntu-images:
     strategy:
       matrix:
-        os: [24.04]
-        node: [22.x, 24.x]
-        exclude:
-          - node: 22.x
-        vm: [ubuntu-latest, ubuntu-24.04-arm]
         include:
           - vm: ubuntu-latest
-            os: 24.04
-            node: 24.x
+            os: "24.04"
+            node: "24.x"
             arch: amd
             platform: linux/amd64
           - vm: ubuntu-24.04-arm
-            os: 24.04
+            os: "24.04"
             arch: arm
-            node: 22.x
+            node: "22.x"
             platform: linux/arm64,linux/arm/v7
           - vm: ubuntu-24.04-arm
-            os: 24.04
+            os: "24.04"
             arch: arm
-            node: 24.x
+            node: "24.x"
             platform: linux/arm64
     runs-on: ${{ matrix.vm }}
     steps:
@@ -72,22 +73,18 @@ jobs:
   build-alpine-images:
     strategy:
       matrix:
-        node: [22, 24]
-        exclude:
-          - node: 22
-        vm: [ubuntu-latest, ubuntu-24.04-arm]
         include:
           - vm: ubuntu-latest
-            node: 24
+            node: "24"
             arch: amd
             platform: linux/amd64
           - vm: ubuntu-24.04-arm
             arch: arm
-            node: 22
+            node: "22"
             platform: linux/arm64,linux/arm/v7
           - vm: ubuntu-24.04-arm
             arch: arm
-            node: 24
+            node: "24"
             platform: linux/arm64
     runs-on: ${{ matrix.vm }}
     steps:
@@ -118,11 +115,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [24.04]
-        node: [22.x, 24.x]
-        exclude:
-          - node: 22.x
-
+        include:
+          - os: "24.04"
+            node: "24.x"
     steps:
       - name: Login to ghcr.io
         uses: docker/login-action@v3
@@ -152,9 +147,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: [22, 24]
-        exclude:
-          - node: 22
+        include:
+          - node: "24"
     steps:
       - name: Login to ghcr.io
         uses: docker/login-action@v3
@@ -184,10 +178,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [24.04]
-        node: [22.x, 24.x]
-        exclude:
-          - node: 22.x
+        include:
+          - os: "24.04"
+            node: "24.x"
     permissions:
       packages: write
     steps:
@@ -204,9 +197,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: [22, 24]
-        exclude:
-          - node: 22
+        include:
+          - node: "24"
     permissions:
       packages: write
     steps:
