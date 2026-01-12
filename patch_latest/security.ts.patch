@@ -2,10 +2,10 @@ diff --git a/src/security.ts b/src/security.ts
 index 855b4a51..98e80968 100644
 --- a/src/security.ts
 +++ b/src/security.ts
-@@ -104,6 +104,7 @@ export interface SecurityConfig {
-   secretKey: string
+@@ -128,6 +128,7 @@ export interface SecurityConfig {
    users: User[]
    acls?: ACL[]
+   oidc?: OIDCSecurityConfig
 +  showDeviceLabelNames?: boolean
  }
 
