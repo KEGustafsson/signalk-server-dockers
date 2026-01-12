@@ -1,0 +1,57 @@
+--- a/packages/server-admin-ui/src/views/DataBrowser/DataRow.js	2026-01-11 16:00:38.000000000 +0000
++++ b/packages/server-admin-ui/src/views/DataBrowser/DataRow.js	2026-01-11 16:10:19.685391598 +0000
+@@ -1,10 +1,27 @@
+ import React from 'react'
++import { connect } from 'react-redux'
+ import { usePathData, useMetaData } from './usePathData'
+ import TimestampCell from './TimestampCell'
+ import CopyToClipboardWithFade from './CopyToClipboardWithFade'
+ import { getValueRenderer, DefaultValueRenderer } from './ValueRenderers'
+ 
+ /**
++ * Get a display label for a source reference by looking up device descriptions.
++ */
++function getSourceDisplayName(sourceRef, serverStatistics) {
++  const devices = (serverStatistics && serverStatistics.devices) || []
++  if (sourceRef && sourceRef.startsWith('ws.')) {
++    const device = devices.find(
++      (d) =>
++        sourceRef === `ws.${d.clientId}` ||
++        sourceRef.startsWith(`ws.${d.clientId}.`)
++    )
++    if (device && device.description) return device.description
++  }
++  return sourceRef
++}
++
++/**
+  * DataRow - Individual virtualized row with granular subscription
+  * Only re-renders when THIS path's data changes
+  */
+@@ -15,7 +32,8 @@
+   raw,
+   isPaused,
+   onToggleSource,
+-  selectedSources
++  selectedSources,
++  serverStatistics
+ }) {
+   const data = usePathData(context, path$SourceKey)
+   const meta = useMetaData(context, data?.path)
+@@ -65,7 +83,7 @@
+           }}
+         />
+         <CopyToClipboardWithFade text={data.$source}>
+-          {data.$source} <i className="far fa-copy"></i>
++          {getSourceDisplayName(data.$source, serverStatistics)} <i className="far fa-copy"></i>
+         </CopyToClipboardWithFade>{' '}
+         {data.pgn || ''}
+         {data.sentence || ''}
+@@ -105,4 +123,6 @@
+   return <DefaultValueRenderer value={data.value} units={units} />
+ }
+ 
+-export default React.memo(DataRow)
++export default connect(({ serverStatistics }) => ({ serverStatistics }))(
++  React.memo(DataRow)
++)

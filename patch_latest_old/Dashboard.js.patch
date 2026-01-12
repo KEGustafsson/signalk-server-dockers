@@ -1,0 +1,119 @@
+diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
+index 403322a2..00000000 100644
+--- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
++++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
+@@ -10,6 +10,7 @@ import {
+   Table
+ } from 'reactstrap'
+ import '../../fa-pulse.css'
++import { getDeviceDisplayLabel } from '../../util/deviceUtils'
+
+ const Dashboard = (props) => {
+   const {
+@@ -17,13 +18,18 @@ const Dashboard = (props) => {
+     numberOfAvailablePaths,
+     wsClients,
+     providerStatistics,
+-    uptime
++    uptime,
++    devices,
++    loadAvg1m,
++    loadAvg5m,
++    loadAvg15m
+   } = props.serverStatistics || {
+     deltaRate: 0,
+     numberOfAvailablePaths: 0,
+     wsClients: 0,
+     providerStatistics: {},
+-    uptime: ''
++    uptime: '',
++    devices: []
+   }
+   const providerStatus = props.providerStatus || []
+   const errorCount = providerStatus.filter((s) => s.type === 'error').length
+@@ -66,6 +72,7 @@ const Dashboard = (props) => {
+   }
+
+   const renderActivity = (providerId, providerStats, linkType) => {
++    const device = getDeviceDisplayLabel(providerId, devices)
+     return (
+       <li key={providerId} onClick={() => props.history.push(`/dashboard`)}>
+         <i
+@@ -84,7 +91,7 @@ const Dashboard = (props) => {
+         <span className="title">
+           {linkType === 'plugin'
+             ? pluginNameLink(providerId)
+-            : providerIdLink(providerId)}
++            : providerIdLink(providerId, device)}
+         </span>
+         {providerStats.writeRate > 0 && (
+           <span className="value">
+@@ -111,11 +118,33 @@ const Dashboard = (props) => {
+           </span>
+         )}
+         <div className="bars">
+-          <Progress
+-            className="progress-xs"
+-            color="warning"
+-            value={(providerStats.deltaRate / deltaRate) * 100}
+-          />
++          <div className="progress-xs progress">
++            <div
++              class="progress-bar bg-warning"
++              role="progressbar"
++              style={{
++                width: (providerStats.deltaRate / deltaRate) * 100 + '%',
++              }}
++              aria-valuenow={(providerStats.deltaRate / deltaRate) * 100}
++              aria-valuemin="0"
++              aria-valuemax="100"
++            ></div>
++            {providerStats.writeRate > 0 && (
++              <div
++                class="progress-bar bg-info"
++                role="progressbar"
++                style={{
++                  width:
++                    100 - (providerStats.deltaRate / deltaRate) * 100 + '%',
++                }}
++                aria-valuenow={
++                  100 - (providerStats.deltaRate / deltaRate) * 100
++                }
++                aria-valuemin="0"
++                aria-valuemax="100"
++              ></div>
++            )}
++          </div>
+         </div>
+       </li>
+     )
+@@ -188,6 +217,15 @@ const Dashboard = (props) => {
+                       {uptimeD} days, {uptimeH} hours, {uptimeM} minutes
+                     </strong>
+                   </div>
++                  <div className="callout callout-primary">
++                    <small className="text-muted">
++                      Average CPU Load (1/5/15min)
++                    </small>
++                    <br />
++                    <strong className="h5">
++                      {loadAvg1m} {loadAvg5m} {loadAvg15m}
++                    </strong>
++                  </div>
+                 </Col>
+                 <Col xs="12" md="6">
+                   <div className="text-muted" style={{ fontSize: '1rem' }}>
+@@ -285,11 +323,11 @@ function pluginNameLink(id) {
+   return <a href={'#/serverConfiguration/plugins/' + id}>{id}</a>
+ }
+
+-function providerIdLink(id) {
++function providerIdLink(id, name) {
+   if (id === 'defaults') {
+     return <a href={'#/serverConfiguration/settings'}>{id}</a>
+   } else if (id.startsWith('ws.')) {
+-    return <a href={'#/security/devices'}>{id}</a>
++    return <a href={'#/security/devices'}>{name}</a>
+   } else {
+     return <a href={'#/serverConfiguration/connections/' + id}>{id}</a>
+   }
