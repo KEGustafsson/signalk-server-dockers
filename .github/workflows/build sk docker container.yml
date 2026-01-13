@@ -85,11 +85,11 @@ jobs:
           git clone https://github.com/SignalK/signalk-server.git
           # git clone -b dev https://github.com/KEGustafsson/signalk-server.git
           cd signalk-server
-          if [ -d "./../patch_new" ] && [ "$(ls -A ./../patch_new/*.patch 2>/dev/null)" ]; then
-            git apply ./../patch_new/*.patch
-          else
-            echo "No patches to apply"
-          fi
+          #if [ -d "./../patch_new" ] && [ "$(ls -A ./../patch_new/*.patch 2>/dev/null)" ]; then
+          #  git apply ./../patch_new/*.patch
+          #else
+          #  echo "No patches to apply"
+          #fi
       - uses: actions/download-artifact@v7
         with:
           name: nmea0183-signalk
