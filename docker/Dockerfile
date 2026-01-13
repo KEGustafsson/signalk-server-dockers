@@ -19,7 +19,8 @@ WORKDIR /home/node/signalk
 COPY *.tgz .
 USER root
 RUN npm in -g *.tgz \
-  && mv /usr/lib/node_modules/@signalk/* /usr/lib/node_modules/signalk-server/node_modules/@signalk/ \
+  && cp -rf /usr/lib/node_modules/@signalk/* /usr/lib/node_modules/signalk-server/node_modules/@signalk/ \
+  && rm -rf /usr/lib/node_modules/@signalk/ \
   && cp *.tgz /usr/lib/node_modules/signalk-server/ \
   && ls -la /usr/lib/node_modules/signalk-server/*.tgz \
   && npm cache clean --force
