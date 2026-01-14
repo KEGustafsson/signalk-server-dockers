@@ -17,9 +17,11 @@ COPY --chown=node:node *.tgz .
 
 # Install signalk-server nested, then all other tarballs hoisted in a single npm install,
 # and finally copy @signalk packages into the nested node_modules
-RUN npm install $(ls signalk-server-[0-9]*.tgz) --install-strategy=nested \
-  && other_tarballs=$(ls *.tgz 2>/dev/null | grep -v '^signalk-server-[0-9]' || true) \
-  && if [ -n "$other_tarballs" ]; then npm install $other_tarballs; fi \
+RUN npm init -y \
+  && workspace_tarballs=$(ls *.tgz 2>/dev/null | grep -v '^signalk-server-[0-9]' || true) \
+  && if [ -n "$workspace_tarballs" ]; then npm install $workspace_tarballs; fi \
+  && server_tarball=$(ls signalk-server-[0-9]*.tgz) \
+  && npm install "$server_tarball" --install-strategy=nested \
   && if [ -d node_modules/@signalk ]; then \
        mkdir -p node_modules/signalk-server/node_modules/@signalk/ \
        && cp -rf node_modules/@signalk/* node_modules/signalk-server/node_modules/@signalk/ \
