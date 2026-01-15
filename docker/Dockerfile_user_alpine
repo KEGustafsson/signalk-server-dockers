@@ -27,6 +27,7 @@ RUN npm install $(ls signalk-server-[0-9]*.tgz) --install-strategy=nested \
      fi
 
 FROM base
+USER node
 
 COPY --from=tarballs_installed --chown=node:node /home/node/signalk /home/node/signalk
 
