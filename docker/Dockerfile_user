@@ -29,6 +29,7 @@ RUN npm init -y \
      fi
 
 FROM base
+USER node
 
 COPY --from=tarballs_installed --chown=node:node /home/node/signalk /home/node/signalk
 
