@@ -29,14 +29,13 @@ RUN npm init -y \
      fi
 
 FROM base
-USER node
 
 COPY --from=tarballs_installed --chown=node:node /home/node/signalk /home/node/signalk
-
 COPY --chown=node:node --chmod=755 docker/startup.sh startup.sh
 
-EXPOSE 3000
 ENV IS_IN_DOCKER=true
 ENV SKIP_ADMINUI_VERSION_CHECK=true
 WORKDIR /home/node/.signalk
+USER node
+EXPOSE 3000
 ENTRYPOINT ["/home/node/signalk/startup.sh"]
