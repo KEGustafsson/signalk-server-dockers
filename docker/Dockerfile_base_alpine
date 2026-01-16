@@ -3,19 +3,23 @@ FROM node:${NODE}-alpine AS node-base
 
 FROM alpine:latest
 
+# --- Node runtime ---
 COPY --from=node-base /usr/local/bin/node /usr/local/bin/
 COPY --from=node-base /usr/local/lib/node_modules /usr/local/lib/node_modules
 
 RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
  && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
+# --- node user ---
 RUN addgroup -g 1000 -S node \
  && adduser  -u 1000 -S -G node -h /home/node -s /bin/sh node \
  && mkdir -p /home/node \
  && chown -R node:node /home/node
 
+# --- DBus configs ---
 COPY avahi/avahi-dbus.conf bluez/bluezuser.conf /etc/dbus-1/system.d/
 
+# --- System packages ---
 RUN apk add --no-cache \
     sudo git bash coreutils \
     python3 py3-virtualenv py3-pip build-base \
@@ -35,6 +39,7 @@ RUN apk add --no-cache \
  && chmod 777 /var/run/dbus /var/run/avahi-daemon \
  && chown -R avahi:avahi /var/run/avahi-daemon
 
+# --- npm global config ---
 RUN npm config rm proxy \
  && npm config rm https-proxy \
  && npm config set fetch-retries 5 \
@@ -46,6 +51,6 @@ RUN npm config rm proxy \
  && npm install -g pm2 \
  && rm -rf /tmp/* /var/tmp/*
 
+# --- Runtime defaults ---
 USER node
 WORKDIR /home/node
-
