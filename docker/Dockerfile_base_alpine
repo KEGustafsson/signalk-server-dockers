@@ -35,9 +35,6 @@ RUN apk add --no-cache \
  && chmod 777 /var/run/dbus /var/run/avahi-daemon \
  && chown -R avahi:avahi /var/run/avahi-daemon
 
-USER node
-WORKDIR /home/node
-
 RUN npm config rm proxy \
  && npm config rm https-proxy \
  && npm config set fetch-retries 5 \
@@ -50,3 +47,5 @@ RUN npm config rm proxy \
  && rm -rf /tmp/* /var/tmp/*
 
 USER node
+WORKDIR /home/node
+
