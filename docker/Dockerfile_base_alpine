@@ -4,7 +4,7 @@ FROM node:${NODE}-alpine
 COPY avahi/avahi-dbus.conf bluez/bluezuser.conf /etc/dbus-1/system.d/
 
 RUN apk add --no-cache \
-    sudo git bash coreutils \
+    sudo git bash \
     python3 py3-virtualenv py3-pip build-base \
     avahi avahi-compat-libdns_sd \
     procps-ng nano curl libcap-setcap dbus bluez \
