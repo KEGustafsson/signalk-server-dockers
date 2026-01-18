@@ -29,6 +29,7 @@ RUN npm init -y \
      fi
 
 FROM base
+USER node
 
 COPY --from=tarballs_installed --chown=node:node /home/node/ /home/node/
 COPY --chown=node:node --chmod=755 docker/startup.sh startup.sh
