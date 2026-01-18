@@ -30,7 +30,7 @@ RUN npm init -y \
 
 FROM base
 
-COPY --from=tarballs_installed --chown=node:node /home/node/signalk /home/node/signalk
+COPY --from=tarballs_installed --chown=node:node /home/node/ /home/node/
 COPY --chown=node:node --chmod=755 docker/startup.sh startup.sh
 
 ENV IS_IN_DOCKER=true
