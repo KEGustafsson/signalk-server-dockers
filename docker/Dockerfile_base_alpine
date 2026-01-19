@@ -35,3 +35,4 @@ RUN npm config rm proxy \
 
 WORKDIR /home/node
 USER node
+RUN apk add --no-cache coreutils
