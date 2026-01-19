@@ -16,7 +16,7 @@ RUN apk add --no-cache \
  && addgroup node spi \
  && addgroup node netdev \
  && addgroup node docker \
- && chmod u+s /bin/date \
+ && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
  && mkdir -p /var/run/dbus /var/run/avahi-daemon \
  && chmod 777 /var/run/dbus /var/run/avahi-daemon \
  && chown -R avahi:avahi /var/run/avahi-daemon
@@ -34,4 +34,6 @@ RUN npm config rm proxy \
 
 WORKDIR /home/node
 USER node
-RUN sudo apk add --no-cache coreutils
+RUN sudo apk add --no-cache coreutils \
+ && sudo chmod u+s /bin/date \
+ && sudo sed -i '/^node ALL=(ALL) NOPASSWD:ALL/d' /etc/sudoers
