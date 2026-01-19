@@ -786,6 +786,14 @@ jobs:
 
   housekeeping:
     name: Housekeeping
+    if: |
+      always() &&
+      (needs.copy-to-dockerhub.result == 'success' || needs.copy-to-dockerhub.result == 'skipped') &&
+      (needs.copy-alpine-to-dockerhub.result == 'success' || needs.copy-alpine-to-dockerhub.result == 'skipped') &&
+      (needs.copy-debian-to-dockerhub.result == 'success' || needs.copy-debian-to-dockerhub.result == 'skipped') &&
+      (needs.copy-to-dockerhub.result == 'success' || 
+       needs.copy-alpine-to-dockerhub.result == 'success' || 
+       needs.copy-debian-to-dockerhub.result == 'success')
     needs: [copy-to-dockerhub, copy-alpine-to-dockerhub, copy-debian-to-dockerhub]
     runs-on: ubuntu-latest
     permissions:
