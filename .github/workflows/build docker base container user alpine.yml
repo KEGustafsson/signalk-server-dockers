@@ -377,6 +377,9 @@ jobs:
           token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   slack:
+    name: Slack update
+    if: |
+      always()
     runs-on: ubuntu-latest
     needs: [housekeeping]
     steps:
