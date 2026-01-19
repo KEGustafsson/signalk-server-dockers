@@ -4,9 +4,24 @@ on:
   schedule:
     - cron: "0 0 * * 1"
   workflow_dispatch:
+    inputs:
+      ubuntu:
+        description: 'Build Ubuntu base image'
+        type: boolean
+        default: true
+      alpine:
+        description: 'Build Alpine base image'
+        type: boolean
+        default: true
+      debian:
+        description: 'Build Debian base image'
+        type: boolean
+        default: true
 
 jobs:
   build-ubuntu-images:
+    name: Ubuntu base image
+    if: ${{ github.event.inputs.ubuntu == 'true' }}
     strategy:
       matrix:
         os: [24.04]
@@ -75,6 +90,8 @@ jobs:
             TAG=latest
 
   build-alpine-images:
+    name: Alpine base image
+    if: ${{ github.event.inputs.alpine == 'true' }}
     strategy:
       matrix:
         node: [22, 24]
@@ -124,6 +141,8 @@ jobs:
             NODE=${{ matrix.node }}
 
   build-debian-images:
+    name: Debian base imag
+    if: ${{ github.event.inputs.debian == 'true' }}
     strategy:
       matrix:
         node: [22, 24]
@@ -335,6 +354,15 @@ jobs:
             "docker://docker.io/kgustafs/signalk-server-base:latest-debian-${{ matrix.node }}"
 
   housekeeping:
+    name: Housekeeping
+    if: |
+      always() &&
+      (needs.copy-ubuntu-to-dockerhub.result == 'success' || needs.copy-ubuntu-to-dockerhub.result == 'skipped') &&
+      (needs.copy-alpine-to-dockerhub.result == 'success' || needs.copy-alpine-to-dockerhub.result == 'skipped') &&
+      (needs.copy-debian-to-dockerhub.result == 'success' || needs.copy-debian-to-dockerhub.result == 'skipped') &&
+      (needs.copy-ubuntu-to-dockerhub.result == 'success' || 
+       needs.copy-alpine-to-dockerhub.result == 'success' || 
+       needs.copy-debian-to-dockerhub.result == 'success')
     needs: [copy-ubuntu-to-dockerhub, copy-alpine-to-dockerhub, copy-debian-to-dockerhub]
     runs-on: ubuntu-latest
     permissions:
