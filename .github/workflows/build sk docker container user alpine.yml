@@ -3,15 +3,15 @@ name: SignalK Docker Build - User (Ubuntu + Alpine + Debian)
 on:
   workflow_dispatch:
     inputs:
-      build_ubuntu_docker_tags:
+      build_docker_tags_ubuntu:
         description: 'Build Ubuntu docker image'
         type: boolean
         default: true
-      build_alpine_docker_tags:
+      build_docker_tags_alpine:
         description: 'Build Alpine docker image'
         type: boolean
         default: true
-      build_debian_docker_tags:
+      build_docker_tags_debian:
         description: 'Build Debian docker image'
         type: boolean
         default: true
@@ -139,8 +139,8 @@ jobs:
           name: packed-modules
           path: ./signalk-server/*.tgz
 
-  build_ubuntu_docker_tags:
-    if: ${{ github.event.inputs.build_ubuntu_docker_tags == 'true' }}
+  build_docker_tags_ubuntu:
+    if: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' }}
     needs: [signalk-server]
     runs-on: ubuntu-latest
     strategy:
@@ -195,7 +195,7 @@ jobs:
           path: docker_tags_${{ matrix.os }}_${{ matrix.node }}.txt
 
   build-images:
-    needs: [signalk-server, build_ubuntu_docker_tags]
+    needs: [signalk-server, build_docker_tags_ubuntu]
     strategy:
       matrix:
         os: [24.04]
@@ -246,7 +246,7 @@ jobs:
             BASE_IMAGE=${{ matrix.os }}-${{ matrix.node }}
 
   create-and-push-manifest:
-    needs: [build_ubuntu_docker_tags, build-images]
+    needs: [build_docker_tags_ubuntu, build-images]
     runs-on: ubuntu-latest
     strategy:
       matrix:
