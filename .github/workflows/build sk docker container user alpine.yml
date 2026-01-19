@@ -732,7 +732,7 @@ jobs:
 
   copy-debian-to-dockerhub:
     name: Debian copy to Docker Hub
-    needs: create-and-push-alpine-manifest
+    needs: create-and-push-debian-manifest
     runs-on: ubuntu-latest
     strategy:
       matrix:
