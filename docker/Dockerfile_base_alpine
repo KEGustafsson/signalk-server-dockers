@@ -3,8 +3,11 @@ FROM node:${NODE}-alpine
 
 COPY docker/avahi/avahi-dbus.conf docker/bluez/bluezuser.conf /etc/dbus-1/system.d/
 
+RUN deluser node 2>/dev/null || true && \
+    delgroup node 2>/dev/null || true
+
 RUN apk add --no-cache \
-    sudo git bash \
+    sudo git bash coreutils \
     python3 py3-virtualenv py3-pip build-base \
     avahi avahi-compat-libdns_sd \
     procps-ng nano curl libcap-setcap dbus bluez \
@@ -32,8 +35,8 @@ RUN npm config rm proxy \
  && npm install -g pm2 \
  && rm -rf /tmp/* /var/tmp/*
 
+RUN addgroup -g 1000 node && \
+    adduser -u 1000 -G node -s /bin/sh -D node
+
 WORKDIR /home/node
 USER node
-RUN sudo apk add --no-cache coreutils \
- && sudo chmod u+s /bin/date \
- && sudo sed -i '/^node ALL=(ALL) NOPASSWD:ALL/d' /etc/sudoers
