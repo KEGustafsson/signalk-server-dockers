@@ -16,7 +16,6 @@ RUN apk add --no-cache \
  && addgroup node spi \
  && addgroup node netdev \
  && addgroup node docker \
- && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
  && chmod u+s /bin/date \
  && mkdir -p /var/run/dbus /var/run/avahi-daemon \
  && chmod 777 /var/run/dbus /var/run/avahi-daemon \
