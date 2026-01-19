@@ -36,7 +36,7 @@ RUN addgroup -g 1000 node \
  && addgroup node spi \
  && addgroup node netdev \
  && addgroup node docker \
- && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+ && echo 'node ALL=(ALL) NOPASSWD: /bin/date' >> /etc/sudoers
 
 WORKDIR /home/node
 USER node
