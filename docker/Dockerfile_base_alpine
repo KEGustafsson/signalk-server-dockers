@@ -1,7 +1,7 @@
 ARG NODE
 FROM node:${NODE}-alpine
 
-COPY avahi/avahi-dbus.conf bluez/bluezuser.conf /etc/dbus-1/system.d/
+COPY docker/avahi/avahi-dbus.conf docker/bluez/bluezuser.conf /etc/dbus-1/system.d/
 
 RUN apk add --no-cache \
     sudo git bash \
