@@ -2,6 +2,19 @@ name: SignalK Docker Build - User (Ubuntu + Alpine + Debian)
 
 on:
   workflow_dispatch:
+    inputs:
+      build_ubuntu_docker_tags:
+        description: 'Build Ubuntu docker image'
+        type: boolean
+        default: true
+      build_alpine_docker_tags:
+        description: 'Build Alpine docker image'
+        type: boolean
+        default: true
+      build_debian_docker_tags:
+        description: 'Build Debian docker image'
+        type: boolean
+        default: true
 
 jobs:
   specification:
