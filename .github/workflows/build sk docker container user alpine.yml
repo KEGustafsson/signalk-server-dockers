@@ -810,6 +810,8 @@ jobs:
 
   slack:
     name: Slack update
+    if: |
+      always()
     runs-on: ubuntu-latest
     needs: housekeeping
     steps:
