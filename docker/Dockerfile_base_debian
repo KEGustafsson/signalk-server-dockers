@@ -6,8 +6,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN groupadd --gid 1000 node \
  && useradd  --uid 1000 --gid node --shell /bin/bash --create-home node
 
-COPY avahi/avahi-dbus.conf \
-     bluez/bluezuser.conf \
+COPY docker/avahi/avahi-dbus.conf \
+     docker/bluez/bluezuser.conf \
      /etc/dbus-1/system.d/
 
 RUN apt-get update \
