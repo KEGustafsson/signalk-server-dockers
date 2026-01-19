@@ -1,4 +1,4 @@
-name: SignalK Docker Build - User (Ubuntu + Alpine)
+name: SignalK Docker Build - User (Ubuntu + Alpine + Debian)
 
 on:
   workflow_dispatch:
