@@ -1,4 +1,4 @@
-name: Build Docker base images user (Ubuntu + Alpine)
+name: Build Docker base images user (Ubuntu + Alpine + Debian-Slim)
 
 on:
   schedule:
@@ -123,6 +123,55 @@ jobs:
           build-args: |
             NODE=${{ matrix.node }}
 
+  build-debian-images:
+    strategy:
+      matrix:
+        node: [22, 24]
+#        exclude:
+#          - node: 22
+        vm: [ubuntu-latest, ubuntu-24.04-arm]
+        include:
+          - vm: ubuntu-latest
+            node: 24
+            arch: amd
+            platform: linux/amd64
+          - vm: ubuntu-latest
+            os: 24.04
+            node: 22
+            arch: amd
+            platform: linux/amd64
+          - vm: ubuntu-24.04-arm
+            arch: arm
+            node: 22
+            platform: linux/arm64,linux/arm/v7
+          - vm: ubuntu-24.04-arm
+            arch: arm
+            node: 24
+            platform: linux/arm64
+    runs-on: ${{ matrix.vm }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Build Alpine baseimages
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile_base_debian
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: |
+            ghcr.io/kegustafsson/signalk-server-base:${{ matrix.arch }}-debian-${{ matrix.node }}
+          build-args: |
+            NODE=${{ matrix.node }}
+
   create-and-push-ubuntu-manifest:
     needs: [build-ubuntu-images]
     runs-on: ubuntu-latest
@@ -232,8 +281,61 @@ jobs:
             "docker://ghcr.io/kegustafsson/signalk-server-base:latest-alpine-${{ matrix.node }}" \
             "docker://docker.io/kgustafs/signalk-server-base:latest-alpine-${{ matrix.node }}"
 
+  create-and-push-debian-manifest:
+    needs: [build-debian-images]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+#        exclude:
+#          - node: 22
+    steps:
+      - name: Login to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Create and push multi-arch manifest to GHCR
+        uses: int128/docker-manifest-create-action@v2
+        with:
+          tags: |
+            ghcr.io/kegustafsson/signalk-server-base:latest-debian-${{ matrix.node }}
+          sources: |
+            ghcr.io/kegustafsson/signalk-server-base:amd-debian-${{ matrix.node }}
+            ghcr.io/kegustafsson/signalk-server-base:arm-debian-${{ matrix.node }}
+
+  copy-debian-to-dockerhub:
+    needs: create-and-push-debian-manifest
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+#        exclude:
+#          - node: 22
+    steps:
+      - name: Install skopeo
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+      - name: Copy images from GHCR to Docker Hub
+        shell: bash
+        env:
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_HUB_ACCESS_TOKEN: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          skopeo copy --all \
+            --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
+            --dest-creds "${DOCKER_HUB_USERNAME}:${DOCKER_HUB_ACCESS_TOKEN}" \
+            "docker://ghcr.io/kegustafsson/signalk-server-base:latest-debian-${{ matrix.node }}" \
+            "docker://docker.io/kgustafs/signalk-server-base:latest-debian-${{ matrix.node }}"
+
   housekeeping:
-    needs: [copy-ubuntu-to-dockerhub, copy-alpine-to-dockerhub]
+    needs: [copy-ubuntu-to-dockerhub, copy-alpine-to-dockerhub, copy-debian-to-dockerhub]
     runs-on: ubuntu-latest
     permissions:
       packages: write
