@@ -836,11 +836,6 @@ jobs:
             echo "cleanup=false" >> $GITHUB_OUTPUT
             echo "Skipping cleanup - no successful copies"
           fi
-      - name: Wait before cleanup
-        if: steps.check.outputs.cleanup == 'true'
-        run: |
-          echo "Waiting 60 seconds to ensure all operations complete..."
-          sleep 60
       - name: Remove intermediate Docker Images from GHCR
         if: steps.check.outputs.cleanup == 'true'
         uses: dataaxiom/ghcr-cleanup-action@v1
