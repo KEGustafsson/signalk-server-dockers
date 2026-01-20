@@ -200,7 +200,7 @@ jobs:
 
   build-images:
     name: Build Ubuntu image
-    needs: [signalk-server, build_docker_tags_ubuntu]
+    needs: [build_docker_tags_ubuntu]
     strategy:
       matrix:
         os: [24.04]
@@ -252,7 +252,7 @@ jobs:
 
   create-and-push-manifest:
     name: Ubuntu manifest
-    needs: [build_docker_tags_ubuntu, build-images]
+    needs: [build-images]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -417,7 +417,7 @@ jobs:
 
   build-alpine-images:
     name: Build Alpine image
-    needs: [signalk-server, build_docker_tags_alpine]
+    needs: [build_docker_tags_alpine]
     strategy:
       matrix:
         node: [22, 24]
@@ -470,7 +470,7 @@ jobs:
 
   create-and-push-alpine-manifest:
     name: Alpine manifest
-    needs: [build_docker_tags_alpine, build-alpine-images]
+    needs: [build-alpine-images]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -629,7 +629,7 @@ jobs:
 
   build-debian-images:
     name: Build Debian image
-    needs: [signalk-server, build_docker_tags_debian]
+    needs: [build_docker_tags_debian]
     strategy:
       matrix:
         node: [22, 24]
@@ -682,7 +682,7 @@ jobs:
 
   create-and-push-debian-manifest:
     name: Debian manifest
-    needs: [build_docker_tags_debian, build-debian-images]
+    needs: [build-debian-images]
     runs-on: ubuntu-latest
     strategy:
       matrix:
