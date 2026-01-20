@@ -282,9 +282,9 @@ jobs:
           sudo apt-get install -y skopeo
       - name: Load Docker images from OCI tarballs
         run: |
-          skopeo copy oci-archive:image-amd-${{ matrix.os }}-${{ matrix.node }}.tar \
+          skopeo copy --multi-arch=all oci-archive:image-amd-${{ matrix.os }}-${{ matrix.node }}.tar \
             docker-daemon:signalk-server:amd-${{ matrix.os }}-${{ matrix.node }}
-          skopeo copy oci-archive:image-arm-${{ matrix.os }}-${{ matrix.node }}.tar \
+          skopeo copy --multi-arch=all oci-archive:image-arm-${{ matrix.os }}-${{ matrix.node }}.tar \
             docker-daemon:signalk-server:arm-${{ matrix.os }}-${{ matrix.node }}
       - name: Normalize and filter GHCR tags (multiline output)
         id: ghcr_tags
@@ -516,9 +516,9 @@ jobs:
           sudo apt-get install -y skopeo
       - name: Load Docker images from OCI tarballs
         run: |
-          skopeo copy oci-archive:image-amd-alpine-${{ matrix.node }}.tar \
+          skopeo copy --multi-arch=all oci-archive:image-amd-alpine-${{ matrix.node }}.tar \
             docker-daemon:signalk-server:amd-alpine-${{ matrix.node }}
-          skopeo copy oci-archive:image-arm-alpine-${{ matrix.node }}.tar \
+          skopeo copy --multi-arch=all oci-archive:image-arm-alpine-${{ matrix.node }}.tar \
             docker-daemon:signalk-server:arm-alpine-${{ matrix.node }}
       - name: Normalize and filter GHCR tags (multiline output)
         id: ghcr_tags
@@ -747,9 +747,9 @@ jobs:
           sudo apt-get install -y skopeo
       - name: Load Docker images from OCI tarballs
         run: |
-          skopeo copy oci-archive:image-amd-debian-${{ matrix.node }}.tar \
+          skopeo copy --multi-arch=all oci-archive:image-amd-debian-${{ matrix.node }}.tar \
             docker-daemon:signalk-server:amd-debian-${{ matrix.node }}
-          skopeo copy oci-archive:image-arm-debian-${{ matrix.node }}.tar \
+          skopeo copy --multi-arch=all oci-archive:image-arm-debian-${{ matrix.node }}.tar \
             docker-daemon:signalk-server:arm-debian-${{ matrix.node }}
       - name: Normalize and filter GHCR tags (multiline output)
         id: ghcr_tags
