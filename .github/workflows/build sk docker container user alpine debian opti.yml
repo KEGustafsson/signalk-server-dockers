@@ -1,4 +1,4 @@
-name: SignalK Docker Build - User Opti (Ubuntu + Alpine + Debian)
+name: SignalK Docker Build - User (Ubuntu + Alpine + Debian)
 
 on:
   workflow_dispatch:
@@ -236,11 +236,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ['22.x', '24.x']
         include:
+          # AMD64 builds for both node versions
           - vm: ubuntu-latest
             arch: amd64
+            node: '22.x'
             platform: linux/amd64
+          - vm: ubuntu-latest
+            arch: amd64
+            node: '24.x'
+            platform: linux/amd64
+          # ARM builds (22.x supports armv7, 24.x only arm64)
           - vm: ubuntu-24.04-arm
             arch: arm64
             node: '22.x'
@@ -287,11 +293,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ['22', '24']
         include:
+          # AMD64 builds for both node versions
           - vm: ubuntu-latest
             arch: amd64
+            node: '22'
             platform: linux/amd64
+          - vm: ubuntu-latest
+            arch: amd64
+            node: '24'
+            platform: linux/amd64
+          # ARM builds (22 supports armv7, 24 only arm64)
           - vm: ubuntu-24.04-arm
             arch: arm64
             node: '22'
@@ -338,11 +350,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: ['22', '24']
         include:
+          # AMD64 builds for both node versions
           - vm: ubuntu-latest
             arch: amd64
+            node: '22'
             platform: linux/amd64
+          - vm: ubuntu-latest
+            arch: amd64
+            node: '24'
+            platform: linux/amd64
+          # ARM builds (22 supports armv7, 24 only arm64)
           - vm: ubuntu-24.04-arm
             arch: arm64
             node: '22'
@@ -418,22 +436,30 @@ jobs:
       - name: Wait for images to be available
         run: |
           set -euo pipefail
+          echo "Waiting for build jobs to complete and images to be available..."
+          
           for arch in amd64 arm64; do
             image="${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${arch}-ubuntu-${{ matrix.node }}-${{ github.sha }}"
-            echo "Checking availability of $image"
-            for i in {1..30}; do
+            echo "Checking: $image"
+            
+            for i in {1..60}; do
               if docker manifest inspect "$image" > /dev/null 2>&1; then
                 echo "✓ Image available: $image"
                 break
               fi
-              if [ $i -eq 30 ]; then
-                echo "✗ Timeout waiting for $image"
+              if [ $i -eq 60 ]; then
+                echo "✗ TIMEOUT: Image not available after 10 minutes: $image"
+                echo "This usually means the build job failed or is still running."
+                echo "Check the build-ubuntu-images job status."
                 exit 1
               fi
-              echo "Waiting... (attempt $i/30)"
+              if [ $((i % 6)) -eq 0 ]; then
+                echo "Still waiting... ($i/60) - $(date)"
+              fi
               sleep 10
             done
           done
+          echo "✓ All images available for manifest creation"
       - name: Create and push multi-arch manifest to GHCR
         uses: int128/docker-manifest-create-action@v2
         with:
@@ -480,22 +506,30 @@ jobs:
       - name: Wait for images to be available
         run: |
           set -euo pipefail
+          echo "Waiting for build jobs to complete and images to be available..."
+          
           for arch in amd64 arm64; do
             image="${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${arch}-alpine-${{ matrix.node }}-${{ github.sha }}"
-            echo "Checking availability of $image"
-            for i in {1..30}; do
+            echo "Checking: $image"
+            
+            for i in {1..60}; do
               if docker manifest inspect "$image" > /dev/null 2>&1; then
                 echo "✓ Image available: $image"
                 break
               fi
-              if [ $i -eq 30 ]; then
-                echo "✗ Timeout waiting for $image"
+              if [ $i -eq 60 ]; then
+                echo "✗ TIMEOUT: Image not available after 10 minutes: $image"
+                echo "This usually means the build job failed or is still running."
+                echo "Check the build-alpine-images job status."
                 exit 1
               fi
-              echo "Waiting... (attempt $i/30)"
+              if [ $((i % 6)) -eq 0 ]; then
+                echo "Still waiting... ($i/60) - $(date)"
+              fi
               sleep 10
             done
           done
+          echo "✓ All images available for manifest creation"
       - name: Create and push multi-arch manifest to GHCR
         uses: int128/docker-manifest-create-action@v2
         with:
@@ -542,22 +576,30 @@ jobs:
       - name: Wait for images to be available
         run: |
           set -euo pipefail
+          echo "Waiting for build jobs to complete and images to be available..."
+          
           for arch in amd64 arm64; do
             image="${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${arch}-debian-${{ matrix.node }}-${{ github.sha }}"
-            echo "Checking availability of $image"
-            for i in {1..30}; do
+            echo "Checking: $image"
+            
+            for i in {1..60}; do
               if docker manifest inspect "$image" > /dev/null 2>&1; then
                 echo "✓ Image available: $image"
                 break
               fi
-              if [ $i -eq 30 ]; then
-                echo "✗ Timeout waiting for $image"
+              if [ $i -eq 60 ]; then
+                echo "✗ TIMEOUT: Image not available after 10 minutes: $image"
+                echo "This usually means the build job failed or is still running."
+                echo "Check the build-debian-images job status."
                 exit 1
               fi
-              echo "Waiting... (attempt $i/30)"
+              if [ $((i % 6)) -eq 0 ]; then
+                echo "Still waiting... ($i/60) - $(date)"
+              fi
               sleep 10
             done
           done
+          echo "✓ All images available for manifest creation"
       - name: Create and push multi-arch manifest to GHCR
         uses: int128/docker-manifest-create-action@v2
         with:
