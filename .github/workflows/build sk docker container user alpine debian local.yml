@@ -238,7 +238,7 @@ jobs:
           build-args: |
             BASE_IMAGE=${{ matrix.os }}-${{ matrix.node }}
       - name: Upload image artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
           name: image-${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}
           path: /tmp/image-${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}.tar
@@ -475,7 +475,7 @@ jobs:
           build-args: |
             BASE_IMAGE=alpine-${{ matrix.node }}
       - name: Upload image artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
           name: image-${{ matrix.arch }}-alpine-${{ matrix.node }}
           path: /tmp/image-${{ matrix.arch }}-alpine-${{ matrix.node }}.tar
@@ -706,7 +706,7 @@ jobs:
           build-args: |
             BASE_IMAGE=debian-${{ matrix.node }}
       - name: Upload image artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v6
         with:
           name: image-${{ matrix.arch }}-debian-${{ matrix.node }}
           path: /tmp/image-${{ matrix.arch }}-debian-${{ matrix.node }}.tar
