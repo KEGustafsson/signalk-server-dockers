@@ -410,7 +410,8 @@ jobs:
         node: ['22.x', '24.x']
         include:
           - node: '24.x'
-            short_tag: latest, latest-24.x
+            short_tag: latest
+            short_tag2: latest-24.x
           - node: '22.x'
             short_tag: latest-22.x
     steps:
@@ -466,6 +467,7 @@ jobs:
           tags: |
             ${{ steps.ghcr_tags.outputs.IMAGES }}
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.short_tag }}
+            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.short_tag2 }}
           sources: |
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:amd64-ubuntu-${{ matrix.node }}-${{ github.sha }}
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:arm64-ubuntu-${{ matrix.node }}-${{ github.sha }}
