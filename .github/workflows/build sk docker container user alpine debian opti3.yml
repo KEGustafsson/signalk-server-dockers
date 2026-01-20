@@ -836,6 +836,12 @@ jobs:
             echo "cleanup=false" >> $GITHUB_OUTPUT
             echo "Skipping cleanup - no successful copies"
           fi
+      - name: Delete all workflow artifacts
+        if: steps.check.outputs.cleanup == 'true'
+        uses: geekyeggo/delete-artifact@v5
+        with:
+          name: '*'
+          failOnError: false
       - name: Remove intermediate Docker Images from GHCR
         if: steps.check.outputs.cleanup == 'true'
         uses: dataaxiom/ghcr-cleanup-action@v1
