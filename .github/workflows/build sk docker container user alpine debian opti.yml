@@ -283,8 +283,8 @@ jobs:
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.arch }}-ubuntu-${{ matrix.node }}-${{ github.sha }}
           build-args: |
             BASE_IMAGE=24.04-${{ matrix.node }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=ubuntu-${{ matrix.arch }}-${{ matrix.node }}
+          cache-to: type=gha,mode=max,scope=ubuntu-${{ matrix.arch }}-${{ matrix.node }}
 
   build-alpine-images:
     name: Build Alpine image
@@ -340,8 +340,8 @@ jobs:
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.arch }}-alpine-${{ matrix.node }}-${{ github.sha }}
           build-args: |
             BASE_IMAGE=alpine-${{ matrix.node }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=alpine-${{ matrix.arch }}-${{ matrix.node }}
+          cache-to: type=gha,mode=max,scope=alpine-${{ matrix.arch }}-${{ matrix.node }}
 
   build-debian-images:
     name: Build Debian image
@@ -397,8 +397,8 @@ jobs:
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.arch }}-debian-${{ matrix.node }}-${{ github.sha }}
           build-args: |
             BASE_IMAGE=debian-${{ matrix.node }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=debian-${{ matrix.arch }}-${{ matrix.node }}
+          cache-to: type=gha,mode=max,scope=debian-${{ matrix.arch }}-${{ matrix.node }}
 
   create-ubuntu-manifest:
     name: Ubuntu manifest
@@ -410,7 +410,7 @@ jobs:
         node: ['22.x', '24.x']
         include:
           - node: '24.x'
-            short_tag: latest
+            short_tag: latest, latest-24.x
           - node: '22.x'
             short_tag: latest-22.x
     steps:
