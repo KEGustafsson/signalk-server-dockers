@@ -685,11 +685,18 @@ jobs:
         run: |
           set -euo pipefail
           
+          GHCR_PREFIX="${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}"
+          HUB_PREFIX="docker.io/${{ env.DOCKER_HUB_REPO }}"
+          
           # Copy all versioned tags
           while IFS= read -r ghcr_image; do
             [ -z "$ghcr_image" ] && continue
-            hub_image="${ghcr_image//${{ env.GHCR_REGISTRY }}\/${{ env.GHCR_REPO }}/docker.io\/${{ env.DOCKER_HUB_REPO }}}"
-            echo "Copying $ghcr_image -> $hub_image"
+            
+            # Extract just the tag part after the last colon
+            tag="${ghcr_image##*:}"
+            hub_image="${HUB_PREFIX}:${tag}"
+            
+            echo "Copying: $ghcr_image -> $hub_image"
             
             if ! skopeo copy --all \
               --retry-times 3 \
@@ -700,17 +707,18 @@ jobs:
               echo "ERROR: Failed to copy $ghcr_image"
               exit 1
             fi
-            echo "✓ Successfully copied $ghcr_image"
+            echo "✓ Successfully copied: $tag"
           done < ghcr_tags.txt
           
           # Copy short tag
+          echo ""
           echo "Copying short tag: ${{ matrix.variant.short_tag }}"
           if ! skopeo copy --all \
             --retry-times 3 \
             --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
             --dest-creds "${DOCKER_HUB_USERNAME}:${DOCKER_HUB_ACCESS_TOKEN}" \
-            "docker://${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.variant.short_tag }}" \
-            "docker://docker.io/${{ env.DOCKER_HUB_REPO }}:${{ matrix.variant.short_tag }}"; then
+            "docker://${GHCR_PREFIX}:${{ matrix.variant.short_tag }}" \
+            "docker://${HUB_PREFIX}:${{ matrix.variant.short_tag }}"; then
             echo "ERROR: Failed to copy short tag"
             exit 1
           fi
