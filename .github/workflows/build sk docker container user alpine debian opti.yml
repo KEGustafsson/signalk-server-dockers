@@ -754,7 +754,7 @@ jobs:
           delete-untagged: true
           delete-tags: |
             *-${{ github.sha }}
-          token: ${{ secrets.GHCR_TOKEN }}
+          token: ${{ secrets.GHCR_TOKEN_NEW }}
 
   slack:
     name: Slack notification
