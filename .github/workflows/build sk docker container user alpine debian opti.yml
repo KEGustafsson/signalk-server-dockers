@@ -183,8 +183,8 @@ jobs:
         id: tags
         run: |
           TAG="${{ needs.signalk-server.outputs.tag }}"
-          MAJOR="${{ needs.signalk-server.outputs.major }}"
-          MINOR="${{ needs.signalk-server.outputs.major }}.${{ needs.signalk-server.outputs.minor }}"
+          MAJOR="v${{ needs.signalk-server.outputs.major }}"
+          MINOR="v${{ needs.signalk-server.outputs.major }}.${{ needs.signalk-server.outputs.minor }}"
           GHCR="${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}"
           HUB="${{ env.DOCKER_HUB_REPO }}"
           
@@ -215,8 +215,8 @@ jobs:
           
           # Generate tags for each variant (using consistent format)
           if [[ "${{ github.event.inputs.build_docker_tags_ubuntu }}" == "true" ]]; then
-            echo "ubuntu_22=$(generate_tags '22.x' '22.x')" >> $GITHUB_OUTPUT
-            echo "ubuntu_24=$(generate_tags '24.x' '24.x')" >> $GITHUB_OUTPUT
+            echo "ubuntu_22=$(generate_tags 'ubuntu' '22.x')" >> $GITHUB_OUTPUT
+            echo "ubuntu_24=$(generate_tags 'ubuntu' '24.x')" >> $GITHUB_OUTPUT
           fi
           
           if [[ "${{ github.event.inputs.build_docker_tags_alpine }}" == "true" ]]; then
