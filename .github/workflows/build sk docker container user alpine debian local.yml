@@ -233,12 +233,12 @@ jobs:
           file: ./docker/Dockerfile_user
           platforms: ${{ matrix.platform }}
           push: false
-          outputs: type=docker,dest=/tmp/image-${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}.tar
+          outputs: type=oci,dest=/tmp/image-${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}.tar
           tags: signalk-server:${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}
           build-args: |
             BASE_IMAGE=${{ matrix.os }}-${{ matrix.node }}
       - name: Upload image artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: image-${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}
           path: /tmp/image-${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}.tar
@@ -276,10 +276,16 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: image-arm-${{ matrix.os }}-${{ matrix.node }}
-      - name: Load Docker images
+      - name: Install skopeo
         run: |
-          docker load -i image-amd-${{ matrix.os }}-${{ matrix.node }}.tar
-          docker load -i image-arm-${{ matrix.os }}-${{ matrix.node }}.tar
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+      - name: Load Docker images from OCI tarballs
+        run: |
+          skopeo copy oci-archive:image-amd-${{ matrix.os }}-${{ matrix.node }}.tar \
+            docker-daemon:signalk-server:amd-${{ matrix.os }}-${{ matrix.node }}
+          skopeo copy oci-archive:image-arm-${{ matrix.os }}-${{ matrix.node }}.tar \
+            docker-daemon:signalk-server:arm-${{ matrix.os }}-${{ matrix.node }}
       - name: Normalize and filter GHCR tags (multiline output)
         id: ghcr_tags
         shell: bash
@@ -464,12 +470,12 @@ jobs:
           file: ./docker/Dockerfile_user
           platforms: ${{ matrix.platform }}
           push: false
-          outputs: type=docker,dest=/tmp/image-${{ matrix.arch }}-alpine-${{ matrix.node }}.tar
+          outputs: type=oci,dest=/tmp/image-${{ matrix.arch }}-alpine-${{ matrix.node }}.tar
           tags: signalk-server:${{ matrix.arch }}-alpine-${{ matrix.node }}
           build-args: |
             BASE_IMAGE=alpine-${{ matrix.node }}
       - name: Upload image artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: image-${{ matrix.arch }}-alpine-${{ matrix.node }}
           path: /tmp/image-${{ matrix.arch }}-alpine-${{ matrix.node }}.tar
@@ -504,10 +510,16 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: image-arm-alpine-${{ matrix.node }}
-      - name: Load Docker images
+      - name: Install skopeo
         run: |
-          docker load -i image-amd-alpine-${{ matrix.node }}.tar
-          docker load -i image-arm-alpine-${{ matrix.node }}.tar
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+      - name: Load Docker images from OCI tarballs
+        run: |
+          skopeo copy oci-archive:image-amd-alpine-${{ matrix.node }}.tar \
+            docker-daemon:signalk-server:amd-alpine-${{ matrix.node }}
+          skopeo copy oci-archive:image-arm-alpine-${{ matrix.node }}.tar \
+            docker-daemon:signalk-server:arm-alpine-${{ matrix.node }}
       - name: Normalize and filter GHCR tags (multiline output)
         id: ghcr_tags
         shell: bash
@@ -689,12 +701,12 @@ jobs:
           file: ./docker/Dockerfile_user
           platforms: ${{ matrix.platform }}
           push: false
-          outputs: type=docker,dest=/tmp/image-${{ matrix.arch }}-debian-${{ matrix.node }}.tar
+          outputs: type=oci,dest=/tmp/image-${{ matrix.arch }}-debian-${{ matrix.node }}.tar
           tags: signalk-server:${{ matrix.arch }}-debian-${{ matrix.node }}
           build-args: |
             BASE_IMAGE=debian-${{ matrix.node }}
       - name: Upload image artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: image-${{ matrix.arch }}-debian-${{ matrix.node }}
           path: /tmp/image-${{ matrix.arch }}-debian-${{ matrix.node }}.tar
@@ -729,10 +741,16 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           name: image-arm-debian-${{ matrix.node }}
-      - name: Load Docker images
+      - name: Install skopeo
         run: |
-          docker load -i image-amd-debian-${{ matrix.node }}.tar
-          docker load -i image-arm-debian-${{ matrix.node }}.tar
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+      - name: Load Docker images from OCI tarballs
+        run: |
+          skopeo copy oci-archive:image-amd-debian-${{ matrix.node }}.tar \
+            docker-daemon:signalk-server:amd-debian-${{ matrix.node }}
+          skopeo copy oci-archive:image-arm-debian-${{ matrix.node }}.tar \
+            docker-daemon:signalk-server:arm-debian-${{ matrix.node }}
       - name: Normalize and filter GHCR tags (multiline output)
         id: ghcr_tags
         shell: bash
@@ -863,6 +881,4 @@ jobs:
           echo "TAG=$tag" >> $GITHUB_OUTPUT
       - name: Slack notification
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"Manually triggered Ubuntu + Alpine + Debian images ready, ${{ steps.vars.outputs.TAG }}"}' https://hooks.slack.com/services/${{ secrets.SLACK }}${{ matrix.os }}_${{ matrix.node }}.txt
-
-            arch: amd
+          curl -X POST -H 'Content-type: application/json' --data '{"text":"Manually triggered Ubuntu + Alpine + Debian images ready, ${{ steps.vars.outputs.TAG }}"}' https://hooks.slack.com/services/${{ secrets.SLACK }}
