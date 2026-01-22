@@ -1,14 +1,10 @@
 ARG NODE
-FROM node:${NODE}-alpine AS node-base
-
-FROM alpine:latest
-
-COPY --from=node-base /usr/local/bin/node /usr/local/bin/
-COPY --from=node-base /usr/local/lib/node_modules /usr/local/lib/node_modules
-RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
-  && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+FROM node:${NODE}-alpine
 
 COPY docker/avahi/avahi-dbus.conf docker/bluez/bluezuser.conf /etc/dbus-1/system.d/
+
+RUN deluser node 2>/dev/null || true && \
+    delgroup node 2>/dev/null || true
 
 RUN apk add --no-cache \
     sudo git bash coreutils \
@@ -40,7 +36,7 @@ RUN addgroup -g 1000 node \
  && addgroup node spi \
  && addgroup node netdev \
  && addgroup node docker \
- && echo 'node ALL=(ALL) NOPASSWD: /bin/date' >> /etc/sudoers \
+ && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
  && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 WORKDIR /home/node
