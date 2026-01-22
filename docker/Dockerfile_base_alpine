@@ -14,6 +14,7 @@ RUN apk add --no-cache \
  && addgroup -g 991 -S docker \
  && addgroup -g 990 -S i2c \
  && addgroup -g 989 -S spi \
+ && chmod u+s /bin/date \
  && mkdir -p /var/run/dbus /var/run/avahi-daemon \
  && chmod 777 /var/run/dbus /var/run/avahi-daemon \
  && chown -R avahi:avahi /var/run/avahi-daemon
