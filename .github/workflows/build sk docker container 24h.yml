@@ -912,7 +912,6 @@ jobs:
 
   housekeeping:
     name: Housekeeping
-    if: always()
     needs: [copy-to-dockerhub]
     runs-on: ubuntu-latest
     permissions:
@@ -945,7 +944,6 @@ jobs:
 
   slack:
     name: Slack notification
-    if: always()
     runs-on: ubuntu-latest
     needs: [housekeeping]
     steps:
