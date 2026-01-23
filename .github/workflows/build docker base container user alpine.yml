@@ -12,9 +12,17 @@ on:
       alpine:
         description: 'Build Alpine base image'
         type: boolean
-        default: true
+        default: false
       debian:
         description: 'Build Debian base image'
+        type: boolean
+        default: false
+      build_node_22:
+        description: 'Build Node.js 22 images'
+        type: boolean
+        default: false
+      build_node_24:
+        description: 'Build Node.js 24 images'
         type: boolean
         default: true
 
@@ -63,6 +71,7 @@ jobs:
           password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Build baseimages
+        if: ${{ (startsWith(matrix.node, '22') && github.event.inputs.build_node_22 == 'true') || (startsWith(matrix.node, '24') && github.event.inputs.build_node_24 == 'true') }}
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -75,12 +84,14 @@ jobs:
             NODE=${{ matrix.node }}
 
       - name: Modify Dockerfile_rel for testing
+        if: ${{ (startsWith(matrix.node, '22') && github.event.inputs.build_node_22 == 'true') || (startsWith(matrix.node, '24') && github.event.inputs.build_node_24 == 'true') }}
         run: |
           sed -i \
             "s|:latest|:${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}|g" \
             ./docker/Dockerfile_rel_user
 
       - name: Build Signal K test docker
+        if: ${{ (startsWith(matrix.node, '22') && github.event.inputs.build_node_22 == 'true') || (startsWith(matrix.node, '24') && github.event.inputs.build_node_24 == 'true') }}
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -129,6 +140,7 @@ jobs:
           password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Build Alpine baseimages
+        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -179,7 +191,8 @@ jobs:
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Build Alpine baseimages
+      - name: Build Debian baseimages
+        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -203,6 +216,7 @@ jobs:
 
     steps:
       - name: Login to ghcr.io
+        if: ${{ (startsWith(matrix.node, '22') && github.event.inputs.build_node_22 == 'true') || (startsWith(matrix.node, '24') && github.event.inputs.build_node_24 == 'true') }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -210,6 +224,7 @@ jobs:
           password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Create and push multi-arch manifest to GHCR
+        if: ${{ (startsWith(matrix.node, '22') && github.event.inputs.build_node_22 == 'true') || (startsWith(matrix.node, '24') && github.event.inputs.build_node_24 == 'true') }}
         uses: int128/docker-manifest-create-action@v2
         with:
           tags: |
@@ -229,10 +244,12 @@ jobs:
 #          - node: 22.x
     steps:
       - name: Install skopeo
+        if: ${{ (startsWith(matrix.node, '22') && github.event.inputs.build_node_22 == 'true') || (startsWith(matrix.node, '24') && github.event.inputs.build_node_24 == 'true') }}
         run: |
           sudo apt-get update
           sudo apt-get install -y skopeo
       - name: Copy images from GHCR to Docker Hub
+        if: ${{ (startsWith(matrix.node, '22') && github.event.inputs.build_node_22 == 'true') || (startsWith(matrix.node, '24') && github.event.inputs.build_node_24 == 'true') }}
         shell: bash
         env:
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
@@ -257,6 +274,7 @@ jobs:
 #          - node: 22
     steps:
       - name: Login to ghcr.io
+        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -264,6 +282,7 @@ jobs:
           password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Create and push multi-arch manifest to GHCR
+        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
         uses: int128/docker-manifest-create-action@v2
         with:
           tags: |
@@ -282,10 +301,12 @@ jobs:
 #          - node: 22
     steps:
       - name: Install skopeo
+        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
         run: |
           sudo apt-get update
           sudo apt-get install -y skopeo
       - name: Copy images from GHCR to Docker Hub
+        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
         shell: bash
         env:
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
@@ -310,6 +331,7 @@ jobs:
 #          - node: 22
     steps:
       - name: Login to ghcr.io
+        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -317,6 +339,7 @@ jobs:
           password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Create and push multi-arch manifest to GHCR
+        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
         uses: int128/docker-manifest-create-action@v2
         with:
           tags: |
@@ -335,10 +358,12 @@ jobs:
 #          - node: 22
     steps:
       - name: Install skopeo
+        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
         run: |
           sudo apt-get update
           sudo apt-get install -y skopeo
       - name: Copy images from GHCR to Docker Hub
+        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
         shell: bash
         env:
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}

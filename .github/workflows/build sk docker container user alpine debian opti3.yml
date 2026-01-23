@@ -10,15 +10,15 @@ on:
       build_docker_tags_alpine:
         description: 'Build Alpine docker image'
         type: boolean
-        default: true
+        default: false
       build_docker_tags_debian:
         description: 'Build Debian docker image'
         type: boolean
-        default: true
+        default: false
       build_node_22:
         description: 'Build Node.js 22 images'
         type: boolean
-        default: true
+        default: false
       build_node_24:
         description: 'Build Node.js 24 images'
         type: boolean
