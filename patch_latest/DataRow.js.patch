@@ -1,68 +1,56 @@
-From ecaa590190e69eaa7eb4285f28d4387748fb8b50 Mon Sep 17 00:00:00 2001
-From: Claude <noreply@anthropic.com>
-Date: Tue, 27 Jan 2026 01:40:45 +0000
-Subject: [PATCH] Fix DataRow.js.patch to match current file structure
+--- a/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
++++ b/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
+@@ -1,10 +1,27 @@
+ import React from 'react'
++import { connect } from 'react-redux'
+ import { usePathData, useMetaData } from './usePathData'
+ import TimestampCell from './TimestampCell'
+ import CopyToClipboardWithFade from './CopyToClipboardWithFade'
+ import { getValueRenderer, DefaultValueRenderer } from './ValueRenderers'
 
-Updated patch context to match the current SignalK server codebase structure.
-
-https://claude.ai/code/session_0191c5ASKRQqFSEP8K8aNce5
----
- patch_latest/DataRow.js.patch | 21 ++++++++++-----------
- 1 file changed, 10 insertions(+), 11 deletions(-)
-
-diff --git a/patch_latest/DataRow.js.patch b/patch_latest/DataRow.js.patch
-index 20c2370..24a9d3c 100644
---- a/patch_latest/DataRow.js.patch
-+++ b/patch_latest/DataRow.js.patch
-@@ -1,5 +1,5 @@
----- a/packages/server-admin-ui/src/views/DataBrowser/DataRow.js	2026-01-11 16:00:38.000000000 +0000
--+++ b/packages/server-admin-ui/src/views/DataBrowser/DataRow.js	2026-01-11 16:10:19.685391598 +0000
-+--- a/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
-++++ b/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
- @@ -1,10 +1,27 @@
-  import React from 'react'
- +import { connect } from 'react-redux'
-@@ -7,7 +7,7 @@
-  import TimestampCell from './TimestampCell'
-  import CopyToClipboardWithFade from './CopyToClipboardWithFade'
-  import { getValueRenderer, DefaultValueRenderer } from './ValueRenderers'
-- 
+ /**
++ * Get a display label for a source reference by looking up device descriptions.
++ */
++function getSourceDisplayName(sourceRef, serverStatistics) {
++  const devices = (serverStatistics && serverStatistics.devices) || []
++  if (sourceRef && sourceRef.startsWith('ws.')) {
++    const device = devices.find(
++      (d) =>
++        sourceRef === `ws.${d.clientId}` ||
++        sourceRef.startsWith(`ws.${d.clientId}.`)
++    )
++    if (device && device.description) return device.description
++  }
++  return sourceRef
++}
 +
-  /**
- + * Get a display label for a source reference by looking up device descriptions.
- + */
-@@ -28,7 +28,7 @@
-   * DataRow - Individual virtualized row with granular subscription
-   * Only re-renders when THIS path's data changes
-   */
--@@ -15,7 +32,8 @@
-+@@ -15,7 +32,8 @@ function DataRow({
-    raw,
-    isPaused,
-    onToggleSource,
-@@ -38,19 +38,18 @@
-  }) {
-    const data = usePathData(context, path$SourceKey)
-    const meta = useMetaData(context, data?.path)
--@@ -65,7 +83,7 @@
--           }}
-+@@ -72,7 +90,7 @@ function DataRow({
-          />
-          <CopyToClipboardWithFade text={data.$source}>
- -          {data.$source} <i className="far fa-copy"></i>
- +          {getSourceDisplayName(data.$source, serverStatistics)} <i className="far fa-copy"></i>
--         </CopyToClipboardWithFade>{' '}
--         {data.pgn || ''}
--         {data.sentence || ''}
--@@ -105,4 +123,6 @@
-+         </CopyToClipboardWithFade>
-+         {data.pgn && <span>&nbsp;{data.pgn}</span>}
-+         {data.sentence && <span>&nbsp;{data.sentence}</span>}
-+@@ -113,4 +131,6 @@ function ValueRenderer({ data, meta, units, raw }) {
-    return <DefaultValueRenderer value={data.value} units={units} />
-  }
-- 
-+
- -export default React.memo(DataRow)
- +export default connect(({ serverStatistics }) => ({ serverStatistics }))(
- +  React.memo(DataRow)
++/**
+  * DataRow - Individual virtualized row with granular subscription
+  * Only re-renders when THIS path's data changes
+  */
+@@ -15,7 +32,8 @@ function DataRow({
+   raw,
+   isPaused,
+   onToggleSource,
+-  selectedSources
++  selectedSources,
++  serverStatistics
+ }) {
+   const data = usePathData(context, path$SourceKey)
+   const meta = useMetaData(context, data?.path)
+@@ -72,7 +90,7 @@ function DataRow({
+         />
+         <CopyToClipboardWithFade text={data.$source}>
+-          {data.$source} <i className="far fa-copy"></i>
++          {getSourceDisplayName(data.$source, serverStatistics)} <i className="far fa-copy"></i>
+         </CopyToClipboardWithFade>
+         {data.pgn && <span>&nbsp;{data.pgn}</span>}
+         {data.sentence && <span>&nbsp;{data.sentence}</span>}
+@@ -113,4 +131,6 @@ function ValueRenderer({ data, meta, units, raw }) {
+   return <DefaultValueRenderer value={data.value} units={units} />
+ }
+
+-export default React.memo(DataRow)
++export default connect(({ serverStatistics }) => ({ serverStatistics }))(
++  React.memo(DataRow)
++)
