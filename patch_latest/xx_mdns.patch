@@ -7,7 +7,7 @@ index e7ffc5f..a9dbaa5 100644
      "baconjs": "^1.0.1",
      "bcryptjs": "^2.4.3",
 -    "bonjour-service": "^1.3.0",
-+    "@collight/dns-sd": "^1.0.0",
++    "@collight/dns-sd": "^0.1.6",
      "body-parser": "^1.20.3",
      "busboy": "^1.6.0",
      "chalk": "^3.0.0",
