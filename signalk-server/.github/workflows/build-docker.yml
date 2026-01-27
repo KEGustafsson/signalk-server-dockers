@@ -1,0 +1,149 @@
+name: Build Docker development container
+
+on:
+  push:
+    branches:
+      - master
+      - 'build-docker'
+    tags:
+      - '*'
+      - '!v*'
+  workflow_dispatch:
+
+jobs:
+  signalk-server_npm_files:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node setup
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+      - name: Build npm files locally and upload artifacts
+        run: |
+          npm cache clean -f
+          npm install npm@latest -g
+          npm install --package-lock-only
+          npm ci && npm cache clean --force
+          npm run build:all
+          npm pack --workspaces
+          rm signalk-typedoc-signalk-theme*.tgz # This is only needed as a dev dependency
+          npm pack
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          retention-days: 1
+          name: packed-modules
+          path: |
+            *.tgz
+
+  docker_images:
+    needs: signalk-server_npm_files
+    strategy:
+      matrix:
+        os: [24.04]
+        node: [22.x, 24.x]
+        vm: [ubuntu-latest, ubuntu-24.04-arm]
+        include:
+          - vm: ubuntu-latest
+            arch: amd
+            platform: linux/amd64
+          - vm: ubuntu-24.04-arm
+            arch: arm
+            node: 22.x
+            platform: linux/arm64,linux/arm/v7
+          - vm: ubuntu-24.04-arm
+            arch: arm
+            node: 24.x
+            platform: linux/arm64 #,linux/arm/v7 Nodejs 24.x is working correctly and therefore disabled for now
+    runs-on: ${{ matrix.vm }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to ghcr.io
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: packed-modules
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ghcr.io/signalk/signalk-server:${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
+          build-args: |
+            REGISTRY=ghcr.io
+            UBUNTU_VERSION=${{ matrix.os }}-${{ matrix.node }}
+
+  create-and-push-manifest:
+    needs: docker_images
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [24.04]
+        node: [22.x, 24.x]
+        include:
+          - os: 24.04
+            node: 22.x
+            suffix: -22.x
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Docker meta
+        id: docker_meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            signalk/signalk-server
+            ghcr.io/signalk/signalk-server
+          tags: |
+            type=ref,event=branch
+            type=sha
+          flavor: |
+            suffix=${{ matrix.suffix }}
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: signalkci
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
+      - name: Create and push multi-arch manifest to GHCR and Docker Hub
+        uses: int128/docker-manifest-create-action@v2
+        with:
+          tags: |
+            ${{ steps.docker_meta.outputs.tags }}
+          sources: |
+            ghcr.io/signalk/signalk-server:amd-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
+            ghcr.io/signalk/signalk-server:arm-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
+
+  housekeeping:
+    needs: create-and-push-manifest
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Remove Temporary & Untagged Docker Images from GHCR
+        uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          packages: signalk-server
+          delete-untagged: true
+          delete-tags: |
+            *-${{ github.run_id }}
+          token: ${{ secrets.GHCR_PAT }}

@@ -1,0 +1,272 @@
+name: Release - build & publish modules and server, build & publish docker containers
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build_and_publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install and build all
+        run: |
+          npm cache clean -f
+          npm install npm@latest -g
+          npm install --package-lock-only
+          npm ci && npm cache clean --force
+          npm run build:all
+
+      - name: Publish server-admin-ui-dependencies
+        run: |
+          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/server-admin-ui-dependencies/package.json)
+          if ! npm view @signalk/server-admin-ui-dependencies@$LOCAL_VERSION version &>/dev/null; then
+            cd packages/server-admin-ui-dependencies
+            npm publish --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish server-admin-ui
+        run: |
+          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/server-admin-ui/package.json)
+          if ! npm view @signalk/server-admin-ui@$LOCAL_VERSION version &>/dev/null; then
+            cd packages/server-admin-ui
+            npm publish --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish server-api
+        run: |
+          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/server-api/package.json)
+          if ! npm view @signalk/server-api@$LOCAL_VERSION version &>/dev/null; then
+            cd packages/server-api
+            npm publish --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish streams
+        run: |
+          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/streams/package.json)
+          if ! npm view @signalk/streams@$LOCAL_VERSION version &>/dev/null; then
+            cd packages/streams
+            npm publish --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish resources-provider
+        run: |
+          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/resources-provider-plugin/package.json)
+          if ! npm view @signalk/resources-provider@$LOCAL_VERSION version &>/dev/null; then
+            cd packages/resources-provider-plugin
+            npm publish --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish typedoc-signalk-theme
+        run: |
+          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/typedoc-theme/package.json)
+          if ! npm view @signalk/typedoc-signalk-theme@$LOCAL_VERSION version &>/dev/null; then
+            cd packages/typedoc-theme
+            npm publish --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish assemblyscript-plugin-sdk
+        run: |
+          LOCAL_VERSION=$(awk '/"version":/{gsub(/("|",)/,"",$2);print $2}' packages/assemblyscript-plugin-sdk/package.json)
+          if ! npm view @signalk/assemblyscript-plugin-sdk@$LOCAL_VERSION version &>/dev/null; then
+            cd packages/assemblyscript-plugin-sdk
+            npm publish --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Set tag variable
+        id: vars
+        run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+
+      - name: Publish signalk-server
+        run: |
+          if [[ "${{ steps.vars.outputs.tag }}" == *beta* ]];
+            then
+              npm publish --tag beta
+            else
+              npm publish
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  release:
+    permissions:
+      contents: write
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    needs: build_and_publish
+    steps:
+      - name: Build Changelog
+        id: github_release
+        uses: mikepenz/release-changelog-builder-action@v5
+        with:
+          ignorePreReleases: 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
+
+      - name: Create Release (archived, need to be updated to use the new action)
+        uses: actions/create-release@v1
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+          prerelease: ${{ contains(github.ref, 'beta') }}
+          body: ${{steps.github_release.outputs.changelog}}
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
+
+  docker_images:
+    needs: build_and_publish
+    strategy:
+      matrix:
+        os: [24.04]
+        node: [22.x, 24.x]
+        vm: [ubuntu-latest, ubuntu-24.04-arm]
+        include:
+          - vm: ubuntu-latest
+            arch: amd
+            platform: linux/amd64
+          - vm: ubuntu-24.04-arm
+            arch: arm
+            node: 22.x
+            platform: linux/arm64,linux/arm/v7
+          - vm: ubuntu-24.04-arm
+            arch: arm
+            node: 24.x
+            platform: linux/arm64 #,linux/arm/v7 Nodejs 24.x is working correctly and therefore disabled for now
+    runs-on: ${{ matrix.vm }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
+      - name: Set TAG for build-args
+        id: vars
+        run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+      - name: Modify Dockerfile_rel for build
+        run: |
+          sed -i \
+            "s|cr.signalk.io/signalk/signalk-server-base:latest|ghcr.io/signalk/signalk-server-base:latest-${{ matrix.os }}-${{ matrix.node }}|g" \
+            ./docker/Dockerfile_rel
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile_rel
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ghcr.io/signalk/signalk-server:${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
+          build-args: |
+            TAG=${{ steps.vars.outputs.tag }}
+
+  create-and-push-manifest:
+    needs: docker_images
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [24.04]
+        node: [22.x, 24.x]
+        include:
+          - os: 24.04
+            node: 22.x
+            tag: latest
+          - os: 24.04
+            node: 24.x
+            tag: latest
+            suffix: -24.x
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Docker meta
+        id: docker_meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            signalk/signalk-server
+            ghcr.io/signalk/signalk-server
+          tags: |
+            type=semver,pattern={{raw}}
+            type=semver,pattern=v{{major}},enable=${{ !contains(github.ref, 'beta') }}
+            type=semver,pattern=v{{major}}.{{minor}},enable=${{ !contains(github.ref, 'beta') }}
+            type=raw,value=${{ matrix.tag }},enable=${{ !contains(github.ref, 'beta') }}
+          flavor: |
+            suffix=${{ matrix.suffix }}
+            latest=false
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: signalkci
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
+      - name: Create and push multi-arch manifest to GHCR and Docker Hub
+        uses: int128/docker-manifest-create-action@v2
+        with:
+          tags: |
+            ${{ steps.docker_meta.outputs.tags }}
+          sources: |
+            ghcr.io/signalk/signalk-server:amd-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
+            ghcr.io/signalk/signalk-server:arm-${{ matrix.os }}-${{ matrix.node }}-${{ github.run_id }}
+
+  housekeeping:
+    needs: create-and-push-manifest
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Remove Docker Image from GHCR
+        uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          packages: signalk-server
+          delete-untagged: true
+          delete-tags: |
+            *-${{ github.run_id }}
+          token: ${{ secrets.GHCR_PAT }}
+
+  deploy_fly:
+    runs-on: ubuntu-latest
+    needs: create-and-push-manifest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Set TAG for build-arg
+        id: vars
+        run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+      - name: Deploy demo.signalk.org at fly.io
+        working-directory: ./fly_io/demo_signalk_org
+        run: flyctl deploy --remote-only --build-arg SK_VERSION=${{ steps.vars.outputs.tag }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

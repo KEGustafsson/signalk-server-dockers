@@ -1,0 +1,111 @@
+name: Build Docker base images
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+jobs:
+  build-images:
+    strategy:
+      matrix:
+        os: [24.04]
+        node: [22.x, 24.x]
+        vm: [ubuntu-latest, ubuntu-24.04-arm]
+        include:
+          - vm: ubuntu-latest
+            arch: amd
+            platform: linux/amd64
+          - vm: ubuntu-24.04-arm
+            arch: arm
+            node: 22.x
+            platform: linux/arm64,linux/arm/v7
+          - vm: ubuntu-24.04-arm
+            arch: arm
+            node: 24.x
+            platform: linux/arm64
+    runs-on: ${{ matrix.vm }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
+
+      - name: Build baseimages
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile_base_${{ matrix.os }}
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: |
+            ghcr.io/signalk/signalk-server-base:${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}
+          build-args: |
+            NODE=${{ matrix.node }}
+
+      - name: Modify Dockerfile_rel for testing
+        run: |
+          sed -i \
+            "s|cr.signalk.io/signalk/signalk-server-base:latest|ghcr.io/signalk/signalk-server-base:${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}|g" \
+            ./docker/Dockerfile_rel
+
+      - name: Build Signal K test docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile_rel
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            TAG=latest
+
+  create-and-push-manifest:
+    needs: [build-images]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [24.04]
+        node: [22.x, 24.x]
+
+    steps:
+      - name: Login to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_PAT }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: signalkci
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create and push multi-arch manifest to GHCR and Docker Hub
+        uses: int128/docker-manifest-create-action@v2
+        with:
+          tags: |
+            ghcr.io/signalk/signalk-server-base:latest-${{ matrix.os }}-${{ matrix.node }}
+            signalk/signalk-server-base:latest-${{ matrix.os }}-${{ matrix.node }}
+          sources: |
+            ghcr.io/signalk/signalk-server-base:amd-${{ matrix.os }}-${{ matrix.node }}
+            ghcr.io/signalk/signalk-server-base:arm-${{ matrix.os }}-${{ matrix.node }}
+
+  housekeeping:
+    needs: create-and-push-manifest
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+
+    steps:
+      - name: Remove Docker Image from GHCR
+        uses: dataaxiom/ghcr-cleanup-action@v1
+        with:
+          packages: signalk-server-base
+          delete-untagged: true
+          delete-tags: amd-24.04-24.x,amd-24.04-22.x,arm-24.04-24.x,arm-24.04-22.x
+          token: ${{ secrets.GHCR_PAT }} # Need to have delete permission

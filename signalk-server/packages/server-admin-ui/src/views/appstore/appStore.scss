@@ -1,0 +1,138 @@
+.appstore {
+  &__warning {
+    margin-bottom: 20px;
+
+    .message__container {
+      padding: 10px;
+      color: #9d8641;
+      border: 1px solid #9d8641;
+      background-color: #fff2cd;
+      p {
+        span {
+          margin-right: 5px;
+        }
+        margin: 0;
+      }
+      i {
+        margin-right: 5px;
+      }
+    }
+  }
+
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+
+    @media (max-width: 1080px) {
+      flex-direction: column;
+
+      .title__container {
+        width: 100%;
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }
+
+      .action__container {
+        width: 100%;
+        flex-direction: row-reverse;
+
+        .search {
+          min-width: none;
+          justify-self: flex-start;
+        }
+      }
+    }
+
+    .title__container {
+      display: flex;
+      align-items: center;
+
+      .card-title {
+        margin: 0 10px 0 0;
+      }
+
+      .button-wrapper {
+        .badge__update {
+          color: white;
+          font-size: 10px;
+          border-radius: 3px;
+          background-color: #00cd79;
+          margin-left: 5px;
+          padding: 3px;
+          vertical-align: middle;
+        }
+
+        button {
+          margin: 0 2px;
+        }
+      }
+    }
+
+    .action__container {
+      display: flex;
+      align-items: center;
+
+      button {
+        margin: 0 5px;
+      }
+
+      .search {
+        height: 100%;
+        position: relative;
+        margin: 0 5px;
+
+        &__icon {
+          position: absolute;
+          margin-left: 5px;
+          padding: 10px;
+          color: grey;
+        }
+        &__input {
+          padding: 10px;
+          width: 100%;
+          text-indent: 30px;
+        }
+      }
+    }
+  }
+
+  &__tags {
+    button {
+      margin: 5px 5px;
+      border-radius: 30px;
+    }
+    margin-bottom: 20px;
+  }
+
+  &__grid {
+    flex: 1 1 auto;
+    background-color: white;
+    max-height: 80%;
+    font-size: 14px;
+
+    .grid__action {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .cell-action {
+      width: 160px;
+
+      .proress__wrapper {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .progress__status {
+        text-align: center;
+        width: 100%;
+      }
+
+      .progress__bar {
+        width: 100%;
+      }
+    }
+  }
+}

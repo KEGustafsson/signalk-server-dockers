@@ -1,0 +1,50 @@
+node_modules
+!test/plugin-test-config/node_modules/
+
+*.tsbuildinfo
+
+lib/
+dist/
+
+.DS_Store
+.vscode/
+*.db
+logs/*
+bower_components
+settings/ssl-key.pem
+settings/ssl-cert.pem
+/*.iml
+
+*.tgz
+work/
+
+test/plugin-test-config/.npmrc
+test/plugin-test-config/plugin-config-data/
+test/plugin-test-config/ssl-cert.pem
+test/plugin-test-config/ssl-key.pem
+test/plugin-test-config/baseDeltas.json
+
+test/server-test-config/applicationData/
+test/server-test-config/ssl-cert.pem
+test/server-test-config/ssl-key.pem
+test/server-test-config/plugin-config-data/
+
+docs/built
+
+# WASM build artifacts
+*.wasm  
+
+# .net builds
+jco-output/
+obj/
+bin/
+Debug/
+Release/
+*.ps1
+nul
+
+# wasmtime build artifacts
+*.wasm
+
+# debug artefacts
+*.sln

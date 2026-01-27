@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": false
+  },
+  "include": ["./src/**/*", "./src/openApi.json"],
+  "references": [
+    {
+      "path": "../server-api"
+    }
+  ]
+}

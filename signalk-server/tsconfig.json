@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "include": ["./src/**/*", "./src/**/*.json"],
+  "references": [
+    {
+      "path": "./packages/server-api"
+    },
+    {
+      "path": "./packages/resources-provider-plugin"
+    }
+  ]
+}
