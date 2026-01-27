@@ -1,5 +1,5 @@
 diff --git a/package.json b/package.json
-index e7ffc5f..a9dbaa5 100644
+index e7ffc5f..39fa805 100644
 --- a/package.json
 +++ b/package.json
 @@ -83,7 +83,7 @@
@@ -11,6 +11,127 @@ index e7ffc5f..a9dbaa5 100644
      "body-parser": "^1.20.3",
      "busboy": "^1.6.0",
      "chalk": "^3.0.0",
+@@ -111,7 +111,6 @@
+     "jsonwebtoken": "^9.0.0",
+     "listr": "^0.14.1",
+     "lodash": "^4.17.21",
+-    "mdns-js": "^1.0.3",
+     "minimist": "^1.2.8",
+     "moment": "^2.10.6",
+     "morgan": "^1.5.0",
+diff --git a/src/discovery.js b/src/discovery.js
+index 5da0aee..24ebd31 100644
+--- a/src/discovery.js
++++ b/src/discovery.js
+@@ -18,7 +18,7 @@ import { createDebug } from './debug'
+ const debug = createDebug('signalk-server:discovery')
+ const canboatjs = require('@canboat/canboatjs')
+ const dgram = require('dgram')
+-const mdns = require('mdns-js')
++const { DNSSD } = require('@collight/dns-sd')
+ const { networkInterfaces } = require('os')
+ 
+ module.exports.runDiscovery = function (app) {
+@@ -196,56 +196,59 @@ module.exports.runDiscovery = function (app) {
+ 
+   function discoverSignalkWs(wsType) {
+     try {
+-      mdns.excludeInterface('0.0.0.0')
+-      var browser = mdns.createBrowser(mdns.tcp('signalk-' + wsType))
++      const dnssd = new DNSSD()
++      debug('looking for SignalK ' + wsType)
+ 
+-      browser.on('ready', function onReady() {
+-        try {
+-          debug('looking for SignalK ' + wsType)
+-          browser.discover()
+-        } catch (err) {
+-          debug('discoverSignalkWs:', err)
+-        }
+-      })
++      const browser = dnssd.startBrowser(
++        {
++          filter: {
++            protocol: 'tcp',
++            type: 'signalk-' + wsType
++          }
++        },
++        (service) => {
++          try {
++            const addresses = service.addresses || []
++            const host = service.host || service.name
++            const port = service.port
+ 
+-      browser.on('update', function onUpdate(data) {
+-        try {
+-          if (
+-            !isLocalIP(data.addresses[0]) &&
+-            Array.isArray(data.type) &&
+-            data.type[0].name === 'signalk-' + wsType &&
+-            !findWSProvider(data.addresses[0], wsType, data.host, data.port)
+-          ) {
+-            debug('discoverSignalkWs found data[' + wsType + ']:', data)
+-            const providerId = wsType + '-' + data.host + ':' + data.port
+-            app.emit('discovered', {
+-              id: providerId,
+-              enabled: false,
+-              pipeElements: [
+-                {
+-                  type: 'providers/simple',
+-                  options: {
+-                    type: 'SignalK',
+-                    subOptions: {
+-                      type: wsType,
+-                      host: data.host,
+-                      port: data.port,
++            if (
++              addresses.length > 0 &&
++              !isLocalIP(addresses[0]) &&
++              !findWSProvider(addresses[0], wsType, host, port)
++            ) {
++              debug('discoverSignalkWs found service[' + wsType + ']:', service)
++              const providerId = wsType + '-' + host + ':' + port
++              app.emit('discovered', {
++                id: providerId,
++                enabled: false,
++                pipeElements: [
++                  {
++                    type: 'providers/simple',
++                    options: {
++                      type: 'SignalK',
++                      subOptions: {
++                        type: wsType,
++                        host: host,
++                        port: port,
++                        providerId: providerId
++                      },
+                       providerId: providerId
+-                    },
+-                    providerId: providerId
++                    }
+                   }
+-                }
+-              ]
+-            })
++                ]
++              })
++            }
++          } catch (err) {
++            debug('discoverSignalkWs:', err)
+           }
+-        } catch (err) {
+-          debug('discoverSignalkWs:', err)
+         }
+-      })
++      )
+ 
+       setTimeout(() => {
+         try {
+           browser.stop()
++          dnssd.destroy()
+           debug('discoverSignalkWs close')
+         } catch (err) {
+           debug('discoverSignalkWs:', err)
 diff --git a/src/mdns.js b/src/mdns.js
 index 2944d55..8a26e70 100644
 --- a/src/mdns.js
