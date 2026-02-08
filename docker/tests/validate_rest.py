@@ -1,4 +1,3 @@
-import json
 import requests
 import sys
 import time
@@ -24,16 +23,28 @@ if not vessels:
     print("ERROR: No vessels data after timeout")
     sys.exit(1)
 
-print("Vessels detected:", list(vessels.keys()))
+vessel_id = next(iter(vessels))
+vessel = vessels[vessel_id]
 
-# Prefer self if present, otherwise first vessel
-self_id = "self" if "self" in vessels else next(iter(vessels))
-nav = vessels[self_id].get("navigation")
+print(f"Using vessel: {vessel_id}")
 
-if not nav or "position" not in nav:
-    print("ERROR: Navigation position missing")
+nav = vessel.get("navigation", {})
+pos = nav.get("position", {})
+
+value = pos.get("value")
+
+if not value:
+    print("ERROR: navigation.position.value missing")
+    print("navigation object:", nav)
     sys.exit(1)
 
-pos = nav["position"]
-print("Position OK:", pos)
+lat = value.get("latitude")
+lon = value.get("longitude")
+
+if lat is None or lon is None:
+    print("ERROR: latitude/longitude missing")
+    print("position.value:", value)
+    sys.exit(1)
+
+print(f"Position OK: lat={lat}, lon={lon}")
 print("REST validation PASSED")
