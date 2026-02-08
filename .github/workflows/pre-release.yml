@@ -41,12 +41,12 @@ jobs:
 
       - name: Feed NMEA0183 input (custom port)
         run: |
-          cat testdata/sample.nmea | nc localhost 10120
+          cat docker/tests/sample.nmea | nc localhost 10120
 
       - name: Validate REST API output
         run: |
           pip3 install requests
-          python3 testdata/validate_rest.py
+          python3 docker/tests/validate_rest.py
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
