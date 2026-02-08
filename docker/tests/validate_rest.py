@@ -23,26 +23,20 @@ if not vessel_id:
 
 print("Using vessel:", vessel_id)
 
-# ✅ URL-encode vessel ID (THIS IS THE FIX)
 encoded_id = quote(vessel_id, safe='')
 
-url = f"{BASE}/vessels/{encoded_id}/navigation/position"
+# ✅ CORRECT REST VALUE PATH
+url = f"{BASE}/vessels/{encoded_id}/navigation/position/value"
 print("Querying:", url)
 
 r = requests.get(url, timeout=5)
 
 if r.status_code != 200:
-    print(f"ERROR: position endpoint not available (HTTP {r.status_code})")
+    print(f"ERROR: position value endpoint not available (HTTP {r.status_code})")
     print("Response:", r.text)
     sys.exit(1)
 
-data = r.json()
-value = data.get("value")
-
-if not value:
-    print("ERROR: position value missing")
-    print("Response:", data)
-    sys.exit(1)
+value = r.json()
 
 lat = value.get("latitude")
 lon = value.get("longitude")
