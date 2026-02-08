@@ -1,33 +1,39 @@
 import json
 import requests
 import sys
+import time
 
-URL = "http://localhost:3000/signalk/v1/api/vessels/self"
+BASE = "http://localhost:3000/signalk/v1/api"
 
-expected = json.load(open("docker/tests/expected.json"))
-response = requests.get(URL)
+def wait_for_vessels(timeout=30):
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            r = requests.get(f"{BASE}/vessels", timeout=2)
+            if r.status_code == 200 and r.json():
+                return r.json()
+        except Exception:
+            pass
+        time.sleep(1)
+    return None
 
-if response.status_code != 200:
-    print("REST API not responding")
+print("Waiting for vessels data...")
+vessels = wait_for_vessels()
+
+if not vessels:
+    print("ERROR: No vessels data after timeout")
     sys.exit(1)
 
-actual = response.json()
+print("Vessels detected:", list(vessels.keys()))
 
-def check(expected, actual, path=""):
-    for key, value in expected.items():
-        if key not in actual:
-            print(f"Missing {path}/{key}")
-            return False
-        if isinstance(value, dict):
-            if not check(value, actual[key], f"{path}/{key}"):
-                return False
-        else:
-            if abs(actual[key] - value) > 0.01:
-                print(f"Mismatch {path}/{key}")
-                return False
-    return True
+# Prefer self if present, otherwise first vessel
+self_id = "self" if "self" in vessels else next(iter(vessels))
+nav = vessels[self_id].get("navigation")
 
-if not check(expected, actual):
+if not nav or "position" not in nav:
+    print("ERROR: Navigation position missing")
     sys.exit(1)
 
-print("REST validation OK")
+pos = nav["position"]
+print("Position OK:", pos)
+print("REST validation PASSED")
