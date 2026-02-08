@@ -49,7 +49,7 @@ jobs:
 
       - name: Feed NMEA0183 (default port 10110)
         run: |
-          timeout 15 sh -c 'while true; do cat docker/tests/sample.nmea; sleep 1; done | nc localhost 10110'
+          for i in $(seq 1 15); do cat docker/tests/sample.nmea; sleep 1; done | nc -w 5 -q 1 localhost 10110 || true
 
       - name: Validate REST API output
         run: |
