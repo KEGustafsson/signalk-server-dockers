@@ -4,7 +4,7 @@ import sys
 
 URL = "http://localhost:3000/signalk/v1/api/vessels/self"
 
-expected = json.load(open("testdata/expected.json"))
+expected = json.load(open("docker/tests/expected.json"))
 response = requests.get(URL)
 
 if response.status_code != 200:
