@@ -1,6 +1,7 @@
 import requests
 import sys
 import time
+from urllib.parse import quote
 
 BASE = "http://localhost:3000/signalk/v1/api"
 
@@ -22,14 +23,17 @@ if not vessel_id:
 
 print("Using vessel:", vessel_id)
 
-# --- THIS IS THE CRITICAL CHANGE ---
-url = f"{BASE}/vessels/{vessel_id}/navigation/position"
+# ✅ URL-encode vessel ID (THIS IS THE FIX)
+encoded_id = quote(vessel_id, safe='')
 
+url = f"{BASE}/vessels/{encoded_id}/navigation/position"
 print("Querying:", url)
+
 r = requests.get(url, timeout=5)
 
 if r.status_code != 200:
-    print("ERROR: position endpoint not available")
+    print(f"ERROR: position endpoint not available (HTTP {r.status_code})")
+    print("Response:", r.text)
     sys.exit(1)
 
 data = r.json()
