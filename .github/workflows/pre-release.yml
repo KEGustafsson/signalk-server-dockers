@@ -31,7 +31,7 @@ jobs:
           docker run -d --rm \
             --name signalk \
             -p 3000:3000 \
-            -p 10120:10120 \
+            -p 10110:10110 \
             ghcr.io/kegustafsson/signalk-server:latest
 
       - name: Wait for SignalK startup
@@ -41,7 +41,7 @@ jobs:
 
       - name: Feed NMEA0183 input (custom port)
         run: |
-          cat docker/tests/sample.nmea | nc localhost 10120
+          cat docker/tests/sample.nmea | nc localhost 10110
 
       - name: Validate REST API output
         run: |
