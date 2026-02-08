@@ -1,0 +1,12 @@
+{
+  "vessels": {
+    "self": {
+      "navigation": {
+        "position": {
+          "latitude": 48.1173,
+          "longitude": 11.5167
+        }
+      }
+    }
+  }
+}

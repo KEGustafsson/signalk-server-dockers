@@ -1,0 +1,77 @@
+name: SignalK Pre-Release Full Sanity Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  signalk-full-test:
+    strategy:
+      matrix:
+        vm: [ubuntu-latest, ubuntu-24.04-arm]
+
+    runs-on: ${{ matrix.vm }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Pull SignalK image
+        run: |
+          docker pull ghcr.io/kegustafsson/signalk-server:latest
+
+      - name: Start SignalK container
+        run: |
+          docker run -d --rm \
+            --name signalk \
+            -p 3000:3000 \
+            -p 10120:10120 \
+            ghcr.io/kegustafsson/signalk-server:latest
+
+      - name: Wait for SignalK startup
+        run: |
+          echo "Waiting for SignalK to be ready..."
+          sleep 20
+
+      - name: Feed NMEA0183 input (custom port)
+        run: |
+          cat testdata/sample.nmea | nc localhost 10120
+
+      - name: Validate REST API output
+        run: |
+          pip3 install requests
+          python3 testdata/validate_rest.py
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Playwright
+        run: |
+          npm install --save-dev @playwright/test
+          npx playwright install --with-deps
+
+      - name: Run UI tests
+        run: |
+          npx playwright test
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts-${{ matrix.vm }}
+          path: |
+            test-results
+            playwright-report
+
+      - name: Security scan (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/kegustafsson/signalk-server:latest
