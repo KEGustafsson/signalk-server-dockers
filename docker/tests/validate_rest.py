@@ -70,7 +70,9 @@ def validate_position(timeout=10):
     """Check position data via REST API."""
     url = f"{API_BASE}/vessels/self/navigation/position/value"
     start = time.time()
+    attempt = 0
     while time.time() - start < timeout:
+        attempt += 1
         try:
             r = requests.get(url, timeout=2)
             if r.status_code == 200:

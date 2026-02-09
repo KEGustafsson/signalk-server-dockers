@@ -83,6 +83,14 @@ jobs:
             test-results
             playwright-report
 
+      - name: Stop NMEA0183 feeder
+        if: always()
+        run: |
+          if [ -f /tmp/nmea_feeder.pid ]; then
+            kill $(cat /tmp/nmea_feeder.pid) 2>/dev/null || true
+            rm -f /tmp/nmea_feeder.pid
+          fi
+
       - name: Security scan (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
