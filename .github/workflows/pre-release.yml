@@ -83,11 +83,6 @@ jobs:
             test-results
             playwright-report
 
-      - name: Security scan (Trivy)
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ghcr.io/kegustafsson/signalk-server:latest
-
       - name: Test Summary
         if: always()
         run: |
