@@ -50,9 +50,11 @@ test.describe('SignalK Admin UI', () => {
     ];
 
     for (const { path, title } of routes) {
+      const start = Date.now();
       await page.goto(`/admin/#${path}`);
       // Verify the page rendered without crashing (sidebar still present)
       await expect(page.locator('.sidebar-nav').first()).toBeVisible({ timeout: 5000 });
+      console.log(`  ${title} (${path}) - OK (${Date.now() - start}ms)`);
     }
   });
 
