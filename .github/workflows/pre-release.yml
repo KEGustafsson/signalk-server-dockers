@@ -34,12 +34,11 @@ jobs:
           docker run -d --rm \
             --name signalk \
             -p 3000:3000 \
-            -p 10110:10110 \
             ghcr.io/kegustafsson/signalk-server:latest
 
       - name: Wait for SignalK startup
         run: |
-          echo "Waiting for SignalK HTTP to be ready..."
+          echo "Waiting for SignalK to be ready..."
           for i in $(seq 1 60); do
             if curl -sf http://localhost:3000/signalk > /dev/null 2>&1; then
               echo "SignalK is ready (after ${i}s)"
@@ -56,16 +55,9 @@ jobs:
           docker ps --filter name=signalk
           docker logs signalk | tail -n 20
 
-      - name: Start NMEA0183 feeder (background, port 10110)
+      - name: Validate REST API
         run: |
-          (for i in $(seq 1 120); do cat docker/tests/sample.nmea; sleep 1; done | nc -w 10 -q 1 localhost 10110 || true) &
-          echo $! > /tmp/nmea_feeder.pid
-          echo "NMEA0183 feeder started in background (PID: $(cat /tmp/nmea_feeder.pid))"
-          sleep 3
-
-      - name: Validate REST API output
-        run: |
-          pip3 install requests
+          pip3 install requests websocket-client
           python3 docker/tests/validate_rest.py
 
       - name: Setup Node.js
@@ -90,14 +82,6 @@ jobs:
           path: |
             test-results
             playwright-report
-
-      - name: Stop NMEA0183 feeder
-        if: always()
-        run: |
-          if [ -f /tmp/nmea_feeder.pid ]; then
-            kill $(cat /tmp/nmea_feeder.pid) 2>/dev/null || true
-            rm -f /tmp/nmea_feeder.pid
-          fi
 
       - name: Security scan (Trivy)
         uses: aquasecurity/trivy-action@master
