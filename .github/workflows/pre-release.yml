@@ -55,15 +55,15 @@ jobs:
           docker ps --filter name=signalk
           docker logs signalk | tail -n 20
 
-      - name: Validate REST API
-        run: |
-          pip3 install requests websocket-client
-          python3 docker/tests/validate_rest.py
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Validate REST API
+        run: |
+          npm install ws
+          node docker/tests/validate_rest.js
 
       - name: Install Playwright
         run: |
@@ -82,14 +82,6 @@ jobs:
           path: |
             test-results
             playwright-report
-
-      - name: Stop NMEA0183 feeder
-        if: always()
-        run: |
-          if [ -f /tmp/nmea_feeder.pid ]; then
-            kill $(cat /tmp/nmea_feeder.pid) 2>/dev/null || true
-            rm -f /tmp/nmea_feeder.pid
-          fi
 
       - name: Security scan (Trivy)
         uses: aquasecurity/trivy-action@master
