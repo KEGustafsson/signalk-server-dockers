@@ -6,29 +6,23 @@ test.describe('SignalK Admin UI', () => {
     await page.goto('/admin');
     await page.waitForLoadState('networkidle');
 
-    // If first boot, create admin account
-    const createVisible = await page.locator('text=Create Admin User')
-      .isVisible()
-      .catch(() => false);
-    if (createVisible) {
-      await page.fill('input[name=username]', 'admin');
-      await page.fill('input[name=password]', 'test123');
-      await page.fill('input[name=confirmPassword]', 'test123');
-      await page.click('button:has-text("Create")');
-      await page.waitForLoadState('networkidle');
+    // Wait for the React app to render a form (either Enable or Login)
+    await page.waitForSelector('input[name="username"]', { timeout: 15000 });
+    await page.fill('input[name="username"]', 'admin');
+    await page.fill('input[name="password"]', 'test123');
+
+    // Enable Security page (first boot, no users) has "Enable" button
+    const enableBtn = page.locator('button:has-text("Enable")');
+    if (await enableBtn.isVisible()) {
+      await enableBtn.click();
+      // After enabling security, wait for the login form
+      await page.waitForSelector('button:has-text("Login")', { timeout: 10000 });
+      await page.fill('input[name="username"]', 'admin');
+      await page.fill('input[name="password"]', 'test123');
     }
 
-    // Login
-    const loginVisible = await page.locator('button:has-text("Login")')
-      .isVisible()
-      .catch(() => false);
-    if (loginVisible) {
-      await page.fill('input[name=username]', 'admin');
-      await page.fill('input[name=password]', 'test123');
-      await page.click('button:has-text("Login")');
-    }
-
-    await expect(page.locator('text=Server')).toBeVisible({ timeout: 10000 });
+    await page.click('button:has-text("Login")');
+    await expect(page.locator('text=Server')).toBeVisible({ timeout: 15000 });
   });
 
   test('Login works', async ({ page }) => {
