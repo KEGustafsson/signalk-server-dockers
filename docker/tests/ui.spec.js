@@ -46,10 +46,9 @@ test.describe('SignalK Admin UI', () => {
         const key = (await link.getAttribute('href')) || (await link.textContent());
         if (clicked.has(key)) continue;
         clicked.add(key);
-        // Sidebar may overflow viewport; use force to bypass pointer
-        // interception from overlapping items at the bottom of the list.
-        await link.scrollIntoViewIfNeeded();
-        await link.click({ force: true });
+        // Sidebar overflows viewport; use native DOM click to bypass
+        // Playwright viewport and pointer-interception checks.
+        await link.evaluate(el => el.click());
         await expect(page.locator('a.nav-link').first()).toBeVisible();
         clickedNew = true;
       }
