@@ -109,31 +109,41 @@ function checkValue(actual, expected, label) {
 }
 
 async function main() {
+  const results = [];
+  const testStart = Date.now();
+
   console.log('SignalK Pre-Release REST Validation');
-  console.log('='.repeat(40));
+  console.log('='.repeat(50));
 
   // Step 1: Create admin
   console.log('\n1. Creating admin account...');
   if (!(await createAdmin())) {
-    console.log('FAIL: Could not create admin account');
+    results.push({ area: 'Admin creation', status: 'FAIL' });
+    printSummary(results, testStart);
     process.exit(1);
   }
+  results.push({ area: 'Admin creation', status: 'PASS' });
   console.log('   OK');
 
   // Step 2: Login
   console.log('\n2. Logging in...');
   const token = await login();
   if (!token) {
-    console.log('FAIL: Could not login');
+    results.push({ area: 'Authentication', status: 'FAIL' });
+    printSummary(results, testStart);
     process.exit(1);
   }
+  results.push({ area: 'Authentication', status: 'PASS' });
   console.log('   OK');
 
   // Step 3: Send NMEA 0183 data (GPS position, COG, SOG)
   console.log('\n3. Sending NMEA 0183 data via WebSocket...');
   try {
     await sendDeltas(token, 'nmea0183-test', NMEA0183_DATA);
+    results.push({ area: 'NMEA 0183 injection (WebSocket)', status: 'PASS' });
   } catch (err) {
+    results.push({ area: 'NMEA 0183 injection (WebSocket)', status: 'FAIL' });
+    printSummary(results, testStart);
     console.log(`FAIL: Could not send NMEA 0183 delta: ${err.message}`);
     process.exit(1);
   }
@@ -143,7 +153,10 @@ async function main() {
   console.log('\n4. Sending NMEA 2000 data via WebSocket...');
   try {
     await sendDeltas(token, 'nmea2000-test', NMEA2000_DATA);
+    results.push({ area: 'NMEA 2000 injection (WebSocket)', status: 'PASS' });
   } catch (err) {
+    results.push({ area: 'NMEA 2000 injection (WebSocket)', status: 'FAIL' });
+    printSummary(results, testStart);
     console.log(`FAIL: Could not send NMEA 2000 delta: ${err.message}`);
     process.exit(1);
   }
@@ -152,23 +165,42 @@ async function main() {
   // Step 5: Validate all data via REST API
   console.log('\n5. Validating all data via REST API...');
   const allData = [...NMEA0183_DATA, ...NMEA2000_DATA];
-  let passed = 0;
 
   for (const { path, value } of allData) {
     const actual = await validatePath(path);
     if (actual == null) {
+      results.push({ area: `REST: ${path}`, status: 'FAIL' });
+      printSummary(results, testStart);
       console.log(`  FAIL: ${path} not available`);
       process.exit(1);
     }
     if (!checkValue(actual, value, path)) {
+      results.push({ area: `REST: ${path}`, status: 'FAIL' });
+      printSummary(results, testStart);
       process.exit(1);
     }
+    results.push({ area: `REST: ${path}`, status: 'PASS' });
     console.log(`  OK: ${path}`);
-    passed++;
   }
 
-  console.log(`\n${'='.repeat(40)}`);
-  console.log(`REST validation PASSED (${passed}/${allData.length} paths verified)`);
+  printSummary(results, testStart);
+}
+
+function printSummary(results, startTime) {
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  const passed = results.filter(r => r.status === 'PASS').length;
+  const failed = results.filter(r => r.status === 'FAIL').length;
+
+  console.log('\n' + '='.repeat(50));
+  console.log('  REST API VALIDATION SUMMARY');
+  console.log('='.repeat(50));
+  for (const { area, status } of results) {
+    const icon = status === 'PASS' ? 'PASS' : 'FAIL';
+    console.log(`  [${icon}] ${area}`);
+  }
+  console.log('-'.repeat(50));
+  console.log(`  Total: ${results.length} | Passed: ${passed} | Failed: ${failed} | Time: ${elapsed}s`);
+  console.log('='.repeat(50));
 }
 
 main().catch((err) => {
