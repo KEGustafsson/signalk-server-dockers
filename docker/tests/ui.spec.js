@@ -33,29 +33,27 @@ test.describe('SignalK Admin UI', () => {
   });
 
   test('Browse all Admin UI pages', async ({ page }) => {
-    // Dynamically discover and click all sidebar nav links.
-    // Multiple passes handle dropdown toggles that reveal sub-items.
-    const clicked = new Set();
-    for (let pass = 0; pass < 3; pass++) {
-      const links = page.locator('a.nav-link');
-      const count = await links.count();
-      let clickedNew = false;
-      for (let i = 0; i < count; i++) {
-        const link = links.nth(i);
-        if (!(await link.isVisible())) continue;
-        const key = (await link.getAttribute('href')) || (await link.textContent());
-        if (clicked.has(key)) continue;
-        clicked.add(key);
-        // Sidebar overflows viewport; use native DOM click to bypass
-        // Playwright viewport and pointer-interception checks.
-        await link.evaluate(el => el.click());
-        await expect(page.locator('a.nav-link').first()).toBeVisible();
-        clickedNew = true;
-      }
-      if (!clickedNew) break;
+    // Navigate to each admin UI route directly via hash routing.
+    // Routes sourced from signalk-server packages/server-admin-ui/src.
+    const routes = [
+      { path: '/dashboard', title: 'Dashboard' },
+      { path: '/webapps', title: 'Webapps' },
+      { path: '/databrowser', title: 'Data Browser' },
+      { path: '/appstore', title: 'Appstore' },
+      { path: '/serverConfiguration/settings', title: 'Settings' },
+      { path: '/serverConfiguration/connections/-', title: 'Data Connections' },
+      { path: '/serverConfiguration/plugins/-', title: 'Plugin Config' },
+      { path: '/serverConfiguration/log', title: 'Server Logs' },
+      { path: '/security/settings', title: 'Security Settings' },
+      { path: '/security/users', title: 'Users' },
+      { path: '/documentation', title: 'Documentation' },
+    ];
+
+    for (const { path, title } of routes) {
+      await page.goto(`/admin/#${path}`);
+      // Verify the page rendered without crashing (sidebar still present)
+      await expect(page.locator('.sidebar-nav').first()).toBeVisible({ timeout: 5000 });
     }
-    // Ensure we actually browsed multiple pages
-    expect(clicked.size).toBeGreaterThanOrEqual(3);
   });
 
   test('Verify live vessel data visible', async ({ page }) => {
