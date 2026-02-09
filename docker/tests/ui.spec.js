@@ -2,26 +2,28 @@ const { test, expect } = require('@playwright/test');
 
 test.describe('SignalK Admin UI', () => {
 
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/admin');
-    await page.waitForLoadState('networkidle');
+  test.beforeEach(async ({ page, context }) => {
+    // Login via API (admin created by validate_rest.js) and set JWT cookie
+    const res = await fetch('http://localhost:3000/signalk/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'test123' }),
+    });
 
-    // Wait for the React app to render a form (either Enable or Login)
-    await page.waitForSelector('input[name="username"]', { timeout: 15000 });
-    await page.fill('input[name="username"]', 'admin');
-    await page.fill('input[name="password"]', 'test123');
-
-    // Enable Security page (first boot, no users) has "Enable" button
-    const enableBtn = page.locator('button:has-text("Enable")');
-    if (await enableBtn.isVisible()) {
-      await enableBtn.click();
-      // After enabling security, wait for the login form
-      await page.waitForSelector('button:has-text("Login")', { timeout: 10000 });
-      await page.fill('input[name="username"]', 'admin');
-      await page.fill('input[name="password"]', 'test123');
+    if (!res.ok) {
+      throw new Error(`Login API failed: HTTP ${res.status}`);
     }
 
-    await page.click('button:has-text("Login")');
+    const { token } = await res.json();
+
+    await context.addCookies([{
+      name: 'JAUTHENTICATION',
+      value: token,
+      url: 'http://localhost:3000',
+    }]);
+
+    // Navigate to admin UI already authenticated
+    await page.goto('/admin/');
     await expect(page.locator('text=Server')).toBeVisible({ timeout: 15000 });
   });
 
