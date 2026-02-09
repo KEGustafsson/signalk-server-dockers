@@ -24,11 +24,12 @@ test.describe('SignalK Admin UI', () => {
 
     // Navigate to admin UI already authenticated
     await page.goto('/admin/');
-    await expect(page.locator('text=Server')).toBeVisible({ timeout: 15000 });
+    // Wait for sidebar nav links to confirm dashboard has loaded
+    await expect(page.locator('a.nav-link').first()).toBeVisible({ timeout: 15000 });
   });
 
   test('Login works', async ({ page }) => {
-    await expect(page.locator('text=Server')).toBeVisible();
+    await expect(page.locator('a.nav-link').first()).toBeVisible();
   });
 
   test('Browse all Admin UI pages', async ({ page }) => {
@@ -44,14 +45,14 @@ test.describe('SignalK Admin UI', () => {
     ];
 
     for (const name of pages) {
-      await page.click(`text=${name}`);
-      await expect(page.locator('h1')).toBeVisible();
+      await page.locator(`a.nav-link:has-text("${name}")`).first().click();
+      await expect(page.locator('h1').first()).toBeVisible();
     }
   });
 
   test('Verify live vessel data visible', async ({ page }) => {
-    await page.click('text=Data Browser');
-    await expect(page.locator('text=navigation')).toBeVisible({ timeout: 10000 });
+    await page.locator('a.nav-link:has-text("Data Browser")').first().click();
+    await expect(page.locator('text=navigation').first()).toBeVisible({ timeout: 10000 });
   });
 
   test('Verify WebSocket connection', async ({ page }) => {
