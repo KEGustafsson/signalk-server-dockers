@@ -4,6 +4,7 @@ test.describe('SignalK Admin UI', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.goto('/admin');
+    await page.waitForLoadState('networkidle');
 
     // Wait for the React app to render a form (either Enable or Login)
     await page.waitForSelector('input[name="username"]', { timeout: 15000 });
