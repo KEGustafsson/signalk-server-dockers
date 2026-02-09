@@ -184,6 +184,7 @@ async function main() {
   }
 
   printSummary(results, testStart);
+  saveResults(results, testStart);
 }
 
 function printSummary(results, startTime) {
@@ -201,6 +202,12 @@ function printSummary(results, startTime) {
   console.log('-'.repeat(50));
   console.log(`  Total: ${results.length} | Passed: ${passed} | Failed: ${failed} | Time: ${elapsed}s`);
   console.log('='.repeat(50));
+}
+
+function saveResults(results, startTime) {
+  const fs = require('fs');
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  fs.writeFileSync('test-results-rest.json', JSON.stringify({ section: 'REST API Validation', elapsed, results }, null, 2));
 }
 
 main().catch((err) => {
