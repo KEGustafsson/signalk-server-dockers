@@ -33,23 +33,27 @@ test.describe('SignalK Admin UI', () => {
   });
 
   test('Browse all Admin UI pages', async ({ page }) => {
-    const pages = [
-      'Server',
-      'Data Browser',
-      'Vessels',
-      'Plugins',
-      'Webapps',
-      'Users',
-      'Security',
-      'Logs'
-    ];
-
-    for (const name of pages) {
-      await page.locator(`a.nav-link:has-text("${name}")`).first().click();
-      // Verify page is still functional after navigation (some items are
-      // dropdown toggles without their own page content / h1)
-      await expect(page.locator('a.nav-link').first()).toBeVisible();
+    // Dynamically discover and click all sidebar nav links.
+    // Multiple passes handle dropdown toggles that reveal sub-items.
+    const clicked = new Set();
+    for (let pass = 0; pass < 3; pass++) {
+      const links = page.locator('a.nav-link');
+      const count = await links.count();
+      let clickedNew = false;
+      for (let i = 0; i < count; i++) {
+        const link = links.nth(i);
+        if (!(await link.isVisible())) continue;
+        const key = (await link.getAttribute('href')) || (await link.textContent());
+        if (clicked.has(key)) continue;
+        clicked.add(key);
+        await link.click();
+        await expect(page.locator('a.nav-link').first()).toBeVisible();
+        clickedNew = true;
+      }
+      if (!clickedNew) break;
     }
+    // Ensure we actually browsed multiple pages
+    expect(clicked.size).toBeGreaterThanOrEqual(3);
   });
 
   test('Verify live vessel data visible', async ({ page }) => {
