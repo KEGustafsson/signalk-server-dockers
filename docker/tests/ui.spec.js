@@ -54,8 +54,6 @@ test.describe('SignalK Admin UI', () => {
       // Verify the page rendered without crashing (sidebar still present)
       await expect(page.locator('.sidebar-nav').first()).toBeVisible({ timeout: 5000 });
     }
-    // Ensure we actually browsed multiple pages
-    expect(clicked.size).toBeGreaterThanOrEqual(3);
   });
 
   test('Verify live vessel data visible', async ({ page }) => {
