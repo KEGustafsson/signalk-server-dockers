@@ -116,6 +116,9 @@ test.describe('SignalK Admin UI', () => {
     console.log('-'.repeat(50));
     console.log(`  Total: ${results.length} | Passed: ${passed} | Failed: ${failed} | Time: ${elapsed}s`);
     console.log('='.repeat(50));
+
+    const fs = require('fs');
+    fs.writeFileSync('test-results-ui.json', JSON.stringify({ section: 'UI Tests (Playwright)', elapsed, results }, null, 2));
   });
 
 });

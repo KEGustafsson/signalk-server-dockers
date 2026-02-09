@@ -83,6 +83,11 @@ jobs:
             test-results
             playwright-report
 
+      - name: Test Summary
+        if: always()
+        run: |
+          node docker/tests/print_summary.js
+
       - name: Security scan (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
