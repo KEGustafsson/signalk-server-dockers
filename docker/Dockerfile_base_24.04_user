@@ -22,9 +22,8 @@ RUN apt-get update \
   && chmod -R 777 /var/run/dbus/ /var/run/avahi-daemon/ \
   && chown -R avahi:avahi /var/run/avahi-daemon/
 
-#RUN curl -fsSL https://deb.nodesource.com/setup_$NODE | bash - \
-RUN curl -fsSL https://deb.nodesource.com/nsolid_setup_5.x | bash - \
-  && apt-get -y install --no-install-recommends nodejs \
+RUN curl -fsSL https://deb.nodesource.com/setup_$NODE | bash - \
+  && apt-get -y install --no-install-recommends nsolid \
   && npm config rm proxy \
   && npm config rm https-proxy \
   && npm config set fetch-retries 5 \
