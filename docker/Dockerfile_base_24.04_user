@@ -23,7 +23,7 @@ RUN apt-get update \
   && chown -R avahi:avahi /var/run/avahi-daemon/
 
 RUN curl -fsSL https://deb.nodesource.com/setup_$NODE | bash - \
-  && apt-get -y install --no-install-recommends nsolid \
+  && apt-get -y install --no-install-recommends nodejs \
   && npm config rm proxy \
   && npm config rm https-proxy \
   && npm config set fetch-retries 5 \
