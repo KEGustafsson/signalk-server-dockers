@@ -15,24 +15,20 @@ RUN mkdir -p /home/node/.signalk/ /home/node/signalk/ \
 FROM base AS tarballs_installed
 COPY --chown=node:node *.tgz .
 
-RUN npm init -y && \
-    # Separate server from others more explicitly
+RUN set -x; \
+    npm init -y && \
     SERVER_TARBALL=$(ls signalk-server-*.tgz | head -n 1) && \
+    echo "Found Server: $SERVER_TARBALL" && \
     EXTRAS=$(ls *.tgz | grep -v "$SERVER_TARBALL" || true) && \
-    \
-    # Install extras first for hoisting
+    echo "Found Extras: $EXTRAS" && \
     if [ -n "$EXTRAS" ]; then npm install $EXTRAS; fi && \
-    \
-    # Install server nested
     npm install "$SERVER_TARBALL" --install-strategy=nested && \
-    \
-    # Only move if the directory actually exists to prevent build failure
     if [ -d node_modules/@signalk ]; then \
         dest="node_modules/signalk-server/node_modules" && \
         mkdir -p "$dest/@signalk" && \
         cp -rf node_modules/@signalk/* "$dest/@signalk/" && \
         mkdir -p "$dest/@mxtommy" && \
-        [ -d node_modules/@mxtommy/kip ] && cp -rf node_modules/@mxtommy/kip "$dest/@mxtommy/"; \
+        if [ -d node_modules/@mxtommy/kip ]; then cp -rf node_modules/@mxtommy/kip "$dest/@mxtommy/"; fi; \
     fi && \
     npm cache clean --force && \
     rm *.tgz
