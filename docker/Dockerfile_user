@@ -28,7 +28,7 @@ RUN npm init -y \
        && rm -rf node_modules/@signalk/ \
        && mkdir -p node_modules/signalk-server/node_modules/@mxtommy/ \
        && cp -rf node_modules/@mxtommy/kip node_modules/signalk-server/node_modules/@mxtommy/ \
-       && rm -rf node_modules/@mxtommy/;
+       && rm -rf node_modules/@mxtommy/ \
      fi \
   && rm *.tgz
 
