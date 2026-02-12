@@ -7,14 +7,13 @@ RUN deluser node 2>/dev/null || true && \
     delgroup node 2>/dev/null || true
 
 RUN apk add --no-cache \
-    sudo git bash coreutils \
+    sudo git bash \
     python3 py3-virtualenv py3-pip build-base \
     avahi avahi-compat-libdns_sd \
     procps-ng nano curl libcap-setcap dbus bluez \
  && addgroup -g 991 -S docker \
  && addgroup -g 990 -S i2c \
  && addgroup -g 989 -S spi \
- && chmod u+s /bin/date \
  && mkdir -p /var/run/dbus /var/run/avahi-daemon \
  && chmod 777 /var/run/dbus /var/run/avahi-daemon \
  && chown -R avahi:avahi /var/run/avahi-daemon
@@ -38,6 +37,7 @@ RUN addgroup -g 1000 node \
  && addgroup node netdev \
  && addgroup node docker \
  && echo 'node ALL=(ALL) NOPASSWD: /bin/date' >> /etc/sudoers \
+ && echo 'node ALL=(ALL) NOPASSWD: /sbin/hwclock' >> /etc/sudoers \
  && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 WORKDIR /home/node
