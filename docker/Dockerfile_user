@@ -25,7 +25,10 @@ RUN npm init -y \
   && if [ -d node_modules/@signalk ]; then \
        mkdir -p node_modules/signalk-server/node_modules/@signalk/ \
        && cp -rf node_modules/@signalk/* node_modules/signalk-server/node_modules/@signalk/ \
-       && rm -rf node_modules/@signalk/; \
+       && rm -rf node_modules/@signalk/ \
+       && mkdir -p node_modules/signalk-server/node_modules/@mxtommy/ \
+       && cp -rf node_modules/@mxtommy/kip node_modules/signalk-server/node_modules/@mxtommy/ \
+       && rm -rf node_modules/@mxtommy/;
      fi
 
 FROM base
