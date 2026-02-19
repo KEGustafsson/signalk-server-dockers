@@ -103,8 +103,8 @@ jobs:
         id: tags
         run: |
           git clone https://github.com/SignalK/signalk-server.git
-          git checkout tags/2.21.3
           cd signalk-server
+          git checkout tags/v2.21.3
           git fetch --tags
           tag=$(git describe --tags `git rev-list --tags --max-count=1`)
           echo "tag=$tag" >> $GITHUB_OUTPUT
@@ -122,8 +122,8 @@ jobs:
         id: git
         run: |
           git clone https://github.com/SignalK/signalk-server.git
-          git checkout tags/2.21.3
           cd signalk-server
+          git checkout tags/v2.21.3
           if [ -d "./../patch_latest" ] && [ "$(ls -A ./../patch_latest/*.patch 2>/dev/null)" ]; then
             git apply ./../patch_latest/*.patch
           else
