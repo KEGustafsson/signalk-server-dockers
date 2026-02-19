@@ -102,8 +102,8 @@ jobs:
       - name: signalk-server tags
         id: tags
         run: |
-          # git clone https://github.com/SignalK/signalk-server.git
-          git clone --depth 1 --branch v2.21.3 https://github.com/SignalK/signalk-server.git
+          git clone https://github.com/SignalK/signalk-server.git
+          git switch -c v2.21.3
           cd signalk-server
           git fetch --tags
           tag=$(git describe --tags `git rev-list --tags --max-count=1`)
@@ -121,8 +121,8 @@ jobs:
       - name: signalk-server download and patch
         id: git
         run: |
-          # git clone https://github.com/SignalK/signalk-server.git
-          git clone --depth 1 --branch v2.21.3 https://github.com/SignalK/signalk-server.git
+          git clone https://github.com/SignalK/signalk-server.git
+          git switch -c v2.21.3
           cd signalk-server
           if [ -d "./../patch_latest" ] && [ "$(ls -A ./../patch_latest/*.patch 2>/dev/null)" ]; then
             git apply ./../patch_latest/*.patch
