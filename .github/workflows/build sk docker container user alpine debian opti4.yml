@@ -105,7 +105,7 @@ jobs:
           git clone https://github.com/SignalK/signalk-server.git
           cd signalk-server
           git fetch --tags
-          git checkout v2.21.3
+          # git checkout v2.21.3
           tag=$(git describe --tags --exact-match)
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "Extracted tag: $tag"
@@ -124,7 +124,7 @@ jobs:
           git clone https://github.com/SignalK/signalk-server.git
           cd signalk-server
           git fetch --tags
-          git checkout v2.21.3
+          # git checkout v2.21.3
           if [ -d "./../patch_latest" ] && [ "$(ls -A ./../patch_latest/*.patch 2>/dev/null)" ]; then
             git apply ./../patch_latest/*.patch
           else
