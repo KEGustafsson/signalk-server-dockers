@@ -1,0 +1,490 @@
+From cd267cea68a680febc418489bcaf269214645117 Mon Sep 17 00:00:00 2001
+From: KEGustafsson <ke.gustafsson@gmail.com>
+Date: Fri, 20 Feb 2026 13:49:58 +0200
+Subject: [PATCH] feat: show ws device names via /sources
+
+Publish authenticated ws device descriptions as source metadata and use /sources in admin UI to resolve ws.* source refs to human-readable labels.
+
+Update Dashboard, Data Browser (virtualized rows), and Source Priorities to use a shared source label resolver with sourceRef fallback.
+---
+ .../src/utils/sourceLabelUtils.js             | 48 +++++++++++
+ .../src/views/Dashboard/Dashboard.js          | 40 ++++++++-
+ .../src/views/DataBrowser/DataBrowser.js      |  1 +
+ .../src/views/DataBrowser/DataRow.js          |  7 +-
+ .../views/DataBrowser/VirtualizedDataTable.js |  4 +-
+ .../views/ServerConfig/SourcePriorities.js    | 38 ++++++++-
+ src/interfaces/ws.js                          | 84 +++++++++++++++++--
+ test/security.js                              | 26 ++++++
+ 8 files changed, 232 insertions(+), 16 deletions(-)
+ create mode 100644 packages/server-admin-ui/src/utils/sourceLabelUtils.js
+
+diff --git a/packages/server-admin-ui/src/utils/sourceLabelUtils.js b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
+new file mode 100644
+index 000000000..89862c7c4
+--- /dev/null
++++ b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
+@@ -0,0 +1,48 @@
++function getDeepestSourceMetadata(sourceRef, sources) {
++  if (
++    !sourceRef ||
++    !sources ||
++    typeof sources !== 'object' ||
++    !sourceRef.startsWith('ws.')
++  ) {
++    return null
++  }
++
++  const parts = sourceRef.split('.')
++  let node = sources
++
++  for (let i = 0; i < parts.length; i++) {
++    if (!node || typeof node !== 'object' || !(parts[i] in node)) {
++      break
++    }
++    node = node[parts[i]]
++  }
++
++  return node && typeof node === 'object' ? node : null
++}
++
++function getSourceDescription(metadata) {
++  if (!metadata || typeof metadata !== 'object') {
++    return null
++  }
++
++  if (typeof metadata.description === 'string' && metadata.description) {
++    return metadata.description
++  }
++
++  if (
++    metadata.n2k &&
++    typeof metadata.n2k.description === 'string' &&
++    metadata.n2k.description
++  ) {
++    return metadata.n2k.description
++  }
++
++  return null
++}
++
++export function getSourceDisplayLabel(sourceRef, sources = {}) {
++  const metadata = getDeepestSourceMetadata(sourceRef, sources)
++  const description = getSourceDescription(metadata)
++  return description || sourceRef
++}
+diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
+index b7ecbec79..2a444aba8 100644
+--- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
++++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
+@@ -10,8 +10,36 @@ import {
+   Table
+ } from 'reactstrap'
+ import '../../fa-pulse.css'
++import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
+ 
+ const Dashboard = (props) => {
++  const [sources, setSources] = React.useState({})
++
++  React.useEffect(() => {
++    let canceled = false
++
++    const fetchSources = () => {
++      fetch('/signalk/v1/api/sources', {
++        credentials: 'include'
++      })
++        .then((response) => response.json())
++        .then((data) => {
++          if (!canceled) {
++            setSources(data)
++          }
++        })
++        .catch(() => undefined)
++    }
++
++    fetchSources()
++    const interval = setInterval(fetchSources, 30 * 1000)
++
++    return () => {
++      canceled = true
++      clearInterval(interval)
++    }
++  }, [])
++
+   const {
+     deltaRate,
+     numberOfAvailablePaths,
+@@ -66,6 +94,7 @@ const Dashboard = (props) => {
+   }
+ 
+   const renderActivity = (providerId, providerStats, linkType) => {
++    const label = getSourceDisplayLabel(providerId, sources)
+     return (
+       <li key={providerId} onClick={() => props.history.push(`/dashboard`)}>
+         <i
+@@ -84,7 +113,7 @@ const Dashboard = (props) => {
+         <span className="title">
+           {linkType === 'plugin'
+             ? pluginNameLink(providerId)
+-            : providerIdLink(providerId)}
++            : providerIdLink(providerId, label)}
+         </span>
+         {providerStats.writeRate > 0 && (
+           <span className="value">
+@@ -136,7 +165,10 @@ const Dashboard = (props) => {
+         <td>
+           {status.statusType === 'plugin'
+             ? pluginNameLink(status.id)
+-            : providerIdLink(status.id)}
++            : providerIdLink(
++                status.id,
++                getSourceDisplayLabel(status.id, sources)
++              )}
+         </td>
+         <td>
+           <p className="text-danger">{lastError}</p>
+@@ -286,11 +318,11 @@ function pluginNameLink(id) {
+   return <a href={'#/serverConfiguration/plugins/' + id}>{id}</a>
+ }
+ 
+-function providerIdLink(id) {
++function providerIdLink(id, label) {
+   if (id === 'defaults') {
+     return <a href={'#/serverConfiguration/settings'}>{id}</a>
+   } else if (id.startsWith('ws.')) {
+-    return <a href={'#/security/devices'}>{id}</a>
++    return <a href={'#/security/devices'}>{label || id}</a>
+   } else {
+     return <a href={'#/serverConfiguration/connections/' + id}>{id}</a>
+   }
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
+index d97b5a4c0..b04e773e5 100644
+--- a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
++++ b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
+@@ -509,6 +509,7 @@ class DataBrowser extends Component {
+                     selectedSources={this.state.selectedSources}
+                     onToggleSourceFilter={this.toggleSourceFilter}
+                     sourceFilterActive={this.state.sourceFilterActive}
++                    sources={this.state.sources || {}}
+                   />
+                 )}
+ 
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataRow.js b/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
+index 1a7eb4473..71611fa11 100644
+--- a/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
++++ b/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
+@@ -3,6 +3,7 @@ import { usePathData, useMetaData } from './usePathData'
+ import TimestampCell from './TimestampCell'
+ import CopyToClipboardWithFade from './CopyToClipboardWithFade'
+ import { getValueRenderer, DefaultValueRenderer } from './ValueRenderers'
++import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
+ 
+ /**
+  * DataRow - Individual virtualized row with granular subscription
+@@ -15,7 +16,8 @@ function DataRow({
+   raw,
+   isPaused,
+   onToggleSource,
+-  selectedSources
++  selectedSources,
++  sources
+ }) {
+   const data = usePathData(context, path$SourceKey)
+   const meta = useMetaData(context, data?.path)
+@@ -73,7 +75,8 @@ function DataRow({
+           }}
+         />
+         <CopyToClipboardWithFade text={data.$source}>
+-          {data.$source} <i className="far fa-copy"></i>
++          {getSourceDisplayLabel(data.$source, sources)}{' '}
++          <i className="far fa-copy"></i>
+         </CopyToClipboardWithFade>
+         {data.pgn && <span>&nbsp;{data.pgn}</span>}
+         {data.sentence && <span>&nbsp;{data.sentence}</span>}
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
+index a034be7a6..125592421 100644
+--- a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
++++ b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
+@@ -15,7 +15,8 @@ function VirtualizedDataTable({
+   onToggleSource,
+   selectedSources,
+   onToggleSourceFilter,
+-  sourceFilterActive
++  sourceFilterActive,
++  sources
+ }) {
+   const containerRef = useRef(null)
+   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 })
+@@ -236,6 +237,7 @@ function VirtualizedDataTable({
+             isPaused={isPaused}
+             onToggleSource={onToggleSource}
+             selectedSources={selectedSources}
++            sources={sources}
+           />
+         ))}
+ 
+diff --git a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
+index 20f5c49c5..278f7e287 100644
+--- a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
++++ b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
+@@ -15,6 +15,7 @@ import {
+ import Creatable from 'react-select/creatable'
+ import remove from 'lodash.remove'
+ import uniq from 'lodash.uniq'
++import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
+ 
+ export const SOURCEPRIOS_PRIO_CHANGED = 'SOURCEPRIOS_PPRIO_CHANGED'
+ export const SOURCEPRIOS_PRIO_DELETED = 'SOURCEPRIOS_PRIO_DELETED'
+@@ -189,8 +190,11 @@ class PrefsEditor extends Component {
+             <tbody>
+               {[...this.props.priorities, { sourceRef: '', timeout: '' }].map(
+                 ({ sourceRef, timeout }, index) => {
++                  const { resolveSourceLabel } = this.props
+                   const options = this.state.sourceRefs.map((sourceRef) => ({
+-                    label: sourceRef,
++                    label: resolveSourceLabel
++                      ? resolveSourceLabel(sourceRef)
++                      : sourceRef,
+                     value: sourceRef
+                   }))
+                   return (
+@@ -200,7 +204,12 @@ class PrefsEditor extends Component {
+                         <Creatable
+                           menuPortalTarget={document.body}
+                           options={options}
+-                          value={{ value: sourceRef, label: sourceRef }}
++                          value={{
++                            value: sourceRef,
++                            label: resolveSourceLabel
++                              ? resolveSourceLabel(sourceRef)
++                              : sourceRef
++                          }}
+                           onChange={(e) => {
+                             this.props.dispatch({
+                               type: SOURCEPRIOS_PRIO_CHANGED,
+@@ -348,7 +357,8 @@ class SourcePriorities extends Component {
+   constructor(props) {
+     super(props)
+     this.state = {
+-      availablePaths: []
++      availablePaths: [],
++      sources: {}
+     }
+     fetchAvailablePaths((pathsArray) => {
+       this.setState({
+@@ -358,6 +368,27 @@ class SourcePriorities extends Component {
+         }))
+       })
+     })
++    this.fetchSources = this.fetchSources.bind(this)
++    this.resolveSourceLabel = this.resolveSourceLabel.bind(this)
++  }
++
++  componentDidMount() {
++    this.fetchSources()
++  }
++
++  fetchSources() {
++    fetch('/signalk/v1/api/sources', {
++      credentials: 'include'
++    })
++      .then((response) => response.json())
++      .then((sources) => {
++        this.setState({ sources })
++      })
++      .catch(() => undefined)
++  }
++
++  resolveSourceLabel(sourceRef) {
++    return getSourceDisplayLabel(sourceRef, this.state.sources)
+   }
+ 
+   render() {
+@@ -421,6 +452,7 @@ class SourcePriorities extends Component {
+                         dispatch={this.props.dispatch}
+                         isSaving={this.props.saveState.isSaving}
+                         pathIndex={index}
++                        resolveSourceLabel={this.resolveSourceLabel}
+                       />
+                     </td>
+                     <td style={{ border: 'none' }}>
+diff --git a/src/interfaces/ws.js b/src/interfaces/ws.js
+index 47992ccee..de88604a5 100644
+--- a/src/interfaces/ws.js
++++ b/src/interfaces/ws.js
+@@ -17,7 +17,11 @@ const _ = require('lodash')
+ const ports = require('../ports')
+ const cookie = require('cookie')
+ const { getSourceId, getMetadata } = require('@signalk/signalk-schema')
+-const { requestAccess, InvalidTokenError } = require('../security')
++const {
++  requestAccess,
++  InvalidTokenError,
++  getSecurityConfig
++} = require('../security')
+ const {
+   findRequest,
+   updateRequest,
+@@ -45,6 +49,68 @@ const BACKPRESSURE_EXIT_THRESHOLD = process.env.BACKPRESSURE_EXIT
+   ? parseInt(process.env.BACKPRESSURE_EXIT, 10)
+   : 1024
+ 
++function wsSourceRefFromIdentifier(identifier) {
++  return `ws.${identifier.replace(/\./g, '_')}`
++}
++
++function getWsDeviceDescription(app, identifier) {
++  if (
++    !identifier ||
++    identifier === 'AUTO' ||
++    !app.securityStrategy ||
++    typeof app.securityStrategy.getDevices !== 'function'
++  ) {
++    return undefined
++  }
++
++  try {
++    const config = getSecurityConfig(app)
++    const devices = app.securityStrategy.getDevices(config)
++    if (!Array.isArray(devices)) {
++      return undefined
++    }
++    const device = devices.find((candidate) => candidate.clientId === identifier)
++    return device && device.description ? device.description : undefined
++  } catch (error) {
++    debugConnection(
++      `could not resolve ws device description for ${identifier}: ${
++        error && error.message ? error.message : error
++      }`
++    )
++    return undefined
++  }
++}
++
++function publishWsDeviceSourceMetadata(app, identifier) {
++  if (!app.deltaCache || typeof app.deltaCache.setSourceDelta !== 'function') {
++    return
++  }
++
++  const description = getWsDeviceDescription(app, identifier)
++  if (!description) {
++    return
++  }
++
++  const sourceRef = wsSourceRefFromIdentifier(identifier)
++  const sourceDelta = {
++    context: app.selfContext,
++    updates: [
++      {
++        source: {
++          label: 'ws',
++          src: sourceRef.substring(3),
++          type: 'ws',
++          description
++        },
++        timestamp: new Date().toISOString(),
++        values: []
++      }
++    ]
++  }
++
++  app.deltaCache.setSourceDelta(sourceRef, sourceDelta)
++}
++
+ module.exports = function (app) {
+   'use strict'
+ 
+@@ -186,6 +252,7 @@ module.exports = function (app) {
+         let principalId
+         if (spark.request.skPrincipal) {
+           principalId = spark.request.skPrincipal.identifier
++          publishWsDeviceSourceMetadata(app, principalId)
+         }
+ 
+         debugConnection(
+@@ -288,7 +355,7 @@ module.exports = function (app) {
+               }
+ 
+               if (msg.accessRequest) {
+-                processAccessRequest(spark, msg)
++                processAccessRequest(app, spark, msg)
+               }
+ 
+               if (msg.login && app.securityStrategy.supportsLogin()) {
+@@ -438,7 +505,7 @@ module.exports = function (app) {
+     })
+   }
+ 
+-  function processAccessRequest(spark, msg) {
++  function processAccessRequest(app, spark, msg) {
+     if (spark.skPendingAccessRequest) {
+       spark.write({
+         requestId: msg.requestId,
+@@ -461,8 +528,13 @@ module.exports = function (app) {
+             if (res.accessRequest && res.accessRequest.token) {
+               spark.request.token = res.accessRequest.token
+               app.securityStrategy.authorizeWS(spark.request)
+-              spark.request.source =
+-                'ws.' + spark.request.skPrincipal.identifier.replace(/\./g, '_')
++              spark.request.source = wsSourceRefFromIdentifier(
++                spark.request.skPrincipal.identifier
++              )
++              publishWsDeviceSourceMetadata(
++                app,
++                spark.request.skPrincipal.identifier
++              )
+             }
+           }
+           spark.write(res)
+@@ -531,7 +603,7 @@ function createPrimusAuthorize(authorizeWS) {
+       const identifier = _.get(req, 'skPrincipal.identifier')
+       if (identifier) {
+         debug(`authorized username: ${identifier}`)
+-        req.source = 'ws.' + identifier.replace(/\./g, '_')
++        req.source = wsSourceRefFromIdentifier(identifier)
+       }
+     } catch (error) {
+       // To be able to login or request access via WS with security in place
+diff --git a/test/security.js b/test/security.js
+index 391da01d1..5ad8e4534 100644
+--- a/test/security.js
++++ b/test/security.js
+@@ -506,6 +506,7 @@ describe('Security', () => {
+     json.accessRequest.should.have.property('permission')
+     json.accessRequest.permission.should.equal('APPROVED')
+     json.accessRequest.should.have.property('token')
++    const deviceToken = json.accessRequest.token
+ 
+     result = await fetch(`${url}/skServer/security/devices`, {
+       headers: {
+@@ -519,6 +520,31 @@ describe('Security', () => {
+     json[0].clientId.should.equal('1235-45653-343453')
+     json[0].permissions.should.equal('readwrite')
+     json[0].description.should.equal('My Awesome Sensor')
++
++    await new Promise((resolve, reject) => {
++      const ws = new WebSocket(
++        `ws://0.0.0.0:${port}/signalk/v1/stream?subscribe=none&token=${deviceToken}`
++      )
++      ws.on('message', () => {
++        ws.close()
++      })
++      ws.on('close', resolve)
++      ws.on('error', reject)
++    })
++
++    result = await fetch(`${url}/signalk/v1/api/sources`, {
++      headers: {
++        Cookie: `JAUTHENTICATION=${adminToken}`
++      }
++    })
++    result.status.should.equal(200)
++    json = await result.json()
++    json.should.have.property('ws')
++    json.ws.should.have.property('1235-45653-343453')
++    json.ws['1235-45653-343453'].should.have.property('n2k')
++    json.ws['1235-45653-343453'].n2k.description.should.equal(
++      'My Awesome Sensor'
++    )
+   })
+ 
+   it('Device access request and denial works', async function () {
