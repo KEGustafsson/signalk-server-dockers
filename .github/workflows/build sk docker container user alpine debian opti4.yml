@@ -126,8 +126,8 @@ jobs:
           cd signalk-server
           # git fetch --tags
           # git checkout v2.21.3
-          if [ -d "./../patch_latest" ] && [ "$(ls -A ./../patch_latest/*.patch 2>/dev/null)" ]; then
-            git apply ./../patch_latest/*.patch
+          if [ -d "./../patch_latest_2" ] && [ "$(ls -A ./../patch_latest_2/*.patch 2>/dev/null)" ]; then
+            git apply ./../patch_latest_2/*.patch
           else
             echo "No patches to apply"
           fi
