@@ -1,7 +1,7 @@
 From 52d64bd258c8365ae4742de8a17bccee2cfc1af5 Mon Sep 17 00:00:00 2001
 From: KE Gustafsson <ke.gustafsson@gmail.com>
 Date: Sat, 21 Feb 2026 16:30:26 +0200
-Subject: [PATCH] fix(admin-ui): show ws n2k labels in source views
+Subject: [PATCH 1/2] fix(admin-ui): show ws n2k labels in source views
 
 Resolve ws.* source references to human-readable labels from
 sources.ws.<device>.n2k.description.
@@ -682,3 +682,219 @@ index 20f5c49c5..32a4dbb01 100644
                        />
                      </td>
                      <td style={{ border: 'none' }}>
+
+From bb192b4cd997287e7a3778308458aecd937d2536 Mon Sep 17 00:00:00 2001
+From: KE Gustafsson <ke.gustafsson@gmail.com>
+Date: Sat, 21 Feb 2026 16:58:07 +0200
+Subject: [PATCH 2/2] fix(ws): publish device descriptions in sources
+
+Add ws source metadata publishing for approved/authorized devices so
+admin UIs can resolve ws source refs to human-readable labels.
+
+Cache device descriptions and skip duplicate source delta writes for
+performance.
+
+Extend security test to verify /signalk/v1/api/sources exposes ws device
+description under n2k metadata after ws connect.
+---
+ src/interfaces/ws.js | 100 ++++++++++++++++++++++++++++++++++++++++---
+ test/security.js     |  26 +++++++++++
+ 2 files changed, 120 insertions(+), 6 deletions(-)
+
+diff --git a/src/interfaces/ws.js b/src/interfaces/ws.js
+index 47992ccee..e625f00da 100644
+--- a/src/interfaces/ws.js
++++ b/src/interfaces/ws.js
+@@ -17,7 +17,11 @@ const _ = require('lodash')
+ const ports = require('../ports')
+ const cookie = require('cookie')
+ const { getSourceId, getMetadata } = require('@signalk/signalk-schema')
+-const { requestAccess, InvalidTokenError } = require('../security')
++const {
++  requestAccess,
++  InvalidTokenError,
++  getSecurityConfig
++} = require('../security')
+ const {
+   findRequest,
+   updateRequest,
+@@ -45,6 +49,84 @@ const BACKPRESSURE_EXIT_THRESHOLD = process.env.BACKPRESSURE_EXIT
+   ? parseInt(process.env.BACKPRESSURE_EXIT, 10)
+   : 1024
+ 
++function wsSourceRefFromIdentifier(identifier) {
++  return `ws.${identifier.replace(/\./g, '_')}`
++}
++
++const wsDeviceDescriptionCache = new Map()
++
++function getWsDeviceDescription(app, identifier) {
++  if (
++    !identifier ||
++    identifier === 'AUTO' ||
++    !app.securityStrategy ||
++    typeof app.securityStrategy.getDevices !== 'function'
++  ) {
++    return undefined
++  }
++
++  const cached = wsDeviceDescriptionCache.get(identifier)
++  if (cached !== undefined) {
++    return cached || undefined
++  }
++
++  try {
++    const config = getSecurityConfig(app)
++    const devices = app.securityStrategy.getDevices(config)
++    if (!Array.isArray(devices)) {
++      wsDeviceDescriptionCache.set(identifier, null)
++      return undefined
++    }
++    const device = devices.find((candidate) => candidate.clientId === identifier)
++    const description =
++      device && device.description ? device.description : undefined
++    wsDeviceDescriptionCache.set(identifier, description || null)
++    return description
++  } catch (error) {
++    debugConnection(
++      `could not resolve ws device description for ${identifier}: ${
++        error && error.message ? error.message : error
++      }`
++    )
++    wsDeviceDescriptionCache.set(identifier, null)
++    return undefined
++  }
++}
++
++function publishWsDeviceSourceMetadata(app, identifier) {
++  if (!app.deltaCache || typeof app.deltaCache.setSourceDelta !== 'function') {
++    return
++  }
++
++  const sourceRef = wsSourceRefFromIdentifier(identifier)
++  if (sourceRef in app.deltaCache.sourceDeltas) {
++    return
++  }
++
++  const description = getWsDeviceDescription(app, identifier)
++  if (!description) {
++    return
++  }
++
++  const sourceDelta = {
++    context: app.selfContext,
++    updates: [
++      {
++        source: {
++          label: 'ws',
++          src: sourceRef.substring(3),
++          type: 'ws',
++          description
++        },
++        timestamp: new Date().toISOString(),
++        values: []
++      }
++    ]
++  }
++
++  app.deltaCache.setSourceDelta(sourceRef, sourceDelta)
++}
++
+ module.exports = function (app) {
+   'use strict'
+ 
+@@ -186,6 +268,7 @@ module.exports = function (app) {
+         let principalId
+         if (spark.request.skPrincipal) {
+           principalId = spark.request.skPrincipal.identifier
++          publishWsDeviceSourceMetadata(app, principalId)
+         }
+ 
+         debugConnection(
+@@ -288,7 +371,7 @@ module.exports = function (app) {
+               }
+ 
+               if (msg.accessRequest) {
+-                processAccessRequest(spark, msg)
++                processAccessRequest(app, spark, msg)
+               }
+ 
+               if (msg.login && app.securityStrategy.supportsLogin()) {
+@@ -438,7 +521,7 @@ module.exports = function (app) {
+     })
+   }
+ 
+-  function processAccessRequest(spark, msg) {
++  function processAccessRequest(app, spark, msg) {
+     if (spark.skPendingAccessRequest) {
+       spark.write({
+         requestId: msg.requestId,
+@@ -461,8 +544,13 @@ module.exports = function (app) {
+             if (res.accessRequest && res.accessRequest.token) {
+               spark.request.token = res.accessRequest.token
+               app.securityStrategy.authorizeWS(spark.request)
+-              spark.request.source =
+-                'ws.' + spark.request.skPrincipal.identifier.replace(/\./g, '_')
++              spark.request.source = wsSourceRefFromIdentifier(
++                spark.request.skPrincipal.identifier
++              )
++              publishWsDeviceSourceMetadata(
++                app,
++                spark.request.skPrincipal.identifier
++              )
+             }
+           }
+           spark.write(res)
+@@ -531,7 +619,7 @@ function createPrimusAuthorize(authorizeWS) {
+       const identifier = _.get(req, 'skPrincipal.identifier')
+       if (identifier) {
+         debug(`authorized username: ${identifier}`)
+-        req.source = 'ws.' + identifier.replace(/\./g, '_')
++        req.source = wsSourceRefFromIdentifier(identifier)
+       }
+     } catch (error) {
+       // To be able to login or request access via WS with security in place
+diff --git a/test/security.js b/test/security.js
+index 391da01d1..5ad8e4534 100644
+--- a/test/security.js
++++ b/test/security.js
+@@ -506,6 +506,7 @@ describe('Security', () => {
+     json.accessRequest.should.have.property('permission')
+     json.accessRequest.permission.should.equal('APPROVED')
+     json.accessRequest.should.have.property('token')
++    const deviceToken = json.accessRequest.token
+ 
+     result = await fetch(`${url}/skServer/security/devices`, {
+       headers: {
+@@ -519,6 +520,31 @@ describe('Security', () => {
+     json[0].clientId.should.equal('1235-45653-343453')
+     json[0].permissions.should.equal('readwrite')
+     json[0].description.should.equal('My Awesome Sensor')
++
++    await new Promise((resolve, reject) => {
++      const ws = new WebSocket(
++        `ws://0.0.0.0:${port}/signalk/v1/stream?subscribe=none&token=${deviceToken}`
++      )
++      ws.on('message', () => {
++        ws.close()
++      })
++      ws.on('close', resolve)
++      ws.on('error', reject)
++    })
++
++    result = await fetch(`${url}/signalk/v1/api/sources`, {
++      headers: {
++        Cookie: `JAUTHENTICATION=${adminToken}`
++      }
++    })
++    result.status.should.equal(200)
++    json = await result.json()
++    json.should.have.property('ws')
++    json.ws.should.have.property('1235-45653-343453')
++    json.ws['1235-45653-343453'].should.have.property('n2k')
++    json.ws['1235-45653-343453'].n2k.description.should.equal(
++      'My Awesome Sensor'
++    )
+   })
+ 
+   it('Device access request and denial works', async function () {
