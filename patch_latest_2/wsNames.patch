@@ -1,7 +1,7 @@
 From cd267cea68a680febc418489bcaf269214645117 Mon Sep 17 00:00:00 2001
 From: KEGustafsson <ke.gustafsson@gmail.com>
 Date: Fri, 20 Feb 2026 13:49:58 +0200
-Subject: [PATCH 1/3] feat: show ws device names via /sources
+Subject: [PATCH 1/5] feat: show ws device names via /sources
 
 Publish authenticated ws device descriptions as source metadata and use /sources in admin UI to resolve ws.* source refs to human-readable labels.
 
@@ -492,7 +492,7 @@ index 391da01d1..5ad8e4534 100644
 From 0768d80de1874b3b884e57e05d30975a9a3dde02 Mon Sep 17 00:00:00 2001
 From: KE Gustafsson <ke.gustafsson@gmail.com>
 Date: Sat, 21 Feb 2026 13:06:32 +0200
-Subject: [PATCH 2/3] refactor: optimize ws device source metadata and
+Subject: [PATCH 2/5] refactor: optimize ws device source metadata and
  deduplicate sources fetch
 
 Cache device descriptions to avoid re-reading security config on every
@@ -740,7 +740,7 @@ index de88604a5..e625f00da 100644
 From 49674ed225c1abe8d34d49caa611ec62e3dca061 Mon Sep 17 00:00:00 2001
 From: KE Gustafsson <ke.gustafsson@gmail.com>
 Date: Sat, 21 Feb 2026 13:19:40 +0200
-Subject: [PATCH 3/3] refactor: optimize source label utils and add ws device
+Subject: [PATCH 3/5] refactor: optimize source label utils and add ws device
  names to react19 UI
 
 - Inline getSourceDescription with optional chaining in sourceLabelUtils
@@ -1123,3 +1123,186 @@ index 9e609262d..636f4eaa4 100644
      this.resolveSourceLabel = this.resolveSourceLabel.bind(this)
    }
  
+
+From a276861e230d27b27e0302c3045e9b2f8c94134d Mon Sep 17 00:00:00 2001
+From: KE Gustafsson <ke.gustafsson@gmail.com>
+Date: Sat, 21 Feb 2026 14:03:39 +0200
+Subject: [PATCH 4/5] fix: enable source name polling in DataBrowser and
+ SourcePriorities
+
+useSources(0) fetched sources only once at mount time, so ws device
+names wouldn't appear if metadata wasn't published yet. Switch to
+useSources() (30s polling) to match Dashboard behavior.
+
+Also fix react19 SourcePriorities Creatable value prop to display
+resolved source label instead of raw source ref.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+---
+ .../src/views/DataBrowser/VirtualizedDataTable.tsx     |  2 +-
+ .../src/views/ServerConfig/SourcePriorities.tsx        | 10 +++-------
+ .../src/views/DataBrowser/VirtualizedDataTable.js      |  2 +-
+ .../src/views/ServerConfig/SourcePriorities.js         |  7 +++++++
+ 4 files changed, 12 insertions(+), 9 deletions(-)
+
+diff --git a/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx b/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
+index ccdceed61..e2eaabeec 100644
+--- a/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
++++ b/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
+@@ -39,7 +39,7 @@ function VirtualizedDataTable({
+   sourceFilterActive,
+   showContext
+ }: VirtualizedDataTableProps) {
+-  const sources = useSources(0)
++  const sources = useSources()
+   const containerRef = useRef<HTMLDivElement>(null)
+   const [isNarrowScreen, setIsNarrowScreen] = useState(
+     typeof window !== 'undefined' && window.innerWidth <= 768
+diff --git a/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx b/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
+index 5d217114a..a7e2d9349 100644
+--- a/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
++++ b/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
+@@ -14,7 +14,7 @@ import { faFloppyDisk } from '@fortawesome/free-solid-svg-icons/faFloppyDisk'
+ import Creatable from 'react-select/creatable'
+ import uniq from 'lodash.uniq'
+ import { useStore, useSourcePriorities } from '../../store'
+-import { fetchSourcesData } from '../../hooks/useSources'
++import { useSources } from '../../hooks/useSources'
+ import { getSourceDisplayLabel } from '../../hooks/sourceLabelUtils'
+ 
+ // Types
+@@ -67,7 +67,7 @@ const PrefsEditor: React.FC<PrefsEditorProps> = ({
+ 
+   const [isOpen, setIsOpen] = useState(false)
+   const [sourceRefs, setSourceRefs] = useState<string[]>([])
+-  const [sources, setSources] = useState<Record<string, unknown>>({})
++  const sources = useSources()
+ 
+   useEffect(() => {
+     if (path) {
+@@ -77,10 +77,6 @@ const PrefsEditor: React.FC<PrefsEditorProps> = ({
+     }
+   }, [path])
+ 
+-  useEffect(() => {
+-    fetchSourcesData().then(setSources).catch(() => undefined)
+-  }, [])
+-
+   const toggleEditor = () => setIsOpen((prev) => !prev)
+ 
+   const resolveSourceLabel = (ref: string): string =>
+@@ -117,7 +113,7 @@ const PrefsEditor: React.FC<PrefsEditorProps> = ({
+                       <Creatable
+                         menuPortalTarget={document.body}
+                         options={options}
+-                        value={{ value: sourceRef, label: sourceRef }}
++                        value={{ value: sourceRef, label: resolveSourceLabel(sourceRef) }}
+                         onChange={(e) => {
+                           changePriority(
+                             pathIndex,
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
+index c611ff623..87d650f0d 100644
+--- a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
++++ b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
+@@ -18,7 +18,7 @@ function VirtualizedDataTable({
+   onToggleSourceFilter,
+   sourceFilterActive
+ }) {
+-  const sources = useSources(0)
++  const sources = useSources()
+   const containerRef = useRef(null)
+   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 })
+   const [isNarrowScreen, setIsNarrowScreen] = useState(
+diff --git a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
+index 636f4eaa4..32a4dbb01 100644
+--- a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
++++ b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
+@@ -374,6 +374,13 @@ class SourcePriorities extends Component {
+ 
+   componentDidMount() {
+     this.fetchSources()
++    this.sourcesInterval = setInterval(() => this.fetchSources(), 30000)
++  }
++
++  componentWillUnmount() {
++    if (this.sourcesInterval) {
++      clearInterval(this.sourcesInterval)
++    }
+   }
+ 
+   fetchSources() {
+
+From fed7f08654b3ef9ad4aa0036a9bf2ddd5a80af63 Mon Sep 17 00:00:00 2001
+From: KE Gustafsson <ke.gustafsson@gmail.com>
+Date: Sat, 21 Feb 2026 14:08:02 +0200
+Subject: [PATCH 5/5] refactor: promote ws description to top-level in sources
+ API
+
+The signalk-schema routes ws sources through handleNmea2000Source
+(because they have a src field), burying description inside n2k.
+Promote it to the source node top level in getSources() so client
+code simply reads metadata.description without n2k coupling.
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+---
+ .../src/hooks/sourceLabelUtils.ts                  |  3 +--
+ .../server-admin-ui/src/utils/sourceLabelUtils.js  |  2 +-
+ src/deltacache.ts                                  | 14 +++++++++++++-
+ 3 files changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
+index 8768fc0c6..5266298af 100644
+--- a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
++++ b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
+@@ -1,6 +1,5 @@
+ interface SourceMetadata {
+   description?: string
+-  n2k?: { description?: string }
+   [key: string]: unknown
+ }
+ 
+@@ -28,6 +27,6 @@ export function getSourceDisplayLabel(
+   sources: Record<string, unknown> = {}
+ ): string {
+   const metadata = getDeepestSourceMetadata(sourceRef, sources)
+-  const description = metadata?.description || metadata?.n2k?.description
++  const description = metadata?.description
+   return description || sourceRef
+ }
+diff --git a/packages/server-admin-ui/src/utils/sourceLabelUtils.js b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
+index 3b3f5329e..1f1a699e1 100644
+--- a/packages/server-admin-ui/src/utils/sourceLabelUtils.js
++++ b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
+@@ -19,6 +19,6 @@ function getDeepestSourceMetadata(sourceRef, sources) {
+ 
+ export function getSourceDisplayLabel(sourceRef, sources = {}) {
+   const metadata = getDeepestSourceMetadata(sourceRef, sources)
+-  const description = metadata?.description || metadata?.n2k?.description
++  const description = metadata?.description
+   return description || sourceRef
+ }
+diff --git a/src/deltacache.ts b/src/deltacache.ts
+index 8a739d366..adcb508de 100644
+--- a/src/deltacache.ts
++++ b/src/deltacache.ts
+@@ -157,7 +157,19 @@ export default class DeltaCache {
+     const addDelta = signalk.addDelta.bind(signalk)
+     _.values(this.sourceDeltas).forEach(addDelta)
+ 
+-    return signalk.retrieve().sources
++    const sources = signalk.retrieve().sources
++
++    // Promote ws device description from n2k (where the schema puts it
++    // because ws sources have a src field) to the source node top level
++    if (sources.ws) {
++      _.forEach(sources.ws, (node: any, key: string) => {
++        if (key !== 'label' && key !== 'type' && node?.n2k?.description) {
++          node.description = node.n2k.description
++        }
++      })
++    }
++
++    return sources
+   }
+ 
+   buildFullFromDeltas(
