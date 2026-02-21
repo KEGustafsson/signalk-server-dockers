@@ -1,786 +1,104 @@
-From cd267cea68a680febc418489bcaf269214645117 Mon Sep 17 00:00:00 2001
-From: KEGustafsson <ke.gustafsson@gmail.com>
-Date: Fri, 20 Feb 2026 13:49:58 +0200
-Subject: [PATCH 1/6] feat: show ws device names via /sources
-
-Publish authenticated ws device descriptions as source metadata and use /sources in admin UI to resolve ws.* source refs to human-readable labels.
-
-Update Dashboard, Data Browser (virtualized rows), and Source Priorities to use a shared source label resolver with sourceRef fallback.
----
- .../src/utils/sourceLabelUtils.js             | 48 +++++++++++
- .../src/views/Dashboard/Dashboard.js          | 40 ++++++++-
- .../src/views/DataBrowser/DataBrowser.js      |  1 +
- .../src/views/DataBrowser/DataRow.js          |  7 +-
- .../views/DataBrowser/VirtualizedDataTable.js |  4 +-
- .../views/ServerConfig/SourcePriorities.js    | 38 ++++++++-
- src/interfaces/ws.js                          | 84 +++++++++++++++++--
- test/security.js                              | 26 ++++++
- 8 files changed, 232 insertions(+), 16 deletions(-)
- create mode 100644 packages/server-admin-ui/src/utils/sourceLabelUtils.js
-
-diff --git a/packages/server-admin-ui/src/utils/sourceLabelUtils.js b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
-new file mode 100644
-index 000000000..89862c7c4
---- /dev/null
-+++ b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
-@@ -0,0 +1,48 @@
-+function getDeepestSourceMetadata(sourceRef, sources) {
-+  if (
-+    !sourceRef ||
-+    !sources ||
-+    typeof sources !== 'object' ||
-+    !sourceRef.startsWith('ws.')
-+  ) {
-+    return null
-+  }
-+
-+  const parts = sourceRef.split('.')
-+  let node = sources
-+
-+  for (let i = 0; i < parts.length; i++) {
-+    if (!node || typeof node !== 'object' || !(parts[i] in node)) {
-+      break
-+    }
-+    node = node[parts[i]]
-+  }
-+
-+  return node && typeof node === 'object' ? node : null
-+}
-+
-+function getSourceDescription(metadata) {
-+  if (!metadata || typeof metadata !== 'object') {
-+    return null
-+  }
-+
-+  if (typeof metadata.description === 'string' && metadata.description) {
-+    return metadata.description
-+  }
-+
-+  if (
-+    metadata.n2k &&
-+    typeof metadata.n2k.description === 'string' &&
-+    metadata.n2k.description
-+  ) {
-+    return metadata.n2k.description
-+  }
-+
-+  return null
-+}
-+
-+export function getSourceDisplayLabel(sourceRef, sources = {}) {
-+  const metadata = getDeepestSourceMetadata(sourceRef, sources)
-+  const description = getSourceDescription(metadata)
-+  return description || sourceRef
-+}
-diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-index b7ecbec79..2a444aba8 100644
---- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-+++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-@@ -10,8 +10,36 @@ import {
-   Table
- } from 'reactstrap'
- import '../../fa-pulse.css'
-+import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
- 
- const Dashboard = (props) => {
-+  const [sources, setSources] = React.useState({})
-+
-+  React.useEffect(() => {
-+    let canceled = false
-+
-+    const fetchSources = () => {
-+      fetch('/signalk/v1/api/sources', {
-+        credentials: 'include'
-+      })
-+        .then((response) => response.json())
-+        .then((data) => {
-+          if (!canceled) {
-+            setSources(data)
-+          }
-+        })
-+        .catch(() => undefined)
-+    }
-+
-+    fetchSources()
-+    const interval = setInterval(fetchSources, 30 * 1000)
-+
-+    return () => {
-+      canceled = true
-+      clearInterval(interval)
-+    }
-+  }, [])
-+
-   const {
-     deltaRate,
-     numberOfAvailablePaths,
-@@ -66,6 +94,7 @@ const Dashboard = (props) => {
-   }
- 
-   const renderActivity = (providerId, providerStats, linkType) => {
-+    const label = getSourceDisplayLabel(providerId, sources)
-     return (
-       <li key={providerId} onClick={() => props.history.push(`/dashboard`)}>
-         <i
-@@ -84,7 +113,7 @@ const Dashboard = (props) => {
-         <span className="title">
-           {linkType === 'plugin'
-             ? pluginNameLink(providerId)
--            : providerIdLink(providerId)}
-+            : providerIdLink(providerId, label)}
-         </span>
-         {providerStats.writeRate > 0 && (
-           <span className="value">
-@@ -136,7 +165,10 @@ const Dashboard = (props) => {
-         <td>
-           {status.statusType === 'plugin'
-             ? pluginNameLink(status.id)
--            : providerIdLink(status.id)}
-+            : providerIdLink(
-+                status.id,
-+                getSourceDisplayLabel(status.id, sources)
-+              )}
-         </td>
-         <td>
-           <p className="text-danger">{lastError}</p>
-@@ -286,11 +318,11 @@ function pluginNameLink(id) {
-   return <a href={'#/serverConfiguration/plugins/' + id}>{id}</a>
- }
- 
--function providerIdLink(id) {
-+function providerIdLink(id, label) {
-   if (id === 'defaults') {
-     return <a href={'#/serverConfiguration/settings'}>{id}</a>
-   } else if (id.startsWith('ws.')) {
--    return <a href={'#/security/devices'}>{id}</a>
-+    return <a href={'#/security/devices'}>{label || id}</a>
-   } else {
-     return <a href={'#/serverConfiguration/connections/' + id}>{id}</a>
-   }
-diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
-index d97b5a4c0..b04e773e5 100644
---- a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
-+++ b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
-@@ -509,6 +509,7 @@ class DataBrowser extends Component {
-                     selectedSources={this.state.selectedSources}
-                     onToggleSourceFilter={this.toggleSourceFilter}
-                     sourceFilterActive={this.state.sourceFilterActive}
-+                    sources={this.state.sources || {}}
-                   />
-                 )}
- 
-diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataRow.js b/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
-index 1a7eb4473..71611fa11 100644
---- a/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
-+++ b/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
-@@ -3,6 +3,7 @@ import { usePathData, useMetaData } from './usePathData'
- import TimestampCell from './TimestampCell'
- import CopyToClipboardWithFade from './CopyToClipboardWithFade'
- import { getValueRenderer, DefaultValueRenderer } from './ValueRenderers'
-+import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
- 
- /**
-  * DataRow - Individual virtualized row with granular subscription
-@@ -15,7 +16,8 @@ function DataRow({
-   raw,
-   isPaused,
-   onToggleSource,
--  selectedSources
-+  selectedSources,
-+  sources
- }) {
-   const data = usePathData(context, path$SourceKey)
-   const meta = useMetaData(context, data?.path)
-@@ -73,7 +75,8 @@ function DataRow({
-           }}
-         />
-         <CopyToClipboardWithFade text={data.$source}>
--          {data.$source} <i className="far fa-copy"></i>
-+          {getSourceDisplayLabel(data.$source, sources)}{' '}
-+          <i className="far fa-copy"></i>
-         </CopyToClipboardWithFade>
-         {data.pgn && <span>&nbsp;{data.pgn}</span>}
-         {data.sentence && <span>&nbsp;{data.sentence}</span>}
-diff --git a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
-index a034be7a6..125592421 100644
---- a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
-+++ b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
-@@ -15,7 +15,8 @@ function VirtualizedDataTable({
-   onToggleSource,
-   selectedSources,
-   onToggleSourceFilter,
--  sourceFilterActive
-+  sourceFilterActive,
-+  sources
- }) {
-   const containerRef = useRef(null)
-   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 })
-@@ -236,6 +237,7 @@ function VirtualizedDataTable({
-             isPaused={isPaused}
-             onToggleSource={onToggleSource}
-             selectedSources={selectedSources}
-+            sources={sources}
-           />
-         ))}
- 
-diff --git a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
-index 20f5c49c5..278f7e287 100644
---- a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
-+++ b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
-@@ -15,6 +15,7 @@ import {
- import Creatable from 'react-select/creatable'
- import remove from 'lodash.remove'
- import uniq from 'lodash.uniq'
-+import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
- 
- export const SOURCEPRIOS_PRIO_CHANGED = 'SOURCEPRIOS_PPRIO_CHANGED'
- export const SOURCEPRIOS_PRIO_DELETED = 'SOURCEPRIOS_PRIO_DELETED'
-@@ -189,8 +190,11 @@ class PrefsEditor extends Component {
-             <tbody>
-               {[...this.props.priorities, { sourceRef: '', timeout: '' }].map(
-                 ({ sourceRef, timeout }, index) => {
-+                  const { resolveSourceLabel } = this.props
-                   const options = this.state.sourceRefs.map((sourceRef) => ({
--                    label: sourceRef,
-+                    label: resolveSourceLabel
-+                      ? resolveSourceLabel(sourceRef)
-+                      : sourceRef,
-                     value: sourceRef
-                   }))
-                   return (
-@@ -200,7 +204,12 @@ class PrefsEditor extends Component {
-                         <Creatable
-                           menuPortalTarget={document.body}
-                           options={options}
--                          value={{ value: sourceRef, label: sourceRef }}
-+                          value={{
-+                            value: sourceRef,
-+                            label: resolveSourceLabel
-+                              ? resolveSourceLabel(sourceRef)
-+                              : sourceRef
-+                          }}
-                           onChange={(e) => {
-                             this.props.dispatch({
-                               type: SOURCEPRIOS_PRIO_CHANGED,
-@@ -348,7 +357,8 @@ class SourcePriorities extends Component {
-   constructor(props) {
-     super(props)
-     this.state = {
--      availablePaths: []
-+      availablePaths: [],
-+      sources: {}
-     }
-     fetchAvailablePaths((pathsArray) => {
-       this.setState({
-@@ -358,6 +368,27 @@ class SourcePriorities extends Component {
-         }))
-       })
-     })
-+    this.fetchSources = this.fetchSources.bind(this)
-+    this.resolveSourceLabel = this.resolveSourceLabel.bind(this)
-+  }
-+
-+  componentDidMount() {
-+    this.fetchSources()
-+  }
-+
-+  fetchSources() {
-+    fetch('/signalk/v1/api/sources', {
-+      credentials: 'include'
-+    })
-+      .then((response) => response.json())
-+      .then((sources) => {
-+        this.setState({ sources })
-+      })
-+      .catch(() => undefined)
-+  }
-+
-+  resolveSourceLabel(sourceRef) {
-+    return getSourceDisplayLabel(sourceRef, this.state.sources)
-   }
- 
-   render() {
-@@ -421,6 +452,7 @@ class SourcePriorities extends Component {
-                         dispatch={this.props.dispatch}
-                         isSaving={this.props.saveState.isSaving}
-                         pathIndex={index}
-+                        resolveSourceLabel={this.resolveSourceLabel}
-                       />
-                     </td>
-                     <td style={{ border: 'none' }}>
-diff --git a/src/interfaces/ws.js b/src/interfaces/ws.js
-index 47992ccee..de88604a5 100644
---- a/src/interfaces/ws.js
-+++ b/src/interfaces/ws.js
-@@ -17,7 +17,11 @@ const _ = require('lodash')
- const ports = require('../ports')
- const cookie = require('cookie')
- const { getSourceId, getMetadata } = require('@signalk/signalk-schema')
--const { requestAccess, InvalidTokenError } = require('../security')
-+const {
-+  requestAccess,
-+  InvalidTokenError,
-+  getSecurityConfig
-+} = require('../security')
- const {
-   findRequest,
-   updateRequest,
-@@ -45,6 +49,68 @@ const BACKPRESSURE_EXIT_THRESHOLD = process.env.BACKPRESSURE_EXIT
-   ? parseInt(process.env.BACKPRESSURE_EXIT, 10)
-   : 1024
- 
-+function wsSourceRefFromIdentifier(identifier) {
-+  return `ws.${identifier.replace(/\./g, '_')}`
-+}
-+
-+function getWsDeviceDescription(app, identifier) {
-+  if (
-+    !identifier ||
-+    identifier === 'AUTO' ||
-+    !app.securityStrategy ||
-+    typeof app.securityStrategy.getDevices !== 'function'
-+  ) {
-+    return undefined
-+  }
-+
-+  try {
-+    const config = getSecurityConfig(app)
-+    const devices = app.securityStrategy.getDevices(config)
-+    if (!Array.isArray(devices)) {
-+      return undefined
-+    }
-+    const device = devices.find((candidate) => candidate.clientId === identifier)
-+    return device && device.description ? device.description : undefined
-+  } catch (error) {
-+    debugConnection(
-+      `could not resolve ws device description for ${identifier}: ${
-+        error && error.message ? error.message : error
-+      }`
-+    )
-+    return undefined
-+  }
-+}
-+
-+function publishWsDeviceSourceMetadata(app, identifier) {
-+  if (!app.deltaCache || typeof app.deltaCache.setSourceDelta !== 'function') {
-+    return
-+  }
-+
-+  const description = getWsDeviceDescription(app, identifier)
-+  if (!description) {
-+    return
-+  }
-+
-+  const sourceRef = wsSourceRefFromIdentifier(identifier)
-+  const sourceDelta = {
-+    context: app.selfContext,
-+    updates: [
-+      {
-+        source: {
-+          label: 'ws',
-+          src: sourceRef.substring(3),
-+          type: 'ws',
-+          description
-+        },
-+        timestamp: new Date().toISOString(),
-+        values: []
-+      }
-+    ]
-+  }
-+
-+  app.deltaCache.setSourceDelta(sourceRef, sourceDelta)
-+}
-+
- module.exports = function (app) {
-   'use strict'
- 
-@@ -186,6 +252,7 @@ module.exports = function (app) {
-         let principalId
-         if (spark.request.skPrincipal) {
-           principalId = spark.request.skPrincipal.identifier
-+          publishWsDeviceSourceMetadata(app, principalId)
-         }
- 
-         debugConnection(
-@@ -288,7 +355,7 @@ module.exports = function (app) {
-               }
- 
-               if (msg.accessRequest) {
--                processAccessRequest(spark, msg)
-+                processAccessRequest(app, spark, msg)
-               }
- 
-               if (msg.login && app.securityStrategy.supportsLogin()) {
-@@ -438,7 +505,7 @@ module.exports = function (app) {
-     })
-   }
- 
--  function processAccessRequest(spark, msg) {
-+  function processAccessRequest(app, spark, msg) {
-     if (spark.skPendingAccessRequest) {
-       spark.write({
-         requestId: msg.requestId,
-@@ -461,8 +528,13 @@ module.exports = function (app) {
-             if (res.accessRequest && res.accessRequest.token) {
-               spark.request.token = res.accessRequest.token
-               app.securityStrategy.authorizeWS(spark.request)
--              spark.request.source =
--                'ws.' + spark.request.skPrincipal.identifier.replace(/\./g, '_')
-+              spark.request.source = wsSourceRefFromIdentifier(
-+                spark.request.skPrincipal.identifier
-+              )
-+              publishWsDeviceSourceMetadata(
-+                app,
-+                spark.request.skPrincipal.identifier
-+              )
-             }
-           }
-           spark.write(res)
-@@ -531,7 +603,7 @@ function createPrimusAuthorize(authorizeWS) {
-       const identifier = _.get(req, 'skPrincipal.identifier')
-       if (identifier) {
-         debug(`authorized username: ${identifier}`)
--        req.source = 'ws.' + identifier.replace(/\./g, '_')
-+        req.source = wsSourceRefFromIdentifier(identifier)
-       }
-     } catch (error) {
-       // To be able to login or request access via WS with security in place
-diff --git a/test/security.js b/test/security.js
-index 391da01d1..5ad8e4534 100644
---- a/test/security.js
-+++ b/test/security.js
-@@ -506,6 +506,7 @@ describe('Security', () => {
-     json.accessRequest.should.have.property('permission')
-     json.accessRequest.permission.should.equal('APPROVED')
-     json.accessRequest.should.have.property('token')
-+    const deviceToken = json.accessRequest.token
- 
-     result = await fetch(`${url}/skServer/security/devices`, {
-       headers: {
-@@ -519,6 +520,31 @@ describe('Security', () => {
-     json[0].clientId.should.equal('1235-45653-343453')
-     json[0].permissions.should.equal('readwrite')
-     json[0].description.should.equal('My Awesome Sensor')
-+
-+    await new Promise((resolve, reject) => {
-+      const ws = new WebSocket(
-+        `ws://0.0.0.0:${port}/signalk/v1/stream?subscribe=none&token=${deviceToken}`
-+      )
-+      ws.on('message', () => {
-+        ws.close()
-+      })
-+      ws.on('close', resolve)
-+      ws.on('error', reject)
-+    })
-+
-+    result = await fetch(`${url}/signalk/v1/api/sources`, {
-+      headers: {
-+        Cookie: `JAUTHENTICATION=${adminToken}`
-+      }
-+    })
-+    result.status.should.equal(200)
-+    json = await result.json()
-+    json.should.have.property('ws')
-+    json.ws.should.have.property('1235-45653-343453')
-+    json.ws['1235-45653-343453'].should.have.property('n2k')
-+    json.ws['1235-45653-343453'].n2k.description.should.equal(
-+      'My Awesome Sensor'
-+    )
-   })
- 
-   it('Device access request and denial works', async function () {
-
-From 0768d80de1874b3b884e57e05d30975a9a3dde02 Mon Sep 17 00:00:00 2001
+From 52d64bd258c8365ae4742de8a17bccee2cfc1af5 Mon Sep 17 00:00:00 2001
 From: KE Gustafsson <ke.gustafsson@gmail.com>
-Date: Sat, 21 Feb 2026 13:06:32 +0200
-Subject: [PATCH 2/6] refactor: optimize ws device source metadata and
- deduplicate sources fetch
+Date: Sat, 21 Feb 2026 16:30:26 +0200
+Subject: [PATCH] fix(admin-ui): show ws n2k labels in source views
 
-Cache device descriptions to avoid re-reading security config on every
-WS connection, skip redundant setSourceDelta calls, extract shared
-useSources hook/utility, and simplify getDeepestSourceMetadata.
+Resolve ws.* source references to human-readable labels from
+sources.ws.<device>.n2k.description.
+
+Apply label resolution in Dashboard, Data Browser, and Source Priorities
+for both server-admin-ui and server-admin-ui-react19.
+
+Add shared /sources polling helpers and keep sourceRef fallback when
+no ws n2k description is available.
 ---
- .../src/utils/sourceLabelUtils.js             | 20 +++++------
- .../server-admin-ui/src/utils/useSources.js   | 35 +++++++++++++++++++
- .../src/views/Dashboard/Dashboard.js          | 28 ++-------------
- .../src/views/DataBrowser/DataBrowser.js      |  6 ++--
- .../views/ServerConfig/SourcePriorities.js    |  6 ++--
- src/interfaces/ws.js                          | 20 +++++++++--
- 6 files changed, 67 insertions(+), 48 deletions(-)
- create mode 100644 packages/server-admin-ui/src/utils/useSources.js
-
-diff --git a/packages/server-admin-ui/src/utils/sourceLabelUtils.js b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
-index 89862c7c4..12122b931 100644
---- a/packages/server-admin-ui/src/utils/sourceLabelUtils.js
-+++ b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
-@@ -1,22 +1,18 @@
- function getDeepestSourceMetadata(sourceRef, sources) {
-   if (
--    !sourceRef ||
-+    !sourceRef?.startsWith('ws.') ||
-     !sources ||
--    typeof sources !== 'object' ||
--    !sourceRef.startsWith('ws.')
-+    typeof sources !== 'object'
-   ) {
-     return null
-   }
- 
--  const parts = sourceRef.split('.')
--  let node = sources
--
--  for (let i = 0; i < parts.length; i++) {
--    if (!node || typeof node !== 'object' || !(parts[i] in node)) {
--      break
--    }
--    node = node[parts[i]]
--  }
-+  const node = sourceRef
-+    .split('.')
-+    .reduce(
-+      (acc, key) => (acc && typeof acc === 'object' ? acc[key] : undefined),
-+      sources
-+    )
- 
-   return node && typeof node === 'object' ? node : null
- }
-diff --git a/packages/server-admin-ui/src/utils/useSources.js b/packages/server-admin-ui/src/utils/useSources.js
-new file mode 100644
-index 000000000..3848d78c9
---- /dev/null
-+++ b/packages/server-admin-ui/src/utils/useSources.js
-@@ -0,0 +1,35 @@
-+import { useState, useEffect } from 'react'
-+
-+export function fetchSourcesData() {
-+  return fetch('/signalk/v1/api/sources', {
-+    credentials: 'include'
-+  }).then((response) => response.json())
-+}
-+
-+export function useSources(pollInterval = 30000) {
-+  const [sources, setSources] = useState({})
-+
-+  useEffect(() => {
-+    let canceled = false
-+
-+    const doFetch = () => {
-+      fetchSourcesData()
-+        .then((data) => {
-+          if (!canceled) {
-+            setSources(data)
-+          }
-+        })
-+        .catch(() => undefined)
-+    }
-+
-+    doFetch()
-+    const interval = setInterval(doFetch, pollInterval)
-+
-+    return () => {
-+      canceled = true
-+      clearInterval(interval)
-+    }
-+  }, [pollInterval])
-+
-+  return sources
-+}
-diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-index 2a444aba8..66543adf7 100644
---- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-+++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-@@ -11,34 +11,10 @@ import {
- } from 'reactstrap'
- import '../../fa-pulse.css'
- import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
-+import { useSources } from '../../utils/useSources'
- 
- const Dashboard = (props) => {
--  const [sources, setSources] = React.useState({})
--
--  React.useEffect(() => {
--    let canceled = false
--
--    const fetchSources = () => {
--      fetch('/signalk/v1/api/sources', {
--        credentials: 'include'
--      })
--        .then((response) => response.json())
--        .then((data) => {
--          if (!canceled) {
--            setSources(data)
--          }
--        })
--        .catch(() => undefined)
--    }
--
--    fetchSources()
--    const interval = setInterval(fetchSources, 30 * 1000)
--
--    return () => {
--      canceled = true
--      clearInterval(interval)
--    }
--  }, [])
-+  const sources = useSources()
- 
-   const {
-     deltaRate,
-diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
-index b04e773e5..72fb85aee 100644
---- a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
-+++ b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
-@@ -2,6 +2,7 @@ import React, { Component } from 'react'
- import { connect } from 'react-redux'
- import { JSONTree } from 'react-json-tree'
- import Select from 'react-select'
-+import { fetchSourcesData } from '../../utils/useSources'
- import {
-   Card,
-   CardHeader,
-@@ -32,10 +33,7 @@ const selectedSourcesStorageKey = 'admin.v1.dataBrowser.selectedSources'
- const sourceFilterActiveStorageKey = 'admin.v1.dataBrowser.sourceFilterActive'
- 
- function fetchSources() {
--  fetch(`/signalk/v1/api/sources`, {
--    credentials: 'include'
--  })
--    .then((response) => response.json())
-+  fetchSourcesData()
-     .then((sources) => {
-       Object.values(sources).forEach((source) => {
-         if (source.type === 'NMEA2000') {
-diff --git a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
-index 278f7e287..9e609262d 100644
---- a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
-+++ b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
-@@ -16,6 +16,7 @@ import Creatable from 'react-select/creatable'
- import remove from 'lodash.remove'
- import uniq from 'lodash.uniq'
- import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
-+import { fetchSourcesData } from '../../utils/useSources'
- 
- export const SOURCEPRIOS_PRIO_CHANGED = 'SOURCEPRIOS_PPRIO_CHANGED'
- export const SOURCEPRIOS_PRIO_DELETED = 'SOURCEPRIOS_PRIO_DELETED'
-@@ -377,10 +378,7 @@ class SourcePriorities extends Component {
-   }
- 
-   fetchSources() {
--    fetch('/signalk/v1/api/sources', {
--      credentials: 'include'
--    })
--      .then((response) => response.json())
-+    fetchSourcesData()
-       .then((sources) => {
-         this.setState({ sources })
-       })
-diff --git a/src/interfaces/ws.js b/src/interfaces/ws.js
-index de88604a5..e625f00da 100644
---- a/src/interfaces/ws.js
-+++ b/src/interfaces/ws.js
-@@ -53,6 +53,8 @@ function wsSourceRefFromIdentifier(identifier) {
-   return `ws.${identifier.replace(/\./g, '_')}`
- }
- 
-+const wsDeviceDescriptionCache = new Map()
-+
- function getWsDeviceDescription(app, identifier) {
-   if (
-     !identifier ||
-@@ -63,20 +65,30 @@ function getWsDeviceDescription(app, identifier) {
-     return undefined
-   }
- 
-+  const cached = wsDeviceDescriptionCache.get(identifier)
-+  if (cached !== undefined) {
-+    return cached || undefined
-+  }
-+
-   try {
-     const config = getSecurityConfig(app)
-     const devices = app.securityStrategy.getDevices(config)
-     if (!Array.isArray(devices)) {
-+      wsDeviceDescriptionCache.set(identifier, null)
-       return undefined
-     }
-     const device = devices.find((candidate) => candidate.clientId === identifier)
--    return device && device.description ? device.description : undefined
-+    const description =
-+      device && device.description ? device.description : undefined
-+    wsDeviceDescriptionCache.set(identifier, description || null)
-+    return description
-   } catch (error) {
-     debugConnection(
-       `could not resolve ws device description for ${identifier}: ${
-         error && error.message ? error.message : error
-       }`
-     )
-+    wsDeviceDescriptionCache.set(identifier, null)
-     return undefined
-   }
- }
-@@ -86,12 +98,16 @@ function publishWsDeviceSourceMetadata(app, identifier) {
-     return
-   }
- 
-+  const sourceRef = wsSourceRefFromIdentifier(identifier)
-+  if (sourceRef in app.deltaCache.sourceDeltas) {
-+    return
-+  }
-+
-   const description = getWsDeviceDescription(app, identifier)
-   if (!description) {
-     return
-   }
- 
--  const sourceRef = wsSourceRefFromIdentifier(identifier)
-   const sourceDelta = {
-     context: app.selfContext,
-     updates: [
-
-From 49674ed225c1abe8d34d49caa611ec62e3dca061 Mon Sep 17 00:00:00 2001
-From: KE Gustafsson <ke.gustafsson@gmail.com>
-Date: Sat, 21 Feb 2026 13:19:40 +0200
-Subject: [PATCH 3/6] refactor: optimize source label utils and add ws device
- names to react19 UI
-
-- Inline getSourceDescription with optional chaining in sourceLabelUtils
-- Support pollInterval=0 in useSources for single-fetch usage
-- Move useSources(0) into VirtualizedDataTable to avoid prop threading
-- Remove unnecessary fetchSources bind in SourcePriorities
-- Add sourceLabelUtils.ts and useSources.ts hooks for react19 package
-- Update react19 Dashboard, DataRow, VirtualizedDataTable, and
-  SourcePriorities to display ws device names via getSourceDisplayLabel
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
----
- .../src/hooks/sourceLabelUtils.ts             | 33 +++++++++++++++++
- .../src/hooks/useSources.ts                   | 36 +++++++++++++++++++
- .../src/views/Dashboard/Dashboard.tsx         | 15 +++++---
- .../src/views/DataBrowser/DataRow.tsx         |  8 +++--
+ .../src/hooks/sourceLabelUtils.test.ts        | 46 +++++++++++++++++++
+ .../src/hooks/sourceLabelUtils.ts             | 38 +++++++++++++++
+ .../src/hooks/useSources.ts                   | 36 +++++++++++++++
+ .../src/views/Dashboard/Dashboard.tsx         | 15 ++++--
+ .../src/views/DataBrowser/DataRow.tsx         |  8 +++-
  .../DataBrowser/VirtualizedDataTable.tsx      |  3 ++
- .../views/ServerConfig/SourcePriorities.tsx   | 12 ++++++-
- .../src/utils/sourceLabelUtils.js             | 22 +-----------
- .../server-admin-ui/src/utils/useSources.js   |  6 ++--
- .../src/views/DataBrowser/DataBrowser.js      |  1 -
- .../views/DataBrowser/VirtualizedDataTable.js |  5 +--
- .../views/ServerConfig/SourcePriorities.js    |  1 -
- 11 files changed, 108 insertions(+), 34 deletions(-)
+ .../views/ServerConfig/SourcePriorities.tsx   | 15 ++++--
+ .../src/utils/sourceLabelUtils.js             | 29 ++++++++++++
+ .../server-admin-ui/src/utils/useSources.js   | 37 +++++++++++++++
+ .../src/views/Dashboard/Dashboard.js          | 16 +++++--
+ .../src/views/DataBrowser/DataBrowser.js      |  6 +--
+ .../src/views/DataBrowser/DataRow.js          |  7 ++-
+ .../views/DataBrowser/VirtualizedDataTable.js |  3 ++
+ .../views/ServerConfig/SourcePriorities.js    | 42 +++++++++++++++--
+ 14 files changed, 279 insertions(+), 22 deletions(-)
+ create mode 100644 packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts
  create mode 100644 packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
  create mode 100644 packages/server-admin-ui-react19/src/hooks/useSources.ts
+ create mode 100644 packages/server-admin-ui/src/utils/sourceLabelUtils.js
+ create mode 100644 packages/server-admin-ui/src/utils/useSources.js
 
+diff --git a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts
+new file mode 100644
+index 000000000..599545af5
+--- /dev/null
++++ b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts
+@@ -0,0 +1,46 @@
++import { describe, it, expect } from 'vitest'
++import { getSourceDisplayLabel } from './sourceLabelUtils'
++
++describe('sourceLabelUtils', () => {
++  it('uses n2k description for nested ws source refs', () => {
++    const sources = {
++      ws: {
++        myDevice: {
++          n2k: {
++            description: 'Cabin Tablet'
++          }
++        }
++      }
++    }
++
++    expect(getSourceDisplayLabel('ws.myDevice.n2k.204', sources)).toBe(
++      'Cabin Tablet'
++    )
++  })
++
++  it('falls back to sourceRef when ws n2k description is missing', () => {
++    const sources = {
++      ws: {
++        myDevice: {
++          description: 'Top-level only'
++        }
++      }
++    }
++
++    expect(getSourceDisplayLabel('ws.myDevice.n2k.204', sources)).toBe(
++      'ws.myDevice.n2k.204'
++    )
++  })
++
++  it('falls back to sourceRef for non-ws source refs', () => {
++    const sources = {
++      nmea0183: {
++        tcp: {
++          description: 'NMEA tcp'
++        }
++      }
++    }
++
++    expect(getSourceDisplayLabel('nmea0183.tcp', sources)).toBe('nmea0183.tcp')
++  })
++})
 diff --git a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
 new file mode 100644
-index 000000000..8768fc0c6
+index 000000000..18830ff65
 --- /dev/null
 +++ b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,38 @@
 +interface SourceMetadata {
-+  description?: string
-+  n2k?: { description?: string }
++  n2k?: {
++    description?: string
++  }
 +  [key: string]: unknown
 +}
 +
-+function getDeepestSourceMetadata(
++function getWsSourceMetadata(
 +  sourceRef: string,
 +  sources: Record<string, unknown>
 +): SourceMetadata | null {
@@ -788,14 +106,18 @@ index 000000000..8768fc0c6
 +    return null
 +  }
 +
-+  const node = sourceRef
-+    .split('.')
-+    .reduce<unknown>(
-+      (acc, key) =>
-+        acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[key] : undefined,
-+      sources
-+    )
++  const parts = sourceRef.split('.')
++  const wsDeviceId = parts[1]
++  if (!wsDeviceId) {
++    return null
++  }
 +
++  const wsSources = sources.ws
++  if (!wsSources || typeof wsSources !== 'object') {
++    return null
++  }
++
++  const node = (wsSources as Record<string, unknown>)[wsDeviceId]
 +  return node && typeof node === 'object' ? (node as SourceMetadata) : null
 +}
 +
@@ -803,8 +125,8 @@ index 000000000..8768fc0c6
 +  sourceRef: string,
 +  sources: Record<string, unknown> = {}
 +): string {
-+  const metadata = getDeepestSourceMetadata(sourceRef, sources)
-+  const description = metadata?.description || metadata?.n2k?.description
++  const metadata = getWsSourceMetadata(sourceRef, sources)
++  const description = metadata?.n2k?.description
 +  return description || sourceRef
 +}
 diff --git a/packages/server-admin-ui-react19/src/hooks/useSources.ts b/packages/server-admin-ui-react19/src/hooks/useSources.ts
@@ -954,7 +276,7 @@ index 7a1fe7486..49481c3a6 100644
          {data.pgn && <span>&nbsp;{data.pgn}</span>}
          {data.sentence && <span>&nbsp;{data.sentence}</span>}
 diff --git a/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx b/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
-index 1d6eb1953..ccdceed61 100644
+index 1d6eb1953..e2eaabeec 100644
 --- a/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
 +++ b/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
 @@ -8,6 +8,7 @@ import {
@@ -969,7 +291,7 @@ index 1d6eb1953..ccdceed61 100644
    sourceFilterActive,
    showContext
  }: VirtualizedDataTableProps) {
-+  const sources = useSources(0)
++  const sources = useSources()
    const containerRef = useRef<HTMLDivElement>(null)
    const [isNarrowScreen, setIsNarrowScreen] = useState(
      typeof window !== 'undefined' && window.innerWidth <= 768
@@ -982,34 +304,37 @@ index 1d6eb1953..ccdceed61 100644
          ))}
  
 diff --git a/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx b/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
-index e90c65730..5d217114a 100644
+index e90c65730..4ba08030c 100644
 --- a/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
 +++ b/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
 @@ -14,6 +14,8 @@ import { faFloppyDisk } from '@fortawesome/free-solid-svg-icons/faFloppyDisk'
  import Creatable from 'react-select/creatable'
  import uniq from 'lodash.uniq'
  import { useStore, useSourcePriorities } from '../../store'
-+import { fetchSourcesData } from '../../hooks/useSources'
++import { useSources } from '../../hooks/useSources'
 +import { getSourceDisplayLabel } from '../../hooks/sourceLabelUtils'
  
  // Types
  interface Priority {
-@@ -65,6 +67,7 @@ const PrefsEditor: React.FC<PrefsEditorProps> = ({
+@@ -51,13 +53,15 @@ interface PrefsEditorProps {
+   priorities: Priority[]
+   pathIndex: number
+   isSaving: boolean
++  sources: Record<string, unknown>
+ }
  
-   const [isOpen, setIsOpen] = useState(false)
-   const [sourceRefs, setSourceRefs] = useState<string[]>([])
-+  const [sources, setSources] = useState<Record<string, unknown>>({})
+ const PrefsEditor: React.FC<PrefsEditorProps> = ({
+   path,
+   priorities,
+   pathIndex,
+-  isSaving
++  isSaving,
++  sources
+ }) => {
+   const changePriority = useStore((s) => s.changePriority)
+   const deletePriority = useStore((s) => s.deletePriority)
+@@ -76,8 +80,11 @@ const PrefsEditor: React.FC<PrefsEditorProps> = ({
  
-   useEffect(() => {
-     if (path) {
-@@ -74,10 +77,17 @@ const PrefsEditor: React.FC<PrefsEditorProps> = ({
-     }
-   }, [path])
- 
-+  useEffect(() => {
-+    fetchSourcesData().then(setSources).catch(() => undefined)
-+  }, [])
-+
    const toggleEditor = () => setIsOpen((prev) => !prev)
  
 +  const resolveSourceLabel = (ref: string): string =>
@@ -1021,74 +346,227 @@ index e90c65730..5d217114a 100644
      value: ref
    }))
  
+@@ -107,7 +114,7 @@ const PrefsEditor: React.FC<PrefsEditorProps> = ({
+                       <Creatable
+                         menuPortalTarget={document.body}
+                         options={options}
+-                        value={{ value: sourceRef, label: sourceRef }}
++                        value={{ value: sourceRef, label: resolveSourceLabel(sourceRef) }}
+                         onChange={(e) => {
+                           changePriority(
+                             pathIndex,
+@@ -199,6 +206,7 @@ const SourcePriorities: React.FC = () => {
+   const { sourcePriorities, saveState } = sourcePrioritiesData
+ 
+   const [availablePaths, setAvailablePaths] = useState<SelectOption[]>([])
++  const sources = useSources()
+ 
+   useEffect(() => {
+     fetchAvailablePaths((pathsArray) => {
+@@ -312,6 +320,7 @@ const SourcePriorities: React.FC = () => {
+                       priorities={priorities}
+                       pathIndex={index}
+                       isSaving={saveState.isSaving || false}
++                      sources={sources}
+                     />
+                   </td>
+                   <td style={{ border: 'none' }}>
 diff --git a/packages/server-admin-ui/src/utils/sourceLabelUtils.js b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
-index 12122b931..3b3f5329e 100644
---- a/packages/server-admin-ui/src/utils/sourceLabelUtils.js
+new file mode 100644
+index 000000000..0d1100048
+--- /dev/null
 +++ b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
-@@ -17,28 +17,8 @@ function getDeepestSourceMetadata(sourceRef, sources) {
-   return node && typeof node === 'object' ? node : null
- }
- 
--function getSourceDescription(metadata) {
--  if (!metadata || typeof metadata !== 'object') {
--    return null
--  }
--
--  if (typeof metadata.description === 'string' && metadata.description) {
--    return metadata.description
--  }
--
--  if (
--    metadata.n2k &&
--    typeof metadata.n2k.description === 'string' &&
--    metadata.n2k.description
--  ) {
--    return metadata.n2k.description
--  }
--
--  return null
--}
--
- export function getSourceDisplayLabel(sourceRef, sources = {}) {
-   const metadata = getDeepestSourceMetadata(sourceRef, sources)
--  const description = getSourceDescription(metadata)
-+  const description = metadata?.description || metadata?.n2k?.description
-   return description || sourceRef
- }
+@@ -0,0 +1,29 @@
++function getWsSourceMetadata(sourceRef, sources) {
++  if (
++    !sourceRef?.startsWith('ws.') ||
++    !sources ||
++    typeof sources !== 'object'
++  ) {
++    return null
++  }
++
++  const parts = sourceRef.split('.')
++  const wsDeviceId = parts[1]
++  if (!wsDeviceId) {
++    return null
++  }
++
++  const wsSources = sources.ws
++  if (!wsSources || typeof wsSources !== 'object') {
++    return null
++  }
++
++  const node = wsSources[wsDeviceId]
++  return node && typeof node === 'object' ? node : null
++}
++
++export function getSourceDisplayLabel(sourceRef, sources = {}) {
++  const metadata = getWsSourceMetadata(sourceRef, sources)
++  const description = metadata?.n2k?.description
++  return description || sourceRef
++}
 diff --git a/packages/server-admin-ui/src/utils/useSources.js b/packages/server-admin-ui/src/utils/useSources.js
-index 3848d78c9..be2f7471d 100644
---- a/packages/server-admin-ui/src/utils/useSources.js
+new file mode 100644
+index 000000000..be2f7471d
+--- /dev/null
 +++ b/packages/server-admin-ui/src/utils/useSources.js
-@@ -23,11 +23,13 @@ export function useSources(pollInterval = 30000) {
-     }
- 
-     doFetch()
--    const interval = setInterval(doFetch, pollInterval)
+@@ -0,0 +1,37 @@
++import { useState, useEffect } from 'react'
++
++export function fetchSourcesData() {
++  return fetch('/signalk/v1/api/sources', {
++    credentials: 'include'
++  }).then((response) => response.json())
++}
++
++export function useSources(pollInterval = 30000) {
++  const [sources, setSources] = useState({})
++
++  useEffect(() => {
++    let canceled = false
++
++    const doFetch = () => {
++      fetchSourcesData()
++        .then((data) => {
++          if (!canceled) {
++            setSources(data)
++          }
++        })
++        .catch(() => undefined)
++    }
++
++    doFetch()
 +    const interval = pollInterval > 0
 +      ? setInterval(doFetch, pollInterval)
 +      : null
- 
-     return () => {
-       canceled = true
--      clearInterval(interval)
++
++    return () => {
++      canceled = true
 +      if (interval) clearInterval(interval)
-     }
-   }, [pollInterval])
++    }
++  }, [pollInterval])
++
++  return sources
++}
+diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
+index b7ecbec79..66543adf7 100644
+--- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
++++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
+@@ -10,8 +10,12 @@ import {
+   Table
+ } from 'reactstrap'
+ import '../../fa-pulse.css'
++import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
++import { useSources } from '../../utils/useSources'
  
+ const Dashboard = (props) => {
++  const sources = useSources()
++
+   const {
+     deltaRate,
+     numberOfAvailablePaths,
+@@ -66,6 +70,7 @@ const Dashboard = (props) => {
+   }
+ 
+   const renderActivity = (providerId, providerStats, linkType) => {
++    const label = getSourceDisplayLabel(providerId, sources)
+     return (
+       <li key={providerId} onClick={() => props.history.push(`/dashboard`)}>
+         <i
+@@ -84,7 +89,7 @@ const Dashboard = (props) => {
+         <span className="title">
+           {linkType === 'plugin'
+             ? pluginNameLink(providerId)
+-            : providerIdLink(providerId)}
++            : providerIdLink(providerId, label)}
+         </span>
+         {providerStats.writeRate > 0 && (
+           <span className="value">
+@@ -136,7 +141,10 @@ const Dashboard = (props) => {
+         <td>
+           {status.statusType === 'plugin'
+             ? pluginNameLink(status.id)
+-            : providerIdLink(status.id)}
++            : providerIdLink(
++                status.id,
++                getSourceDisplayLabel(status.id, sources)
++              )}
+         </td>
+         <td>
+           <p className="text-danger">{lastError}</p>
+@@ -286,11 +294,11 @@ function pluginNameLink(id) {
+   return <a href={'#/serverConfiguration/plugins/' + id}>{id}</a>
+ }
+ 
+-function providerIdLink(id) {
++function providerIdLink(id, label) {
+   if (id === 'defaults') {
+     return <a href={'#/serverConfiguration/settings'}>{id}</a>
+   } else if (id.startsWith('ws.')) {
+-    return <a href={'#/security/devices'}>{id}</a>
++    return <a href={'#/security/devices'}>{label || id}</a>
+   } else {
+     return <a href={'#/serverConfiguration/connections/' + id}>{id}</a>
+   }
 diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
-index 72fb85aee..3c9267707 100644
+index d97b5a4c0..3c9267707 100644
 --- a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
 +++ b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
-@@ -507,7 +507,6 @@ class DataBrowser extends Component {
-                     selectedSources={this.state.selectedSources}
-                     onToggleSourceFilter={this.toggleSourceFilter}
-                     sourceFilterActive={this.state.sourceFilterActive}
--                    sources={this.state.sources || {}}
-                   />
-                 )}
+@@ -2,6 +2,7 @@ import React, { Component } from 'react'
+ import { connect } from 'react-redux'
+ import { JSONTree } from 'react-json-tree'
+ import Select from 'react-select'
++import { fetchSourcesData } from '../../utils/useSources'
+ import {
+   Card,
+   CardHeader,
+@@ -32,10 +33,7 @@ const selectedSourcesStorageKey = 'admin.v1.dataBrowser.selectedSources'
+ const sourceFilterActiveStorageKey = 'admin.v1.dataBrowser.sourceFilterActive'
  
+ function fetchSources() {
+-  fetch(`/signalk/v1/api/sources`, {
+-    credentials: 'include'
+-  })
+-    .then((response) => response.json())
++  fetchSourcesData()
+     .then((sources) => {
+       Object.values(sources).forEach((source) => {
+         if (source.type === 'NMEA2000') {
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataRow.js b/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
+index 1a7eb4473..71611fa11 100644
+--- a/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
++++ b/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
+@@ -3,6 +3,7 @@ import { usePathData, useMetaData } from './usePathData'
+ import TimestampCell from './TimestampCell'
+ import CopyToClipboardWithFade from './CopyToClipboardWithFade'
+ import { getValueRenderer, DefaultValueRenderer } from './ValueRenderers'
++import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
+ 
+ /**
+  * DataRow - Individual virtualized row with granular subscription
+@@ -15,7 +16,8 @@ function DataRow({
+   raw,
+   isPaused,
+   onToggleSource,
+-  selectedSources
++  selectedSources,
++  sources
+ }) {
+   const data = usePathData(context, path$SourceKey)
+   const meta = useMetaData(context, data?.path)
+@@ -73,7 +75,8 @@ function DataRow({
+           }}
+         />
+         <CopyToClipboardWithFade text={data.$source}>
+-          {data.$source} <i className="far fa-copy"></i>
++          {getSourceDisplayLabel(data.$source, sources)}{' '}
++          <i className="far fa-copy"></i>
+         </CopyToClipboardWithFade>
+         {data.pgn && <span>&nbsp;{data.pgn}</span>}
+         {data.sentence && <span>&nbsp;{data.sentence}</span>}
 diff --git a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
-index 125592421..c611ff623 100644
+index a034be7a6..87d650f0d 100644
 --- a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
 +++ b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
 @@ -1,6 +1,7 @@
@@ -1099,128 +577,81 @@ index 125592421..c611ff623 100644
  import './VirtualTable.css'
  
  /**
-@@ -15,9 +16,9 @@ function VirtualizedDataTable({
-   onToggleSource,
-   selectedSources,
-   onToggleSourceFilter,
--  sourceFilterActive,
--  sources
-+  sourceFilterActive
- }) {
-+  const sources = useSources(0)
-   const containerRef = useRef(null)
-   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 })
-   const [isNarrowScreen, setIsNarrowScreen] = useState(
-diff --git a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
-index 9e609262d..636f4eaa4 100644
---- a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
-+++ b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
-@@ -369,7 +369,6 @@ class SourcePriorities extends Component {
-         }))
-       })
-     })
--    this.fetchSources = this.fetchSources.bind(this)
-     this.resolveSourceLabel = this.resolveSourceLabel.bind(this)
-   }
- 
-
-From a276861e230d27b27e0302c3045e9b2f8c94134d Mon Sep 17 00:00:00 2001
-From: KE Gustafsson <ke.gustafsson@gmail.com>
-Date: Sat, 21 Feb 2026 14:03:39 +0200
-Subject: [PATCH 4/6] fix: enable source name polling in DataBrowser and
- SourcePriorities
-
-useSources(0) fetched sources only once at mount time, so ws device
-names wouldn't appear if metadata wasn't published yet. Switch to
-useSources() (30s polling) to match Dashboard behavior.
-
-Also fix react19 SourcePriorities Creatable value prop to display
-resolved source label instead of raw source ref.
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
----
- .../src/views/DataBrowser/VirtualizedDataTable.tsx     |  2 +-
- .../src/views/ServerConfig/SourcePriorities.tsx        | 10 +++-------
- .../src/views/DataBrowser/VirtualizedDataTable.js      |  2 +-
- .../src/views/ServerConfig/SourcePriorities.js         |  7 +++++++
- 4 files changed, 12 insertions(+), 9 deletions(-)
-
-diff --git a/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx b/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
-index ccdceed61..e2eaabeec 100644
---- a/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
-+++ b/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
-@@ -39,7 +39,7 @@ function VirtualizedDataTable({
-   sourceFilterActive,
-   showContext
- }: VirtualizedDataTableProps) {
--  const sources = useSources(0)
-+  const sources = useSources()
-   const containerRef = useRef<HTMLDivElement>(null)
-   const [isNarrowScreen, setIsNarrowScreen] = useState(
-     typeof window !== 'undefined' && window.innerWidth <= 768
-diff --git a/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx b/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
-index 5d217114a..a7e2d9349 100644
---- a/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
-+++ b/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
-@@ -14,7 +14,7 @@ import { faFloppyDisk } from '@fortawesome/free-solid-svg-icons/faFloppyDisk'
- import Creatable from 'react-select/creatable'
- import uniq from 'lodash.uniq'
- import { useStore, useSourcePriorities } from '../../store'
--import { fetchSourcesData } from '../../hooks/useSources'
-+import { useSources } from '../../hooks/useSources'
- import { getSourceDisplayLabel } from '../../hooks/sourceLabelUtils'
- 
- // Types
-@@ -67,7 +67,7 @@ const PrefsEditor: React.FC<PrefsEditorProps> = ({
- 
-   const [isOpen, setIsOpen] = useState(false)
-   const [sourceRefs, setSourceRefs] = useState<string[]>([])
--  const [sources, setSources] = useState<Record<string, unknown>>({})
-+  const sources = useSources()
- 
-   useEffect(() => {
-     if (path) {
-@@ -77,10 +77,6 @@ const PrefsEditor: React.FC<PrefsEditorProps> = ({
-     }
-   }, [path])
- 
--  useEffect(() => {
--    fetchSourcesData().then(setSources).catch(() => undefined)
--  }, [])
--
-   const toggleEditor = () => setIsOpen((prev) => !prev)
- 
-   const resolveSourceLabel = (ref: string): string =>
-@@ -117,7 +113,7 @@ const PrefsEditor: React.FC<PrefsEditorProps> = ({
-                       <Creatable
-                         menuPortalTarget={document.body}
-                         options={options}
--                        value={{ value: sourceRef, label: sourceRef }}
-+                        value={{ value: sourceRef, label: resolveSourceLabel(sourceRef) }}
-                         onChange={(e) => {
-                           changePriority(
-                             pathIndex,
-diff --git a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
-index c611ff623..87d650f0d 100644
---- a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
-+++ b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
-@@ -18,7 +18,7 @@ function VirtualizedDataTable({
+@@ -17,6 +18,7 @@ function VirtualizedDataTable({
    onToggleSourceFilter,
    sourceFilterActive
  }) {
--  const sources = useSources(0)
 +  const sources = useSources()
    const containerRef = useRef(null)
    const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 })
    const [isNarrowScreen, setIsNarrowScreen] = useState(
+@@ -236,6 +238,7 @@ function VirtualizedDataTable({
+             isPaused={isPaused}
+             onToggleSource={onToggleSource}
+             selectedSources={selectedSources}
++            sources={sources}
+           />
+         ))}
+ 
 diff --git a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
-index 636f4eaa4..32a4dbb01 100644
+index 20f5c49c5..32a4dbb01 100644
 --- a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
 +++ b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
-@@ -374,6 +374,13 @@ class SourcePriorities extends Component {
+@@ -15,6 +15,8 @@ import {
+ import Creatable from 'react-select/creatable'
+ import remove from 'lodash.remove'
+ import uniq from 'lodash.uniq'
++import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
++import { fetchSourcesData } from '../../utils/useSources'
  
-   componentDidMount() {
-     this.fetchSources()
+ export const SOURCEPRIOS_PRIO_CHANGED = 'SOURCEPRIOS_PPRIO_CHANGED'
+ export const SOURCEPRIOS_PRIO_DELETED = 'SOURCEPRIOS_PRIO_DELETED'
+@@ -189,8 +191,11 @@ class PrefsEditor extends Component {
+             <tbody>
+               {[...this.props.priorities, { sourceRef: '', timeout: '' }].map(
+                 ({ sourceRef, timeout }, index) => {
++                  const { resolveSourceLabel } = this.props
+                   const options = this.state.sourceRefs.map((sourceRef) => ({
+-                    label: sourceRef,
++                    label: resolveSourceLabel
++                      ? resolveSourceLabel(sourceRef)
++                      : sourceRef,
+                     value: sourceRef
+                   }))
+                   return (
+@@ -200,7 +205,12 @@ class PrefsEditor extends Component {
+                         <Creatable
+                           menuPortalTarget={document.body}
+                           options={options}
+-                          value={{ value: sourceRef, label: sourceRef }}
++                          value={{
++                            value: sourceRef,
++                            label: resolveSourceLabel
++                              ? resolveSourceLabel(sourceRef)
++                              : sourceRef
++                          }}
+                           onChange={(e) => {
+                             this.props.dispatch({
+                               type: SOURCEPRIOS_PRIO_CHANGED,
+@@ -348,7 +358,8 @@ class SourcePriorities extends Component {
+   constructor(props) {
+     super(props)
+     this.state = {
+-      availablePaths: []
++      availablePaths: [],
++      sources: {}
+     }
+     fetchAvailablePaths((pathsArray) => {
+       this.setState({
+@@ -358,6 +369,30 @@ class SourcePriorities extends Component {
+         }))
+       })
+     })
++    this.resolveSourceLabel = this.resolveSourceLabel.bind(this)
++  }
++
++  componentDidMount() {
++    this.fetchSources()
 +    this.sourcesInterval = setInterval(() => this.fetchSources(), 30000)
 +  }
 +
@@ -1228,385 +659,26 @@ index 636f4eaa4..32a4dbb01 100644
 +    if (this.sourcesInterval) {
 +      clearInterval(this.sourcesInterval)
 +    }
-   }
- 
-   fetchSources() {
-
-From fed7f08654b3ef9ad4aa0036a9bf2ddd5a80af63 Mon Sep 17 00:00:00 2001
-From: KE Gustafsson <ke.gustafsson@gmail.com>
-Date: Sat, 21 Feb 2026 14:08:02 +0200
-Subject: [PATCH 5/6] refactor: promote ws description to top-level in sources
- API
-
-The signalk-schema routes ws sources through handleNmea2000Source
-(because they have a src field), burying description inside n2k.
-Promote it to the source node top level in getSources() so client
-code simply reads metadata.description without n2k coupling.
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
----
- .../src/hooks/sourceLabelUtils.ts                  |  3 +--
- .../server-admin-ui/src/utils/sourceLabelUtils.js  |  2 +-
- src/deltacache.ts                                  | 14 +++++++++++++-
- 3 files changed, 15 insertions(+), 4 deletions(-)
-
-diff --git a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
-index 8768fc0c6..5266298af 100644
---- a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
-+++ b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
-@@ -1,6 +1,5 @@
- interface SourceMetadata {
-   description?: string
--  n2k?: { description?: string }
-   [key: string]: unknown
- }
- 
-@@ -28,6 +27,6 @@ export function getSourceDisplayLabel(
-   sources: Record<string, unknown> = {}
- ): string {
-   const metadata = getDeepestSourceMetadata(sourceRef, sources)
--  const description = metadata?.description || metadata?.n2k?.description
-+  const description = metadata?.description
-   return description || sourceRef
- }
-diff --git a/packages/server-admin-ui/src/utils/sourceLabelUtils.js b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
-index 3b3f5329e..1f1a699e1 100644
---- a/packages/server-admin-ui/src/utils/sourceLabelUtils.js
-+++ b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
-@@ -19,6 +19,6 @@ function getDeepestSourceMetadata(sourceRef, sources) {
- 
- export function getSourceDisplayLabel(sourceRef, sources = {}) {
-   const metadata = getDeepestSourceMetadata(sourceRef, sources)
--  const description = metadata?.description || metadata?.n2k?.description
-+  const description = metadata?.description
-   return description || sourceRef
- }
-diff --git a/src/deltacache.ts b/src/deltacache.ts
-index 8a739d366..adcb508de 100644
---- a/src/deltacache.ts
-+++ b/src/deltacache.ts
-@@ -157,7 +157,19 @@ export default class DeltaCache {
-     const addDelta = signalk.addDelta.bind(signalk)
-     _.values(this.sourceDeltas).forEach(addDelta)
- 
--    return signalk.retrieve().sources
-+    const sources = signalk.retrieve().sources
++  }
 +
-+    // Promote ws device description from n2k (where the schema puts it
-+    // because ws sources have a src field) to the source node top level
-+    if (sources.ws) {
-+      _.forEach(sources.ws, (node: any, key: string) => {
-+        if (key !== 'label' && key !== 'type' && node?.n2k?.description) {
-+          node.description = node.n2k.description
-+        }
++  fetchSources() {
++    fetchSourcesData()
++      .then((sources) => {
++        this.setState({ sources })
 +      })
-+    }
-+
-+    return sources
-   }
- 
-   buildFullFromDeltas(
-
-From b96a76070fe58f62c5bb6eee0008f64f485a86a8 Mon Sep 17 00:00:00 2001
-From: KE Gustafsson <ke.gustafsson@gmail.com>
-Date: Sat, 21 Feb 2026 15:23:27 +0200
-Subject: [PATCH 6/6] fix: normalize ws description labels
-
-Expose ws device description at ws.<id>.description in /sources.
-Keep ws.<id>.n2k.description for backward compatibility.
-Resolve labels in both admin UIs from ws.<id>.description with n2k fallback.
-Add tests for both metadata shapes and update security assertions.
----
- .../src/hooks/sourceLabelUtils.test.ts        | 73 +++++++++++++++++++
- .../src/hooks/sourceLabelUtils.ts             | 27 ++++---
- .../src/utils/sourceLabelUtils.js             | 23 +++---
- src/deltacache.ts                             | 35 ++++++---
- src/interfaces/plugins.ts                     | 21 +++++-
- test/security.js                              |  1 +
- 6 files changed, 148 insertions(+), 32 deletions(-)
- create mode 100644 packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts
-
-diff --git a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts
-new file mode 100644
-index 000000000..a380897f3
---- /dev/null
-+++ b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts
-@@ -0,0 +1,73 @@
-+import { describe, it, expect } from 'vitest'
-+import { getSourceDisplayLabel } from './sourceLabelUtils'
-+
-+describe('sourceLabelUtils', () => {
-+  it('uses ws device top-level description for plain ws source refs', () => {
-+    const sources = {
-+      ws: {
-+        myDevice: {
-+          description: 'Cabin Tablet'
-+        }
-+      }
-+    }
-+
-+    expect(getSourceDisplayLabel('ws.myDevice', sources)).toBe('Cabin Tablet')
-+  })
-+
-+  it('uses ws device top-level description for nested ws source refs', () => {
-+    const sources = {
-+      ws: {
-+        myDevice: {
-+          description: 'Cabin Tablet',
-+          n2k: {
-+            description: 'Wrong place'
-+          }
-+        }
-+      }
-+    }
-+
-+    expect(getSourceDisplayLabel('ws.myDevice.n2k.204', sources)).toBe(
-+      'Cabin Tablet'
-+    )
-+  })
-+
-+  it('uses n2k description as fallback for nested ws source refs', () => {
-+    const sources = {
-+      ws: {
-+        myDevice: {
-+          n2k: {
-+            description: 'Legacy Device Name'
-+          }
-+        }
-+      }
-+    }
-+
-+    expect(getSourceDisplayLabel('ws.myDevice.n2k.204', sources)).toBe(
-+      'Legacy Device Name'
-+    )
-+  })
-+
-+  it('falls back to sourceRef when ws device description is missing', () => {
-+    const sources = {
-+      ws: {
-+        myDevice: {}
-+      }
-+    }
-+
-+    expect(getSourceDisplayLabel('ws.myDevice.n2k.204', sources)).toBe(
-+      'ws.myDevice.n2k.204'
-+    )
-+  })
-+
-+  it('falls back to sourceRef for non-ws source refs', () => {
-+    const sources = {
-+      nmea0183: {
-+        tcp: {
-+          description: 'NMEA tcp'
-+        }
-+      }
-+    }
-+
-+    expect(getSourceDisplayLabel('nmea0183.tcp', sources)).toBe('nmea0183.tcp')
-+  })
-+})
-diff --git a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
-index 5266298af..9dd87ccf2 100644
---- a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
-+++ b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
-@@ -1,9 +1,12 @@
- interface SourceMetadata {
-   description?: string
-+  n2k?: {
-+    description?: string
-+  }
-   [key: string]: unknown
- }
- 
--function getDeepestSourceMetadata(
-+function getWsSourceMetadata(
-   sourceRef: string,
-   sources: Record<string, unknown>
- ): SourceMetadata | null {
-@@ -11,14 +14,18 @@ function getDeepestSourceMetadata(
-     return null
-   }
- 
--  const node = sourceRef
--    .split('.')
--    .reduce<unknown>(
--      (acc, key) =>
--        acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[key] : undefined,
--      sources
--    )
-+  const parts = sourceRef.split('.')
-+  const wsDeviceId = parts[1]
-+  if (!wsDeviceId) {
-+    return null
++      .catch(() => undefined)
 +  }
 +
-+  const wsSources = sources.ws
-+  if (!wsSources || typeof wsSources !== 'object') {
-+    return null
-+  }
- 
-+  const node = (wsSources as Record<string, unknown>)[wsDeviceId]
-   return node && typeof node === 'object' ? (node as SourceMetadata) : null
- }
- 
-@@ -26,7 +33,7 @@ export function getSourceDisplayLabel(
-   sourceRef: string,
-   sources: Record<string, unknown> = {}
- ): string {
--  const metadata = getDeepestSourceMetadata(sourceRef, sources)
--  const description = metadata?.description
-+  const metadata = getWsSourceMetadata(sourceRef, sources)
-+  const description = metadata?.description || metadata?.n2k?.description
-   return description || sourceRef
- }
-diff --git a/packages/server-admin-ui/src/utils/sourceLabelUtils.js b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
-index 1f1a699e1..12a263f88 100644
---- a/packages/server-admin-ui/src/utils/sourceLabelUtils.js
-+++ b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
-@@ -1,4 +1,4 @@
--function getDeepestSourceMetadata(sourceRef, sources) {
-+function getWsSourceMetadata(sourceRef, sources) {
-   if (
-     !sourceRef?.startsWith('ws.') ||
-     !sources ||
-@@ -7,18 +7,23 @@ function getDeepestSourceMetadata(sourceRef, sources) {
-     return null
++  resolveSourceLabel(sourceRef) {
++    return getSourceDisplayLabel(sourceRef, this.state.sources)
    }
  
--  const node = sourceRef
--    .split('.')
--    .reduce(
--      (acc, key) => (acc && typeof acc === 'object' ? acc[key] : undefined),
--      sources
--    )
-+  const parts = sourceRef.split('.')
-+  const wsDeviceId = parts[1]
-+  if (!wsDeviceId) {
-+    return null
-+  }
-+
-+  const wsSources = sources.ws
-+  if (!wsSources || typeof wsSources !== 'object') {
-+    return null
-+  }
- 
-+  const node = wsSources[wsDeviceId]
-   return node && typeof node === 'object' ? node : null
- }
- 
- export function getSourceDisplayLabel(sourceRef, sources = {}) {
--  const metadata = getDeepestSourceMetadata(sourceRef, sources)
--  const description = metadata?.description
-+  const metadata = getWsSourceMetadata(sourceRef, sources)
-+  const description = metadata?.description || metadata?.n2k?.description
-   return description || sourceRef
- }
-diff --git a/src/deltacache.ts b/src/deltacache.ts
-index adcb508de..e429382e5 100644
---- a/src/deltacache.ts
-+++ b/src/deltacache.ts
-@@ -158,17 +158,7 @@ export default class DeltaCache {
-     _.values(this.sourceDeltas).forEach(addDelta)
- 
-     const sources = signalk.retrieve().sources
--
--    // Promote ws device description from n2k (where the schema puts it
--    // because ws sources have a src field) to the source node top level
--    if (sources.ws) {
--      _.forEach(sources.ws, (node: any, key: string) => {
--        if (key !== 'label' && key !== 'type' && node?.n2k?.description) {
--          node.description = node.n2k.description
--        }
--      })
--    }
--
-+    promoteWsDescriptionsToTopLevel(sources)
-     return sources
-   }
- 
-@@ -192,7 +182,11 @@ export default class DeltaCache {
-       deltas.filter(secFilter).forEach(addDelta)
-     }
- 
--    return signalk.retrieve()
-+    const full = signalk.retrieve()
-+    if (includeSources) {
-+      promoteWsDescriptionsToTopLevel(full.sources)
-+    }
-+    return full
-   }
- 
-   getCachedDeltas(contextFilter: ContextMatcher, user?: string, key?: string) {
-@@ -294,3 +288,20 @@ function getLeafObject(
-   }
-   return current
- }
-+
-+function promoteWsDescriptionsToTopLevel(sources: any) {
-+  if (!sources?.ws || typeof sources.ws !== 'object') {
-+    return
-+  }
-+
-+  _.forEach(sources.ws, (node: any, key: string) => {
-+    if (
-+      key !== 'label' &&
-+      key !== 'type' &&
-+      !node?.description &&
-+      node?.n2k?.description
-+    ) {
-+      node.description = node.n2k.description
-+    }
-+  })
-+}
-diff --git a/src/interfaces/plugins.ts b/src/interfaces/plugins.ts
-index 877877518..5015a5e27 100644
---- a/src/interfaces/plugins.ts
-+++ b/src/interfaces/plugins.ts
-@@ -362,15 +362,34 @@ module.exports = (theApp: any) => {
- 
-   function getPath(aPath: string) {
-     if (aPath === '/sources') {
--      return {
-+      const sources = {
-         ...theApp.signalk.retrieve().sources,
-         ...theApp.deltaCache.getSources()
-       }
-+      promoteWsDescriptionsToTopLevel(sources)
-+      return sources
-     } else {
-       return _.get(theApp.signalk.retrieve(), aPath)
-     }
-   }
- 
-+  function promoteWsDescriptionsToTopLevel(sources: any) {
-+    if (!sources?.ws || typeof sources.ws !== 'object') {
-+      return
-+    }
-+
-+    _.forEach(sources.ws, (node: any, key: string) => {
-+      if (
-+        key !== 'label' &&
-+        key !== 'type' &&
-+        !node?.description &&
-+        node?.n2k?.description
-+      ) {
-+        node.description = node.n2k.description
-+      }
-+    })
-+  }
-+
-   function putSelfPath(
-     aPath: string,
-     value: any,
-diff --git a/test/security.js b/test/security.js
-index 5ad8e4534..d0a3fbd7a 100644
---- a/test/security.js
-+++ b/test/security.js
-@@ -541,6 +541,7 @@ describe('Security', () => {
-     json = await result.json()
-     json.should.have.property('ws')
-     json.ws.should.have.property('1235-45653-343453')
-+    json.ws['1235-45653-343453'].description.should.equal('My Awesome Sensor')
-     json.ws['1235-45653-343453'].should.have.property('n2k')
-     json.ws['1235-45653-343453'].n2k.description.should.equal(
-       'My Awesome Sensor'
+   render() {
+@@ -421,6 +456,7 @@ class SourcePriorities extends Component {
+                         dispatch={this.props.dispatch}
+                         isSaving={this.props.saveState.isSaving}
+                         pathIndex={index}
++                        resolveSourceLabel={this.resolveSourceLabel}
+                       />
+                     </td>
+                     <td style={{ border: 'none' }}>
