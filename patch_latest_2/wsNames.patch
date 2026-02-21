@@ -1,7 +1,7 @@
 From cd267cea68a680febc418489bcaf269214645117 Mon Sep 17 00:00:00 2001
 From: KEGustafsson <ke.gustafsson@gmail.com>
 Date: Fri, 20 Feb 2026 13:49:58 +0200
-Subject: [PATCH 1/5] feat: show ws device names via /sources
+Subject: [PATCH 1/6] feat: show ws device names via /sources
 
 Publish authenticated ws device descriptions as source metadata and use /sources in admin UI to resolve ws.* source refs to human-readable labels.
 
@@ -492,7 +492,7 @@ index 391da01d1..5ad8e4534 100644
 From 0768d80de1874b3b884e57e05d30975a9a3dde02 Mon Sep 17 00:00:00 2001
 From: KE Gustafsson <ke.gustafsson@gmail.com>
 Date: Sat, 21 Feb 2026 13:06:32 +0200
-Subject: [PATCH 2/5] refactor: optimize ws device source metadata and
+Subject: [PATCH 2/6] refactor: optimize ws device source metadata and
  deduplicate sources fetch
 
 Cache device descriptions to avoid re-reading security config on every
@@ -740,7 +740,7 @@ index de88604a5..e625f00da 100644
 From 49674ed225c1abe8d34d49caa611ec62e3dca061 Mon Sep 17 00:00:00 2001
 From: KE Gustafsson <ke.gustafsson@gmail.com>
 Date: Sat, 21 Feb 2026 13:19:40 +0200
-Subject: [PATCH 3/5] refactor: optimize source label utils and add ws device
+Subject: [PATCH 3/6] refactor: optimize source label utils and add ws device
  names to react19 UI
 
 - Inline getSourceDescription with optional chaining in sourceLabelUtils
@@ -1127,7 +1127,7 @@ index 9e609262d..636f4eaa4 100644
 From a276861e230d27b27e0302c3045e9b2f8c94134d Mon Sep 17 00:00:00 2001
 From: KE Gustafsson <ke.gustafsson@gmail.com>
 Date: Sat, 21 Feb 2026 14:03:39 +0200
-Subject: [PATCH 4/5] fix: enable source name polling in DataBrowser and
+Subject: [PATCH 4/6] fix: enable source name polling in DataBrowser and
  SourcePriorities
 
 useSources(0) fetched sources only once at mount time, so ws device
@@ -1235,7 +1235,7 @@ index 636f4eaa4..32a4dbb01 100644
 From fed7f08654b3ef9ad4aa0036a9bf2ddd5a80af63 Mon Sep 17 00:00:00 2001
 From: KE Gustafsson <ke.gustafsson@gmail.com>
 Date: Sat, 21 Feb 2026 14:08:02 +0200
-Subject: [PATCH 5/5] refactor: promote ws description to top-level in sources
+Subject: [PATCH 5/6] refactor: promote ws description to top-level in sources
  API
 
 The signalk-schema routes ws sources through handleNmea2000Source
@@ -1306,3 +1306,307 @@ index 8a739d366..adcb508de 100644
    }
  
    buildFullFromDeltas(
+
+From b96a76070fe58f62c5bb6eee0008f64f485a86a8 Mon Sep 17 00:00:00 2001
+From: KE Gustafsson <ke.gustafsson@gmail.com>
+Date: Sat, 21 Feb 2026 15:23:27 +0200
+Subject: [PATCH 6/6] fix: normalize ws description labels
+
+Expose ws device description at ws.<id>.description in /sources.
+Keep ws.<id>.n2k.description for backward compatibility.
+Resolve labels in both admin UIs from ws.<id>.description with n2k fallback.
+Add tests for both metadata shapes and update security assertions.
+---
+ .../src/hooks/sourceLabelUtils.test.ts        | 73 +++++++++++++++++++
+ .../src/hooks/sourceLabelUtils.ts             | 27 ++++---
+ .../src/utils/sourceLabelUtils.js             | 23 +++---
+ src/deltacache.ts                             | 35 ++++++---
+ src/interfaces/plugins.ts                     | 21 +++++-
+ test/security.js                              |  1 +
+ 6 files changed, 148 insertions(+), 32 deletions(-)
+ create mode 100644 packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts
+
+diff --git a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts
+new file mode 100644
+index 000000000..a380897f3
+--- /dev/null
++++ b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts
+@@ -0,0 +1,73 @@
++import { describe, it, expect } from 'vitest'
++import { getSourceDisplayLabel } from './sourceLabelUtils'
++
++describe('sourceLabelUtils', () => {
++  it('uses ws device top-level description for plain ws source refs', () => {
++    const sources = {
++      ws: {
++        myDevice: {
++          description: 'Cabin Tablet'
++        }
++      }
++    }
++
++    expect(getSourceDisplayLabel('ws.myDevice', sources)).toBe('Cabin Tablet')
++  })
++
++  it('uses ws device top-level description for nested ws source refs', () => {
++    const sources = {
++      ws: {
++        myDevice: {
++          description: 'Cabin Tablet',
++          n2k: {
++            description: 'Wrong place'
++          }
++        }
++      }
++    }
++
++    expect(getSourceDisplayLabel('ws.myDevice.n2k.204', sources)).toBe(
++      'Cabin Tablet'
++    )
++  })
++
++  it('uses n2k description as fallback for nested ws source refs', () => {
++    const sources = {
++      ws: {
++        myDevice: {
++          n2k: {
++            description: 'Legacy Device Name'
++          }
++        }
++      }
++    }
++
++    expect(getSourceDisplayLabel('ws.myDevice.n2k.204', sources)).toBe(
++      'Legacy Device Name'
++    )
++  })
++
++  it('falls back to sourceRef when ws device description is missing', () => {
++    const sources = {
++      ws: {
++        myDevice: {}
++      }
++    }
++
++    expect(getSourceDisplayLabel('ws.myDevice.n2k.204', sources)).toBe(
++      'ws.myDevice.n2k.204'
++    )
++  })
++
++  it('falls back to sourceRef for non-ws source refs', () => {
++    const sources = {
++      nmea0183: {
++        tcp: {
++          description: 'NMEA tcp'
++        }
++      }
++    }
++
++    expect(getSourceDisplayLabel('nmea0183.tcp', sources)).toBe('nmea0183.tcp')
++  })
++})
+diff --git a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
+index 5266298af..9dd87ccf2 100644
+--- a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
++++ b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
+@@ -1,9 +1,12 @@
+ interface SourceMetadata {
+   description?: string
++  n2k?: {
++    description?: string
++  }
+   [key: string]: unknown
+ }
+ 
+-function getDeepestSourceMetadata(
++function getWsSourceMetadata(
+   sourceRef: string,
+   sources: Record<string, unknown>
+ ): SourceMetadata | null {
+@@ -11,14 +14,18 @@ function getDeepestSourceMetadata(
+     return null
+   }
+ 
+-  const node = sourceRef
+-    .split('.')
+-    .reduce<unknown>(
+-      (acc, key) =>
+-        acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[key] : undefined,
+-      sources
+-    )
++  const parts = sourceRef.split('.')
++  const wsDeviceId = parts[1]
++  if (!wsDeviceId) {
++    return null
++  }
++
++  const wsSources = sources.ws
++  if (!wsSources || typeof wsSources !== 'object') {
++    return null
++  }
+ 
++  const node = (wsSources as Record<string, unknown>)[wsDeviceId]
+   return node && typeof node === 'object' ? (node as SourceMetadata) : null
+ }
+ 
+@@ -26,7 +33,7 @@ export function getSourceDisplayLabel(
+   sourceRef: string,
+   sources: Record<string, unknown> = {}
+ ): string {
+-  const metadata = getDeepestSourceMetadata(sourceRef, sources)
+-  const description = metadata?.description
++  const metadata = getWsSourceMetadata(sourceRef, sources)
++  const description = metadata?.description || metadata?.n2k?.description
+   return description || sourceRef
+ }
+diff --git a/packages/server-admin-ui/src/utils/sourceLabelUtils.js b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
+index 1f1a699e1..12a263f88 100644
+--- a/packages/server-admin-ui/src/utils/sourceLabelUtils.js
++++ b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
+@@ -1,4 +1,4 @@
+-function getDeepestSourceMetadata(sourceRef, sources) {
++function getWsSourceMetadata(sourceRef, sources) {
+   if (
+     !sourceRef?.startsWith('ws.') ||
+     !sources ||
+@@ -7,18 +7,23 @@ function getDeepestSourceMetadata(sourceRef, sources) {
+     return null
+   }
+ 
+-  const node = sourceRef
+-    .split('.')
+-    .reduce(
+-      (acc, key) => (acc && typeof acc === 'object' ? acc[key] : undefined),
+-      sources
+-    )
++  const parts = sourceRef.split('.')
++  const wsDeviceId = parts[1]
++  if (!wsDeviceId) {
++    return null
++  }
++
++  const wsSources = sources.ws
++  if (!wsSources || typeof wsSources !== 'object') {
++    return null
++  }
+ 
++  const node = wsSources[wsDeviceId]
+   return node && typeof node === 'object' ? node : null
+ }
+ 
+ export function getSourceDisplayLabel(sourceRef, sources = {}) {
+-  const metadata = getDeepestSourceMetadata(sourceRef, sources)
+-  const description = metadata?.description
++  const metadata = getWsSourceMetadata(sourceRef, sources)
++  const description = metadata?.description || metadata?.n2k?.description
+   return description || sourceRef
+ }
+diff --git a/src/deltacache.ts b/src/deltacache.ts
+index adcb508de..e429382e5 100644
+--- a/src/deltacache.ts
++++ b/src/deltacache.ts
+@@ -158,17 +158,7 @@ export default class DeltaCache {
+     _.values(this.sourceDeltas).forEach(addDelta)
+ 
+     const sources = signalk.retrieve().sources
+-
+-    // Promote ws device description from n2k (where the schema puts it
+-    // because ws sources have a src field) to the source node top level
+-    if (sources.ws) {
+-      _.forEach(sources.ws, (node: any, key: string) => {
+-        if (key !== 'label' && key !== 'type' && node?.n2k?.description) {
+-          node.description = node.n2k.description
+-        }
+-      })
+-    }
+-
++    promoteWsDescriptionsToTopLevel(sources)
+     return sources
+   }
+ 
+@@ -192,7 +182,11 @@ export default class DeltaCache {
+       deltas.filter(secFilter).forEach(addDelta)
+     }
+ 
+-    return signalk.retrieve()
++    const full = signalk.retrieve()
++    if (includeSources) {
++      promoteWsDescriptionsToTopLevel(full.sources)
++    }
++    return full
+   }
+ 
+   getCachedDeltas(contextFilter: ContextMatcher, user?: string, key?: string) {
+@@ -294,3 +288,20 @@ function getLeafObject(
+   }
+   return current
+ }
++
++function promoteWsDescriptionsToTopLevel(sources: any) {
++  if (!sources?.ws || typeof sources.ws !== 'object') {
++    return
++  }
++
++  _.forEach(sources.ws, (node: any, key: string) => {
++    if (
++      key !== 'label' &&
++      key !== 'type' &&
++      !node?.description &&
++      node?.n2k?.description
++    ) {
++      node.description = node.n2k.description
++    }
++  })
++}
+diff --git a/src/interfaces/plugins.ts b/src/interfaces/plugins.ts
+index 877877518..5015a5e27 100644
+--- a/src/interfaces/plugins.ts
++++ b/src/interfaces/plugins.ts
+@@ -362,15 +362,34 @@ module.exports = (theApp: any) => {
+ 
+   function getPath(aPath: string) {
+     if (aPath === '/sources') {
+-      return {
++      const sources = {
+         ...theApp.signalk.retrieve().sources,
+         ...theApp.deltaCache.getSources()
+       }
++      promoteWsDescriptionsToTopLevel(sources)
++      return sources
+     } else {
+       return _.get(theApp.signalk.retrieve(), aPath)
+     }
+   }
+ 
++  function promoteWsDescriptionsToTopLevel(sources: any) {
++    if (!sources?.ws || typeof sources.ws !== 'object') {
++      return
++    }
++
++    _.forEach(sources.ws, (node: any, key: string) => {
++      if (
++        key !== 'label' &&
++        key !== 'type' &&
++        !node?.description &&
++        node?.n2k?.description
++      ) {
++        node.description = node.n2k.description
++      }
++    })
++  }
++
+   function putSelfPath(
+     aPath: string,
+     value: any,
+diff --git a/test/security.js b/test/security.js
+index 5ad8e4534..d0a3fbd7a 100644
+--- a/test/security.js
++++ b/test/security.js
+@@ -541,6 +541,7 @@ describe('Security', () => {
+     json = await result.json()
+     json.should.have.property('ws')
+     json.ws.should.have.property('1235-45653-343453')
++    json.ws['1235-45653-343453'].description.should.equal('My Awesome Sensor')
+     json.ws['1235-45653-343453'].should.have.property('n2k')
+     json.ws['1235-45653-343453'].n2k.description.should.equal(
+       'My Awesome Sensor'
