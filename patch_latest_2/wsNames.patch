@@ -1,7 +1,7 @@
 From cd267cea68a680febc418489bcaf269214645117 Mon Sep 17 00:00:00 2001
 From: KEGustafsson <ke.gustafsson@gmail.com>
 Date: Fri, 20 Feb 2026 13:49:58 +0200
-Subject: [PATCH] feat: show ws device names via /sources
+Subject: [PATCH 1/3] feat: show ws device names via /sources
 
 Publish authenticated ws device descriptions as source metadata and use /sources in admin UI to resolve ws.* source refs to human-readable labels.
 
@@ -488,3 +488,638 @@ index 391da01d1..5ad8e4534 100644
    })
  
    it('Device access request and denial works', async function () {
+
+From 0768d80de1874b3b884e57e05d30975a9a3dde02 Mon Sep 17 00:00:00 2001
+From: KE Gustafsson <ke.gustafsson@gmail.com>
+Date: Sat, 21 Feb 2026 13:06:32 +0200
+Subject: [PATCH 2/3] refactor: optimize ws device source metadata and
+ deduplicate sources fetch
+
+Cache device descriptions to avoid re-reading security config on every
+WS connection, skip redundant setSourceDelta calls, extract shared
+useSources hook/utility, and simplify getDeepestSourceMetadata.
+---
+ .../src/utils/sourceLabelUtils.js             | 20 +++++------
+ .../server-admin-ui/src/utils/useSources.js   | 35 +++++++++++++++++++
+ .../src/views/Dashboard/Dashboard.js          | 28 ++-------------
+ .../src/views/DataBrowser/DataBrowser.js      |  6 ++--
+ .../views/ServerConfig/SourcePriorities.js    |  6 ++--
+ src/interfaces/ws.js                          | 20 +++++++++--
+ 6 files changed, 67 insertions(+), 48 deletions(-)
+ create mode 100644 packages/server-admin-ui/src/utils/useSources.js
+
+diff --git a/packages/server-admin-ui/src/utils/sourceLabelUtils.js b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
+index 89862c7c4..12122b931 100644
+--- a/packages/server-admin-ui/src/utils/sourceLabelUtils.js
++++ b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
+@@ -1,22 +1,18 @@
+ function getDeepestSourceMetadata(sourceRef, sources) {
+   if (
+-    !sourceRef ||
++    !sourceRef?.startsWith('ws.') ||
+     !sources ||
+-    typeof sources !== 'object' ||
+-    !sourceRef.startsWith('ws.')
++    typeof sources !== 'object'
+   ) {
+     return null
+   }
+ 
+-  const parts = sourceRef.split('.')
+-  let node = sources
+-
+-  for (let i = 0; i < parts.length; i++) {
+-    if (!node || typeof node !== 'object' || !(parts[i] in node)) {
+-      break
+-    }
+-    node = node[parts[i]]
+-  }
++  const node = sourceRef
++    .split('.')
++    .reduce(
++      (acc, key) => (acc && typeof acc === 'object' ? acc[key] : undefined),
++      sources
++    )
+ 
+   return node && typeof node === 'object' ? node : null
+ }
+diff --git a/packages/server-admin-ui/src/utils/useSources.js b/packages/server-admin-ui/src/utils/useSources.js
+new file mode 100644
+index 000000000..3848d78c9
+--- /dev/null
++++ b/packages/server-admin-ui/src/utils/useSources.js
+@@ -0,0 +1,35 @@
++import { useState, useEffect } from 'react'
++
++export function fetchSourcesData() {
++  return fetch('/signalk/v1/api/sources', {
++    credentials: 'include'
++  }).then((response) => response.json())
++}
++
++export function useSources(pollInterval = 30000) {
++  const [sources, setSources] = useState({})
++
++  useEffect(() => {
++    let canceled = false
++
++    const doFetch = () => {
++      fetchSourcesData()
++        .then((data) => {
++          if (!canceled) {
++            setSources(data)
++          }
++        })
++        .catch(() => undefined)
++    }
++
++    doFetch()
++    const interval = setInterval(doFetch, pollInterval)
++
++    return () => {
++      canceled = true
++      clearInterval(interval)
++    }
++  }, [pollInterval])
++
++  return sources
++}
+diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
+index 2a444aba8..66543adf7 100644
+--- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
++++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
+@@ -11,34 +11,10 @@ import {
+ } from 'reactstrap'
+ import '../../fa-pulse.css'
+ import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
++import { useSources } from '../../utils/useSources'
+ 
+ const Dashboard = (props) => {
+-  const [sources, setSources] = React.useState({})
+-
+-  React.useEffect(() => {
+-    let canceled = false
+-
+-    const fetchSources = () => {
+-      fetch('/signalk/v1/api/sources', {
+-        credentials: 'include'
+-      })
+-        .then((response) => response.json())
+-        .then((data) => {
+-          if (!canceled) {
+-            setSources(data)
+-          }
+-        })
+-        .catch(() => undefined)
+-    }
+-
+-    fetchSources()
+-    const interval = setInterval(fetchSources, 30 * 1000)
+-
+-    return () => {
+-      canceled = true
+-      clearInterval(interval)
+-    }
+-  }, [])
++  const sources = useSources()
+ 
+   const {
+     deltaRate,
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
+index b04e773e5..72fb85aee 100644
+--- a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
++++ b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
+@@ -2,6 +2,7 @@ import React, { Component } from 'react'
+ import { connect } from 'react-redux'
+ import { JSONTree } from 'react-json-tree'
+ import Select from 'react-select'
++import { fetchSourcesData } from '../../utils/useSources'
+ import {
+   Card,
+   CardHeader,
+@@ -32,10 +33,7 @@ const selectedSourcesStorageKey = 'admin.v1.dataBrowser.selectedSources'
+ const sourceFilterActiveStorageKey = 'admin.v1.dataBrowser.sourceFilterActive'
+ 
+ function fetchSources() {
+-  fetch(`/signalk/v1/api/sources`, {
+-    credentials: 'include'
+-  })
+-    .then((response) => response.json())
++  fetchSourcesData()
+     .then((sources) => {
+       Object.values(sources).forEach((source) => {
+         if (source.type === 'NMEA2000') {
+diff --git a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
+index 278f7e287..9e609262d 100644
+--- a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
++++ b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
+@@ -16,6 +16,7 @@ import Creatable from 'react-select/creatable'
+ import remove from 'lodash.remove'
+ import uniq from 'lodash.uniq'
+ import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
++import { fetchSourcesData } from '../../utils/useSources'
+ 
+ export const SOURCEPRIOS_PRIO_CHANGED = 'SOURCEPRIOS_PPRIO_CHANGED'
+ export const SOURCEPRIOS_PRIO_DELETED = 'SOURCEPRIOS_PRIO_DELETED'
+@@ -377,10 +378,7 @@ class SourcePriorities extends Component {
+   }
+ 
+   fetchSources() {
+-    fetch('/signalk/v1/api/sources', {
+-      credentials: 'include'
+-    })
+-      .then((response) => response.json())
++    fetchSourcesData()
+       .then((sources) => {
+         this.setState({ sources })
+       })
+diff --git a/src/interfaces/ws.js b/src/interfaces/ws.js
+index de88604a5..e625f00da 100644
+--- a/src/interfaces/ws.js
++++ b/src/interfaces/ws.js
+@@ -53,6 +53,8 @@ function wsSourceRefFromIdentifier(identifier) {
+   return `ws.${identifier.replace(/\./g, '_')}`
+ }
+ 
++const wsDeviceDescriptionCache = new Map()
++
+ function getWsDeviceDescription(app, identifier) {
+   if (
+     !identifier ||
+@@ -63,20 +65,30 @@ function getWsDeviceDescription(app, identifier) {
+     return undefined
+   }
+ 
++  const cached = wsDeviceDescriptionCache.get(identifier)
++  if (cached !== undefined) {
++    return cached || undefined
++  }
++
+   try {
+     const config = getSecurityConfig(app)
+     const devices = app.securityStrategy.getDevices(config)
+     if (!Array.isArray(devices)) {
++      wsDeviceDescriptionCache.set(identifier, null)
+       return undefined
+     }
+     const device = devices.find((candidate) => candidate.clientId === identifier)
+-    return device && device.description ? device.description : undefined
++    const description =
++      device && device.description ? device.description : undefined
++    wsDeviceDescriptionCache.set(identifier, description || null)
++    return description
+   } catch (error) {
+     debugConnection(
+       `could not resolve ws device description for ${identifier}: ${
+         error && error.message ? error.message : error
+       }`
+     )
++    wsDeviceDescriptionCache.set(identifier, null)
+     return undefined
+   }
+ }
+@@ -86,12 +98,16 @@ function publishWsDeviceSourceMetadata(app, identifier) {
+     return
+   }
+ 
++  const sourceRef = wsSourceRefFromIdentifier(identifier)
++  if (sourceRef in app.deltaCache.sourceDeltas) {
++    return
++  }
++
+   const description = getWsDeviceDescription(app, identifier)
+   if (!description) {
+     return
+   }
+ 
+-  const sourceRef = wsSourceRefFromIdentifier(identifier)
+   const sourceDelta = {
+     context: app.selfContext,
+     updates: [
+
+From 49674ed225c1abe8d34d49caa611ec62e3dca061 Mon Sep 17 00:00:00 2001
+From: KE Gustafsson <ke.gustafsson@gmail.com>
+Date: Sat, 21 Feb 2026 13:19:40 +0200
+Subject: [PATCH 3/3] refactor: optimize source label utils and add ws device
+ names to react19 UI
+
+- Inline getSourceDescription with optional chaining in sourceLabelUtils
+- Support pollInterval=0 in useSources for single-fetch usage
+- Move useSources(0) into VirtualizedDataTable to avoid prop threading
+- Remove unnecessary fetchSources bind in SourcePriorities
+- Add sourceLabelUtils.ts and useSources.ts hooks for react19 package
+- Update react19 Dashboard, DataRow, VirtualizedDataTable, and
+  SourcePriorities to display ws device names via getSourceDisplayLabel
+
+Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+---
+ .../src/hooks/sourceLabelUtils.ts             | 33 +++++++++++++++++
+ .../src/hooks/useSources.ts                   | 36 +++++++++++++++++++
+ .../src/views/Dashboard/Dashboard.tsx         | 15 +++++---
+ .../src/views/DataBrowser/DataRow.tsx         |  8 +++--
+ .../DataBrowser/VirtualizedDataTable.tsx      |  3 ++
+ .../views/ServerConfig/SourcePriorities.tsx   | 12 ++++++-
+ .../src/utils/sourceLabelUtils.js             | 22 +-----------
+ .../server-admin-ui/src/utils/useSources.js   |  6 ++--
+ .../src/views/DataBrowser/DataBrowser.js      |  1 -
+ .../views/DataBrowser/VirtualizedDataTable.js |  5 +--
+ .../views/ServerConfig/SourcePriorities.js    |  1 -
+ 11 files changed, 108 insertions(+), 34 deletions(-)
+ create mode 100644 packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
+ create mode 100644 packages/server-admin-ui-react19/src/hooks/useSources.ts
+
+diff --git a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
+new file mode 100644
+index 000000000..8768fc0c6
+--- /dev/null
++++ b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
+@@ -0,0 +1,33 @@
++interface SourceMetadata {
++  description?: string
++  n2k?: { description?: string }
++  [key: string]: unknown
++}
++
++function getDeepestSourceMetadata(
++  sourceRef: string,
++  sources: Record<string, unknown>
++): SourceMetadata | null {
++  if (!sourceRef?.startsWith('ws.') || !sources || typeof sources !== 'object') {
++    return null
++  }
++
++  const node = sourceRef
++    .split('.')
++    .reduce<unknown>(
++      (acc, key) =>
++        acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[key] : undefined,
++      sources
++    )
++
++  return node && typeof node === 'object' ? (node as SourceMetadata) : null
++}
++
++export function getSourceDisplayLabel(
++  sourceRef: string,
++  sources: Record<string, unknown> = {}
++): string {
++  const metadata = getDeepestSourceMetadata(sourceRef, sources)
++  const description = metadata?.description || metadata?.n2k?.description
++  return description || sourceRef
++}
+diff --git a/packages/server-admin-ui-react19/src/hooks/useSources.ts b/packages/server-admin-ui-react19/src/hooks/useSources.ts
+new file mode 100644
+index 000000000..3aeb4b013
+--- /dev/null
++++ b/packages/server-admin-ui-react19/src/hooks/useSources.ts
+@@ -0,0 +1,36 @@
++import { useState, useEffect } from 'react'
++
++export function fetchSourcesData(): Promise<Record<string, unknown>> {
++  return fetch('/signalk/v1/api/sources', {
++    credentials: 'include'
++  }).then((response) => response.json())
++}
++
++export function useSources(pollInterval = 30000): Record<string, unknown> {
++  const [sources, setSources] = useState<Record<string, unknown>>({})
++
++  useEffect(() => {
++    let canceled = false
++
++    const doFetch = () => {
++      fetchSourcesData()
++        .then((data) => {
++          if (!canceled) {
++            setSources(data)
++          }
++        })
++        .catch(() => undefined)
++    }
++
++    doFetch()
++    const interval =
++      pollInterval > 0 ? setInterval(doFetch, pollInterval) : null
++
++    return () => {
++      canceled = true
++      if (interval) clearInterval(interval)
++    }
++  }, [pollInterval])
++
++  return sources
++}
+diff --git a/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx b/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
+index a535ffb51..03f1bbdbb 100644
+--- a/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
++++ b/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
+@@ -10,6 +10,8 @@ import { faSignIn } from '@fortawesome/free-solid-svg-icons/faSignIn'
+ import { faSignOut } from '@fortawesome/free-solid-svg-icons/faSignOut'
+ import { useServerStats, useWsStatus, useStore } from '../../store'
+ import type { ProviderStatistics } from '../../store/types'
++import { useSources } from '../../hooks/useSources'
++import { getSourceDisplayLabel } from '../../hooks/sourceLabelUtils'
+ import '../../fa-pulse.css'
+ 
+ interface ProviderStatusItem {
+@@ -27,6 +29,7 @@ export default function Dashboard() {
+   const providerStatus =
+     (useStore((state) => state.providerStatus) as ProviderStatusItem[]) || []
+   const navigate = useNavigate()
++  const sources = useSources()
+ 
+   const deltaRate = serverStatistics?.deltaRate ?? 0
+   const numberOfAvailablePaths = serverStatistics?.numberOfAvailablePaths ?? 0
+@@ -74,6 +77,7 @@ export default function Dashboard() {
+     providerStats: ProviderStatistics,
+     linkType: string
+   ): ReactNode => {
++    const label = getSourceDisplayLabel(providerId, sources)
+     const iconStyle = {
+       fontSize: '18px',
+       marginLeft: '5px',
+@@ -100,7 +104,7 @@ export default function Dashboard() {
+         <span className="title">
+           {linkType === 'plugin'
+             ? pluginNameLink(providerId)
+-            : providerIdLink(providerId)}
++            : providerIdLink(providerId, label)}
+         </span>
+         {(providerStats.writeRate || 0) > 0 && (
+           <span className="value" style={{ fontWeight: 'normal' }}>
+@@ -160,7 +164,10 @@ export default function Dashboard() {
+         <td>
+           {status.statusType === 'plugin'
+             ? pluginNameLink(status.id)
+-            : providerIdLink(status.id)}
++            : providerIdLink(
++                status.id,
++                getSourceDisplayLabel(status.id, sources)
++              )}
+         </td>
+         <td>
+           <p className="text-danger">{lastError}</p>
+@@ -313,11 +320,11 @@ function pluginNameLink(id: string): ReactNode {
+   return <a href={'#/serverConfiguration/plugins/' + id}>{id}</a>
+ }
+ 
+-function providerIdLink(id: string): ReactNode {
++function providerIdLink(id: string, label?: string): ReactNode {
+   if (id === 'defaults') {
+     return <a href={'#/serverConfiguration/settings'}>{id}</a>
+   } else if (id.startsWith('ws.')) {
+-    return <a href={'#/security/devices'}>{id}</a>
++    return <a href={'#/security/devices'}>{label || id}</a>
+   } else {
+     return <a href={'#/serverConfiguration/connections/' + id}>{id}</a>
+   }
+diff --git a/packages/server-admin-ui-react19/src/views/DataBrowser/DataRow.tsx b/packages/server-admin-ui-react19/src/views/DataBrowser/DataRow.tsx
+index 7a1fe7486..49481c3a6 100644
+--- a/packages/server-admin-ui-react19/src/views/DataBrowser/DataRow.tsx
++++ b/packages/server-admin-ui-react19/src/views/DataBrowser/DataRow.tsx
+@@ -3,6 +3,7 @@ import { usePathData, useMetaData } from './usePathData'
+ import TimestampCell from './TimestampCell'
+ import CopyToClipboardWithFade from './CopyToClipboardWithFade'
+ import { getValueRenderer, DefaultValueRenderer } from './ValueRenderers'
++import { getSourceDisplayLabel } from '../../hooks/sourceLabelUtils'
+ import type { PathData, MetaData } from '../../store'
+ 
+ interface DataRowProps {
+@@ -14,6 +15,7 @@ interface DataRowProps {
+   onToggleSource: (source: string) => void
+   selectedSources: Set<string>
+   showContext: boolean
++  sources: Record<string, unknown>
+ }
+ 
+ interface ValueRendererProps {
+@@ -31,7 +33,8 @@ function DataRow({
+   isPaused,
+   onToggleSource,
+   selectedSources,
+-  showContext
++  showContext,
++  sources
+ }: DataRowProps) {
+   // When showContext is true, path$SourceKey is a composite key: context\0realKey
+   const nullIdx = showContext ? path$SourceKey.indexOf('\0') : -1
+@@ -122,7 +125,8 @@ function DataRow({
+           />
+         </label>
+         <CopyToClipboardWithFade text={source}>
+-          {source} <span className="copy-icon" aria-hidden="true" />
++          {getSourceDisplayLabel(source, sources)}{' '}
++          <span className="copy-icon" aria-hidden="true" />
+         </CopyToClipboardWithFade>{' '}
+         {data.pgn && <span>&nbsp;{data.pgn}</span>}
+         {data.sentence && <span>&nbsp;{data.sentence}</span>}
+diff --git a/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx b/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
+index 1d6eb1953..ccdceed61 100644
+--- a/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
++++ b/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
+@@ -8,6 +8,7 @@ import {
+ } from 'react'
+ import DataRow from './DataRow'
+ import granularSubscriptionManager from './GranularSubscriptionManager'
++import { useSources } from '../../hooks/useSources'
+ import './VirtualTable.css'
+ 
+ interface VisibleItem {
+@@ -38,6 +39,7 @@ function VirtualizedDataTable({
+   sourceFilterActive,
+   showContext
+ }: VirtualizedDataTableProps) {
++  const sources = useSources(0)
+   const containerRef = useRef<HTMLDivElement>(null)
+   const [isNarrowScreen, setIsNarrowScreen] = useState(
+     typeof window !== 'undefined' && window.innerWidth <= 768
+@@ -236,6 +238,7 @@ function VirtualizedDataTable({
+             onToggleSource={onToggleSource}
+             selectedSources={selectedSources}
+             showContext={showContext}
++            sources={sources}
+           />
+         ))}
+ 
+diff --git a/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx b/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
+index e90c65730..5d217114a 100644
+--- a/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
++++ b/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
+@@ -14,6 +14,8 @@ import { faFloppyDisk } from '@fortawesome/free-solid-svg-icons/faFloppyDisk'
+ import Creatable from 'react-select/creatable'
+ import uniq from 'lodash.uniq'
+ import { useStore, useSourcePriorities } from '../../store'
++import { fetchSourcesData } from '../../hooks/useSources'
++import { getSourceDisplayLabel } from '../../hooks/sourceLabelUtils'
+ 
+ // Types
+ interface Priority {
+@@ -65,6 +67,7 @@ const PrefsEditor: React.FC<PrefsEditorProps> = ({
+ 
+   const [isOpen, setIsOpen] = useState(false)
+   const [sourceRefs, setSourceRefs] = useState<string[]>([])
++  const [sources, setSources] = useState<Record<string, unknown>>({})
+ 
+   useEffect(() => {
+     if (path) {
+@@ -74,10 +77,17 @@ const PrefsEditor: React.FC<PrefsEditorProps> = ({
+     }
+   }, [path])
+ 
++  useEffect(() => {
++    fetchSourcesData().then(setSources).catch(() => undefined)
++  }, [])
++
+   const toggleEditor = () => setIsOpen((prev) => !prev)
+ 
++  const resolveSourceLabel = (ref: string): string =>
++    getSourceDisplayLabel(ref, sources)
++
+   const options: SelectOption[] = sourceRefs.map((ref) => ({
+-    label: ref,
++    label: resolveSourceLabel(ref),
+     value: ref
+   }))
+ 
+diff --git a/packages/server-admin-ui/src/utils/sourceLabelUtils.js b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
+index 12122b931..3b3f5329e 100644
+--- a/packages/server-admin-ui/src/utils/sourceLabelUtils.js
++++ b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
+@@ -17,28 +17,8 @@ function getDeepestSourceMetadata(sourceRef, sources) {
+   return node && typeof node === 'object' ? node : null
+ }
+ 
+-function getSourceDescription(metadata) {
+-  if (!metadata || typeof metadata !== 'object') {
+-    return null
+-  }
+-
+-  if (typeof metadata.description === 'string' && metadata.description) {
+-    return metadata.description
+-  }
+-
+-  if (
+-    metadata.n2k &&
+-    typeof metadata.n2k.description === 'string' &&
+-    metadata.n2k.description
+-  ) {
+-    return metadata.n2k.description
+-  }
+-
+-  return null
+-}
+-
+ export function getSourceDisplayLabel(sourceRef, sources = {}) {
+   const metadata = getDeepestSourceMetadata(sourceRef, sources)
+-  const description = getSourceDescription(metadata)
++  const description = metadata?.description || metadata?.n2k?.description
+   return description || sourceRef
+ }
+diff --git a/packages/server-admin-ui/src/utils/useSources.js b/packages/server-admin-ui/src/utils/useSources.js
+index 3848d78c9..be2f7471d 100644
+--- a/packages/server-admin-ui/src/utils/useSources.js
++++ b/packages/server-admin-ui/src/utils/useSources.js
+@@ -23,11 +23,13 @@ export function useSources(pollInterval = 30000) {
+     }
+ 
+     doFetch()
+-    const interval = setInterval(doFetch, pollInterval)
++    const interval = pollInterval > 0
++      ? setInterval(doFetch, pollInterval)
++      : null
+ 
+     return () => {
+       canceled = true
+-      clearInterval(interval)
++      if (interval) clearInterval(interval)
+     }
+   }, [pollInterval])
+ 
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
+index 72fb85aee..3c9267707 100644
+--- a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
++++ b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
+@@ -507,7 +507,6 @@ class DataBrowser extends Component {
+                     selectedSources={this.state.selectedSources}
+                     onToggleSourceFilter={this.toggleSourceFilter}
+                     sourceFilterActive={this.state.sourceFilterActive}
+-                    sources={this.state.sources || {}}
+                   />
+                 )}
+ 
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
+index 125592421..c611ff623 100644
+--- a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
++++ b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
+@@ -1,6 +1,7 @@
+ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
+ import DataRow from './DataRow'
+ import granularSubscriptionManager from './GranularSubscriptionManager'
++import { useSources } from '../../utils/useSources'
+ import './VirtualTable.css'
+ 
+ /**
+@@ -15,9 +16,9 @@ function VirtualizedDataTable({
+   onToggleSource,
+   selectedSources,
+   onToggleSourceFilter,
+-  sourceFilterActive,
+-  sources
++  sourceFilterActive
+ }) {
++  const sources = useSources(0)
+   const containerRef = useRef(null)
+   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 })
+   const [isNarrowScreen, setIsNarrowScreen] = useState(
+diff --git a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
+index 9e609262d..636f4eaa4 100644
+--- a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
++++ b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
+@@ -369,7 +369,6 @@ class SourcePriorities extends Component {
+         }))
+       })
+     })
+-    this.fetchSources = this.fetchSources.bind(this)
+     this.resolveSourceLabel = this.resolveSourceLabel.bind(this)
+   }
+ 
