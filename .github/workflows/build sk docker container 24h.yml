@@ -213,11 +213,15 @@ jobs:
         run: |
           git clone https://github.com/SignalK/signalk-server.git
           cd signalk-server
-          if [ -d "./../patch_latest" ] && [ "$(ls -A ./../patch_latest/*.patch 2>/dev/null)" ]; then
-            git apply ./../patch_latest/*.patch
-          else
-            echo "No patches to apply"
-          fi
+          applied=false
+          for dir in ./../patch_latest/[0-9]*/; do
+            if [ -d "$dir" ] && ls "$dir"*.patch 1>/dev/null 2>&1; then
+              echo "Applying patches from $(basename "$dir")"
+              git apply "$dir"*.patch
+              applied=true
+            fi
+          done
+          if [ "$applied" = false ]; then echo "No patches to apply"; fi
       - uses: actions/download-artifact@v7
         with:
           name: nmea0183-signalk
