@@ -1,0 +1,153 @@
+diff --git a/src/deltaPriority.ts b/src/deltaPriority.ts
+index 242e09e..6481277 100644
+--- a/src/deltaPriority.ts
++++ b/src/deltaPriority.ts
+@@ -173,27 +173,29 @@ export const getToPreferredDelta = (
+           if ('values' in update) {
+             update.values = update.values.reduce(
+               (acc: any, pathValue: PathValue) => {
+-                const latest = getLatest(
+-                  delta.context as Context,
+-                  pathValue.path as Path
+-                )
+-                const isPreferred = isPreferredValue(
+-                  pathValue.path as Path,
+-                  latest,
+-                  update.$source,
+-                  millis
+-                )
+-                if (isPreferred) {
+-                  setLatest(
++                if (pathValue != null) {
++                  const latest = getLatest(
+                     delta.context as Context,
++                    pathValue.path as Path
++                  )
++                  const isPreferred = isPreferredValue(
+                     pathValue.path as Path,
+-                    update.$source as SourceRef,
++                    latest,
++                    update.$source,
+                     millis
+                   )
+-                  acc.push(pathValue)
++                  if (isPreferred) {
++                    setLatest(
++                      delta.context as Context,
++                      pathValue.path as Path,
++                      update.$source as SourceRef,
++                      millis
++                    )
++                    acc.push(pathValue)
++                    return acc
++                  }
+                   return acc
+                 }
+-                return acc
+               },
+               []
+             )
+diff --git a/src/interfaces/ws.js b/src/interfaces/ws.js
+index e625f00..a0dc7b5 100644
+--- a/src/interfaces/ws.js
++++ b/src/interfaces/ws.js
+@@ -658,26 +658,27 @@ function processUpdates(app, pathSources, spark, msg) {
+ 
+       if (source) {
+         update.values.forEach((valuePath) => {
+-          if (!pathSources[valuePath.path]) {
+-            pathSources[valuePath.path] = {}
+-          }
+-          if (
+-            !pathSources[valuePath.path][source] ||
+-            pathSources[valuePath.path][source] !== spark
+-          ) {
+-            if (pathSources[valuePath.path][source]) {
+-              console.log(
+-                `WARNING: got a new ws client for path ${valuePath.path} source ${source}`
++          if (valuePath != null) {
++            if (!pathSources[valuePath.path]) {
++              pathSources[valuePath.path] = {}
++            }
++            if (
++              !pathSources[valuePath.path][source] ||
++              pathSources[valuePath.path][source] !== spark
++            ) {
++              if (pathSources[valuePath.path][source]) {
++                console.log(
++                  `WARNING: got a new ws client for path ${valuePath.path} source ${source}`
++                )
++              }
++              debug(
++                'registered spark for source %s path %s = %s',
++                source,
++                valuePath.path,
++                spark.id
+               )
++              pathSources[valuePath.path][source] = spark
+             }
+-            debug(
+-              'registered spark for source %s path %s = %s',
+-              source,
+-              valuePath.path,
+-              spark.id
+-            )
+-
+-            pathSources[valuePath.path][source] = spark
+           }
+         })
+       }
+diff --git a/src/tokensecurity.ts b/src/tokensecurity.ts
+index d2f4c08..f37feba 100644
+--- a/src/tokensecurity.ts
++++ b/src/tokensecurity.ts
+@@ -1139,27 +1139,31 @@ function tokenSecurityFactory(
+ 
+         if (hasValues(update)) {
+           return update.values.find((valuePath) => {
+-            return (
+-              strategy.checkACL(
+-                skReq.skPrincipal!.identifier,
+-                context,
+-                valuePath.path,
+-                source!,
+-                'write'
+-              ) === false
+-            )
++            if (valuePath != null) {
++              return (
++                strategy.checkACL(
++                  skReq.skPrincipal!.identifier,
++                  context,
++                  valuePath.path,
++                  source!,
++                  'write'
++                ) === false
++              )
++            }
+           })
+         } else if (hasMeta(update)) {
+           return update.meta.find((metaPath) => {
+-            return (
+-              strategy.checkACL(
+-                skReq.skPrincipal!.identifier,
+-                context,
+-                metaPath.path,
+-                source!,
+-                'write'
+-              ) === false
+-            )
++            if (metaPath != null) {
++              return (
++                strategy.checkACL(
++                  skReq.skPrincipal!.identifier,
++                  context,
++                  metaPath.path,
++                  source!,
++                  'write'
++                ) === false
++              )
++            }
+           })
+         }
+         return false

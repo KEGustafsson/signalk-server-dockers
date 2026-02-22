@@ -1,0 +1,171 @@
+diff --git a/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx b/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
+index 03f1bbd..6ee623e 100644
+--- a/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
++++ b/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
+@@ -37,6 +37,11 @@ export default function Dashboard() {
+   const providerStatistics: Record<string, ProviderStatistics> =
+     serverStatistics?.providerStatistics ?? {}
+   const uptime = serverStatistics?.uptime ?? 0
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  const stats = serverStatistics as any
++  const loadAvg1m: string = stats?.loadAvg1m ?? ''
++  const loadAvg5m: string = stats?.loadAvg5m ?? ''
++  const loadAvg15m: string = stats?.loadAvg15m ?? ''
+ 
+   const errorCount = providerStatus.filter((s) => s.type === 'error').length
+   const uptimeNum = typeof uptime === 'number' ? uptime : 0
+@@ -135,11 +140,28 @@ export default function Dashboard() {
+           </span>
+         )}
+         <div className="bars">
+-          <ProgressBar
+-            className="progress-xs"
+-            variant="warning"
+-            now={((providerStats.deltaRate || 0) / deltaRateNum) * 100}
+-          />
++          <div className="progress-xs progress">
++            <div
++              className="progress-bar bg-warning"
++              role="progressbar"
++              style={{
++                width:
++                  ((providerStats.deltaRate || 0) / deltaRateNum) * 100 + '%'
++              }}
++            ></div>
++            {(providerStats.writeRate || 0) > 0 && (
++              <div
++                className="progress-bar bg-info"
++                role="progressbar"
++                style={{
++                  width:
++                    100 -
++                    ((providerStats.deltaRate || 0) / deltaRateNum) * 100 +
++                    '%'
++                }}
++              ></div>
++            )}
++          </div>
+         </div>
+       </li>
+     )
+@@ -219,6 +241,15 @@ export default function Dashboard() {
+                       {uptimeD} days, {uptimeH} hours, {uptimeM} minutes
+                     </strong>
+                   </div>
++                  <div className="callout callout-info">
++                    <small className="text-muted">
++                      Average CPU Load (1/5/15min)
++                    </small>
++                    <br />
++                    <strong className="h5">
++                      {loadAvg1m} {loadAvg5m} {loadAvg15m}
++                    </strong>
++                  </div>
+                 </Col>
+                 <Col xs="12" md="6">
+                   <div className="text-muted" style={{ fontSize: '1rem' }}>
+diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
+index 66543ad..6bb9609 100644
+--- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
++++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
+@@ -21,13 +21,19 @@ const Dashboard = (props) => {
+     numberOfAvailablePaths,
+     wsClients,
+     providerStatistics,
+-    uptime
++    uptime,
++    loadAvg1m,
++    loadAvg5m,
++    loadAvg15m
+   } = props.serverStatistics || {
+     deltaRate: 0,
+     numberOfAvailablePaths: 0,
+     wsClients: 0,
+     providerStatistics: {},
+-    uptime: ''
++    uptime: '',
++    loadAvg1m: '',
++    loadAvg5m: '',
++    loadAvg15m: ''
+   }
+   const providerStatus = props.providerStatus || []
+   const errorCount = providerStatus.filter((s) => s.type === 'error').length
+@@ -116,11 +122,25 @@ const Dashboard = (props) => {
+           </span>
+         )}
+         <div className="bars">
+-          <Progress
+-            className="progress-xs"
+-            color="warning"
+-            value={(providerStats.deltaRate / deltaRate) * 100}
+-          />
++          <div className="progress-xs progress">
++            <div
++              className="progress-bar bg-warning"
++              role="progressbar"
++              style={{
++                width: (providerStats.deltaRate / deltaRate) * 100 + '%'
++              }}
++            ></div>
++            {providerStats.writeRate > 0 && (
++              <div
++                className="progress-bar bg-info"
++                role="progressbar"
++                style={{
++                  width:
++                    100 - (providerStats.deltaRate / deltaRate) * 100 + '%'
++                }}
++              ></div>
++            )}
++          </div>
+         </div>
+       </li>
+     )
+@@ -196,6 +216,15 @@ const Dashboard = (props) => {
+                       {uptimeD} days, {uptimeH} hours, {uptimeM} minutes
+                     </strong>
+                   </div>
++                  <div className="callout callout-info">
++                    <small className="text-muted">
++                      Average CPU Load (1/5/15min)
++                    </small>
++                    <br />
++                    <strong className="h5">
++                      {loadAvg1m} {loadAvg5m} {loadAvg15m}
++                    </strong>
++                  </div>
+                 </Col>
+                 <Col xs="12" md="6">
+                   <div className="text-muted" style={{ fontSize: '1rem' }}>
+diff --git a/src/deltastats.ts b/src/deltastats.ts
+index d59ede8..e9008c2 100644
+--- a/src/deltastats.ts
++++ b/src/deltastats.ts
+@@ -17,6 +17,7 @@
+ 
+ import { isUndefined, values } from 'lodash'
+ import { EventEmitter } from 'node:events'
++import os from 'os'
+ 
+ const STATS_UPDATE_INTERVAL_SECONDS = 5
+ export const CONNECTION_WRITE_EVENT_NAME = 'connectionwrite'
+@@ -73,6 +74,7 @@ export function startDeltaStatistics(
+   return setInterval(() => {
+     updateProviderPeriodStats(app)
+     const anyApp = app as any
++    const loadAverage = os.loadavg()
+     app.emit('serverevent', {
+       type: 'SERVERSTATISTICS',
+       from: 'signalk-server',
+@@ -83,7 +85,10 @@ export function startDeltaStatistics(
+         numberOfAvailablePaths: anyApp.streambundle.getAvailablePaths().length,
+         wsClients: anyApp.interfaces.ws ? anyApp.interfaces.ws.numClients() : 0,
+         providerStatistics: app.providerStatistics,
+-        uptime: process.uptime()
++        uptime: process.uptime(),
++        loadAvg1m: loadAverage[0].toFixed(2),
++        loadAvg5m: loadAverage[1].toFixed(2),
++        loadAvg15m: loadAverage[2].toFixed(2)
+       }
+     })
+     app.lastIntervalDeltaCount = app.deltaCount
