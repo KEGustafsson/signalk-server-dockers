@@ -1,0 +1,219 @@
+From 6a9612cacfd5139a8d6dac949030a7fe3aa288c8 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 22 Feb 2026 14:00:17 +0000
+Subject: [PATCH 2/4] fix(DataBrowser): prevent subscription flood on rapid
+ view transitions
+
+Three related issues in GranularSubscriptionManager:
+
+1. startDiscovery() sent {subscribe:[], announceNewPaths:true} immediately
+   on every DataBrowser mount, triggering a full server cache dump for
+   ~350ms before the targeted subscribe fired. Rapid Dashboard<->DataBrowser
+   switching caused one full dump per mount. Add a 200ms debounce so the
+   discovery message is only sent if the component stays mounted; unmount
+   via unsubscribeAll() cancels the pending timer before it fires.
+
+2. startDiscovery() did not reset currentPaths before re-sending the
+   initial subscribe. On context switch the stale set could satisfy
+   _pathsAreSimilar (>=80% overlap is common when vessels share the
+   same Signal K paths), causing requestPaths to skip resubscription
+   and leaving the UI with no live data for the new context.
+
+3. The 10ms setTimeout between the unsubscribe and subscribe sends in
+   _executeResubscription was added to "ensure order", but WebSocket
+   guarantees in-order delivery on a single connection. Remove it so
+   state transitions and path tracking happen synchronously.
+
+https://claude.ai/code/session_0142hccyF52oZwDAmLrntwTp
+---
+ .../GranularSubscriptionManager.js            | 120 ++++++++++++------
+ 1 file changed, 82 insertions(+), 38 deletions(-)
+
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/GranularSubscriptionManager.js b/packages/server-admin-ui/src/views/DataBrowser/GranularSubscriptionManager.js
+index 8aa203e..467d526 100644
+--- a/packages/server-admin-ui/src/views/DataBrowser/GranularSubscriptionManager.js
++++ b/packages/server-admin-ui/src/views/DataBrowser/GranularSubscriptionManager.js
+@@ -24,6 +24,12 @@ const STATE = {
+ const DEBUG = false
+ const log = (...args) => DEBUG && console.log('[GranularSub]', ...args)
+ 
++// Delay before sending the initial discovery message after startDiscovery() is
++// called.  Rapid view transitions (Dashboard <-> DataBrowser) cancel and
++// restart discovery before the timer fires, so the server never receives the
++// expensive "stream everything" message for short-lived mounts.
++const DISCOVERY_DEBOUNCE_MS = 200
++
+ class GranularSubscriptionManager {
+   constructor() {
+     this.webSocket = null
+@@ -31,6 +37,7 @@ class GranularSubscriptionManager {
+     this.currentPaths = new Set()
+     this.pendingPaths = null
+     this.debounceTimer = null
++    this.discoveryTimer = null
+     this.messageHandler = null
+ 
+     // Configuration
+@@ -48,17 +55,42 @@ class GranularSubscriptionManager {
+   }
+ 
+   /**
+-   * Start subscription - immediately subscribe with announceNewPaths
+-   * The server will announce all existing paths (once) and any new paths as they appear
++   * Start subscription - debounced to avoid a server cache flood on rapid
++   * view transitions.  The actual discovery message is sent after
++   * DISCOVERY_DEBOUNCE_MS; unsubscribeAll() cancels it if the component
++   * unmounts before the timer fires.
+    */
+   startDiscovery() {
+     if (!this.webSocket) return
+ 
++    // Reset path tracking so _pathsAreSimilar does not suppress the first
++    // requestPaths call after a context change or reconnect
++    this.currentPaths = new Set()
++
++    // Cancel any in-flight discovery so rapid mount/unmount cycles do not
++    // trigger multiple server cache dumps
++    if (this.discoveryTimer) {
++      clearTimeout(this.discoveryTimer)
++    }
++
++    this.discoveryTimer = setTimeout(() => {
++      this.discoveryTimer = null
++      this._sendDiscovery()
++    }, DISCOVERY_DEBOUNCE_MS)
++  }
++
++  /**
++   * Send the actual discovery message to the server.
++   * Called by the debounced startDiscovery timer.
++   */
++  _sendDiscovery() {
++    if (!this.webSocket) return
++
+     log('Starting subscription with announceNewPaths')
+ 
+-    // Subscribe with announceNewPaths to discover all paths
++    // Subscribe with announceNewPaths to discover all paths.
+     // Server will send cached values for ALL paths matching context (once each)
+-    // and announce any new paths that appear later
++    // and announce any new paths that appear later.
+     this._send({
+       context: '*',
+       announceNewPaths: true,
+@@ -184,44 +216,45 @@ class GranularSubscriptionManager {
+       unsubscribe: [{ path: '*' }]
+     })
+ 
+-    // Step 2: Subscribe to new paths (with small delay to ensure order)
+-    setTimeout(() => {
+-      if (!newPaths || newPaths.size === 0) {
+-        this.currentPaths = new Set()
+-        this.state = STATE.SUBSCRIBED
+-        return
+-      }
++    // Step 2: Subscribe to new paths.
++    // WebSocket guarantees in-order delivery on a single connection, so the
++    // subscribe message sent right after the unsubscribe will always be
++    // processed by the server in the correct sequence.
++    if (!newPaths || newPaths.size === 0) {
++      this.currentPaths = new Set()
++      this.state = STATE.SUBSCRIBED
++      return
++    }
+ 
+-      // Extract unique paths (remove source suffix from path$SourceKeys)
+-      const uniquePaths = this._extractUniquePaths(newPaths)
++    // Extract unique paths (remove source suffix from path$SourceKeys)
++    const uniquePaths = this._extractUniquePaths(newPaths)
+ 
+-      if (uniquePaths.length === 0) {
+-        this.currentPaths = new Set()
+-        this.state = STATE.SUBSCRIBED
+-        return
+-      }
++    if (uniquePaths.length === 0) {
++      this.currentPaths = new Set()
++      this.state = STATE.SUBSCRIBED
++      return
++    }
+ 
+-      const subMsg = {
+-        context: '*',
+-        announceNewPaths: true, // Continue discovering new paths
+-        subscribe: uniquePaths.map((path) => ({ path }))
+-      }
++    const subMsg = {
++      context: '*',
++      announceNewPaths: true, // Continue discovering new paths
++      subscribe: uniquePaths.map((path) => ({ path }))
++    }
+ 
+-      this._send(subMsg)
+-      this.currentPaths = newPaths
+-      this.state = STATE.SUBSCRIBED
++    this._send(subMsg)
++    this.currentPaths = newPaths
++    this.state = STATE.SUBSCRIBED
+ 
+-      // Check if there's a pending request that came in during resubscription
+-      if (this.pendingPaths) {
+-        const pending = this.pendingPaths
+-        this.pendingPaths = null
+-        // Debounce the pending request
+-        this.debounceTimer = setTimeout(() => {
+-          this.debounceTimer = null
+-          this._executeResubscription(pending)
+-        }, this.DEBOUNCE_MS)
+-      }
+-    }, 10)
++    // Check if there's a pending request that came in during resubscription
++    if (this.pendingPaths) {
++      const pending = this.pendingPaths
++      this.pendingPaths = null
++      // Debounce the pending request
++      this.debounceTimer = setTimeout(() => {
++        this.debounceTimer = null
++        this._executeResubscription(pending)
++      }, this.DEBOUNCE_MS)
++    }
+   }
+ 
+   /**
+@@ -252,6 +285,11 @@ class GranularSubscriptionManager {
+    * Unsubscribe from all paths - used during pause/cleanup
+    */
+   unsubscribeAll() {
++    if (this.discoveryTimer) {
++      clearTimeout(this.discoveryTimer)
++      this.discoveryTimer = null
++    }
++
+     if (this.debounceTimer) {
+       clearTimeout(this.debounceTimer)
+       this.debounceTimer = null
+@@ -277,6 +315,11 @@ class GranularSubscriptionManager {
+    * Cancel pending subscription changes
+    */
+   cancelPending() {
++    if (this.discoveryTimer) {
++      clearTimeout(this.discoveryTimer)
++      this.discoveryTimer = null
++    }
++
+     if (this.debounceTimer) {
+       clearTimeout(this.debounceTimer)
+       this.debounceTimer = null
+@@ -292,7 +335,8 @@ class GranularSubscriptionManager {
+       state: this.state,
+       currentPathsCount: this.currentPaths.size,
+       hasPending: this.pendingPaths !== null,
+-      hasDebounceTimer: this.debounceTimer !== null
++      hasDebounceTimer: this.debounceTimer !== null,
++      hasDiscoveryTimer: this.discoveryTimer !== null
+     }
+   }
+ 
+-- 
+2.43.0
+

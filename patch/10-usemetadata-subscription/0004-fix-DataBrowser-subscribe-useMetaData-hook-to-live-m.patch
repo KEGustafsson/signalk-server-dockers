@@ -1,0 +1,46 @@
+From 572e06c36cb04f21f76dcd63fcb271b07f176d3e Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 22 Feb 2026 14:00:39 +0000
+Subject: [PATCH 4/4] fix(DataBrowser): subscribe useMetaData hook to live
+ metadata updates
+
+useMetaData read the store once on mount and again when context/path
+changed, but never subscribed to future updates. Metadata arriving after
+initial render (e.g. units, description) was silently ignored.
+
+Add a subscribeMeta() method to ValueEmittingStore, mirroring subscribe()
+for value listeners, and use it in useMetaData so the hook re-renders
+whenever the server sends new metadata for the path.
+
+https://claude.ai/code/session_0142hccyF52oZwDAmLrntwTp
+---
+ .../server-admin-ui/src/views/DataBrowser/usePathData.js   | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/usePathData.js b/packages/server-admin-ui/src/views/DataBrowser/usePathData.js
+index 20fe1cb..60a25e4 100644
+--- a/packages/server-admin-ui/src/views/DataBrowser/usePathData.js
++++ b/packages/server-admin-ui/src/views/DataBrowser/usePathData.js
+@@ -59,13 +59,18 @@ export function usePathData(context, path$SourceKey) {
+ }
+ 
+ /**
+- * Hook to get metadata for a path
++ * Hook to get metadata for a path, updated in real-time as meta arrives
+  */
+ export function useMetaData(context, path) {
+   const [meta, setMeta] = useState(() => store.getMeta(context, path))
+ 
+   useEffect(() => {
++    // Sync with current value when context or path changes
+     setMeta(store.getMeta(context, path))
++
++    // Subscribe to future meta updates for this path
++    const unsubscribe = store.subscribeMeta(context, path, setMeta)
++    return unsubscribe
+   }, [context, path])
+ 
+   return meta
+-- 
+2.43.0
+

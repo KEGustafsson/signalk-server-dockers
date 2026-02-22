@@ -1,38 +1,25 @@
-From e907c1c6ef3dcf28a04e7544f13344ba80d1a6e2 Mon Sep 17 00:00:00 2001
+From 0974ec74519cbeeda5bb1f9e6d18d99ef91a559f Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
-Date: Sun, 22 Feb 2026 10:57:09 +0000
-Subject: [PATCH] fix: three WebSocket subscription/congestion bugs
-MIME-Version: 1.0
-Content-Type: text/plain; charset=UTF-8
-Content-Transfer-Encoding: 8bit
+Date: Sun, 22 Feb 2026 14:00:00 +0000
+Subject: [PATCH 1/4] fix: backpressure timer dedup and sendOrAccumulate helper
 
-1. GranularSubscriptionManager.startDiscovery() did not reset
-   currentPaths before re-sending the initial subscribe message.
-   On context switch (handleContextChange calls startDiscovery
-   without first calling unsubscribeAll), the stale currentPaths
-   could satisfy _pathsAreSimilar (≥80% overlap is common when
-   switching between vessels with the same Signal K paths), causing
-   requestPaths to skip the resubscription and leaving the UI with
-   no live data for the new context.
+Two independent backpressure bugs:
 
-2. Each $backpressure event in actions.js queued a fresh 10-second
+1. Each $backpressure server event in actions.js queued a fresh 10-second
    setTimeout for BACKPRESSURE_WARNING_CLEAR without cancelling the
-   previous one. Under sustained backpressure the timers accumulated,
-   firing redundant state updates long after the warning was already
-   cleared. Track the single active timer and cancel it before
-   rescheduling.
+   previous one. Under sustained congestion the timers accumulated,
+   firing redundant state updates long after the warning was cleared.
+   Track the single active timer and cancel it before rescheduling.
 
-3. The backpressure enter/accumulate check block was copy-pasted
-   verbatim in both the onChange realtime handler and the
-   processSubscribe callback in ws.js. Extract it into a
-   sendOrAccumulate() helper to eliminate the DRY violation.
+2. The backpressure enter/accumulate block was duplicated verbatim in
+   both the onChange realtime handler and the processSubscribe callback
+   in ws.js. Extract it into sendOrAccumulate() to remove the duplication.
 
 https://claude.ai/code/session_0142hccyF52oZwDAmLrntwTp
 ---
- packages/server-admin-ui/src/actions.js       | 12 +++-
- .../GranularSubscriptionManager.js            |  4 ++
- src/interfaces/ws.js                          | 67 ++++++++-----------
- 3 files changed, 41 insertions(+), 42 deletions(-)
+ packages/server-admin-ui/src/actions.js | 12 ++++-
+ src/interfaces/ws.js                    | 67 ++++++++++---------------
+ 2 files changed, 37 insertions(+), 42 deletions(-)
 
 diff --git a/packages/server-admin-ui/src/actions.js b/packages/server-admin-ui/src/actions.js
 index 586cc78..b82bea7 100644
@@ -64,23 +51,8 @@ index 586cc78..b82bea7 100644
          dispatch({ type: 'BACKPRESSURE_WARNING_CLEAR' })
        }, 10000)
      }
-diff --git a/packages/server-admin-ui/src/views/DataBrowser/GranularSubscriptionManager.js b/packages/server-admin-ui/src/views/DataBrowser/GranularSubscriptionManager.js
-index 8aa203e..05122f8 100644
---- a/packages/server-admin-ui/src/views/DataBrowser/GranularSubscriptionManager.js
-+++ b/packages/server-admin-ui/src/views/DataBrowser/GranularSubscriptionManager.js
-@@ -54,6 +54,10 @@ class GranularSubscriptionManager {
-   startDiscovery() {
-     if (!this.webSocket) return
- 
-+    // Reset path tracking so _pathsAreSimilar does not suppress the first
-+    // requestPaths call after a context change or reconnect
-+    this.currentPaths = new Set()
-+
-     log('Starting subscription with announceNewPaths')
- 
-     // Subscribe with announceNewPaths to discover all paths
 diff --git a/src/interfaces/ws.js b/src/interfaces/ws.js
-index 47992cc..aafe1e9 100644
+index 47992cc..d429965 100644
 --- a/src/interfaces/ws.js
 +++ b/src/interfaces/ws.js
 @@ -224,26 +224,7 @@ module.exports = function (app) {
@@ -139,8 +111,8 @@ index 47992cc..aafe1e9 100644
          assertBufferSize(spark)
        },
        spark.request.skPrincipal
-@@ -872,6 +834,31 @@ function startServerLog(app, spark) {
-   }
+@@ -851,6 +813,31 @@ function sendLatestDeltas(app, deltaCache, selfContext, spark) {
+     })
  }
  
 +/**
@@ -168,9 +140,9 @@ index 47992cc..aafe1e9 100644
 +  }
 +}
 +
- /**
-  * Flush accumulated values as spec-compliant deltas.
-  * Uses buildFlushDeltas from LatestValuesAccumulator to build the deltas.
+ function startServerLog(app, spark) {
+   const onServerLogEvent = wrapWithverifyWS(
+     app.securityStrategy,
 -- 
 2.43.0
 
