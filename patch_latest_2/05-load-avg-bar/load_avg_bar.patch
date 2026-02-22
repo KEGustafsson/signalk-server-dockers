@@ -52,7 +52,7 @@ index 03f1bbd..6ee623e 100644
                        {uptimeD} days, {uptimeH} hours, {uptimeM} minutes
                      </strong>
                    </div>
-+                  <div className="callout callout-info">
++                  <div className="callout callout-primary">
 +                    <small className="text-muted">
 +                      Average CPU Load (1/5/15min)
 +                    </small>
@@ -125,7 +125,7 @@ index 66543ad..6bb9609 100644
                        {uptimeD} days, {uptimeH} hours, {uptimeM} minutes
                      </strong>
                    </div>
-+                  <div className="callout callout-info">
++                  <div className="callout callout-primary">
 +                    <small className="text-muted">
 +                      Average CPU Load (1/5/15min)
 +                    </small>
