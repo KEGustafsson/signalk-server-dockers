@@ -1,81 +1,57 @@
-From 06e3d19729b49484b2ad3e2832db3344361ece5c Mon Sep 17 00:00:00 2001
-From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
-Date: Sun, 1 Sep 2024 12:23:13 +0300
-Subject: [PATCH 1/4] fix null
-
----
- src/tokensecurity.js | 40 ++++++++++++++++++++++------------------
- 1 file changed, 22 insertions(+), 18 deletions(-)
-
-diff --git a/src/tokensecurity.js b/src/tokensecurity.js
-index 5220d941d..7d6a93cb7 100644
---- a/src/tokensecurity.js
-+++ b/src/tokensecurity.js
-@@ -557,27 +557,31 @@ module.exports = function (app, config) {
-         return (
-           (update.values &&
-             update.values.find((valuePath) => {
--              return (
--                strategy.checkACL(
--                  req.skPrincipal.identifier,
--                  context,
--                  valuePath.path,
--                  source,
--                  'write'
--                ) === false
--              )
-+              if (valuePath != null) {
-+                return (
-+                  strategy.checkACL(
-+                    req.skPrincipal.identifier,
-+                    context,
-+                    valuePath.path,
-+                    source,
-+                    'write'
-+                  ) === false
-+                )
-+              }
-             })) ||
-           (update.meta &&
-             update.meta.find((valuePath) => {
--              return (
--                strategy.checkACL(
--                  req.skPrincipal.identifier,
--                  context,
--                  valuePath.path,
--                  source,
--                  'write'
--                ) === false
--              )
-+              if (valuePath != null) {
-+                return (
-+                  strategy.checkACL(
-+                    req.skPrincipal.identifier,
-+                    context,
-+                    valuePath.path,
-+                    source,
-+                    'write'
-+                  ) === false
-+                )
-+              }
-             }))
-         )
-       })
-
-From f734959caec7be93dad3664b22cc9b19bbb73768 Mon Sep 17 00:00:00 2001
-From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
-Date: Sun, 1 Sep 2024 12:24:53 +0300
-Subject: [PATCH 2/4] fix null
-
----
- src/interfaces/ws.js | 37 +++++++++++++++++++------------------
- 1 file changed, 19 insertions(+), 18 deletions(-)
-
+diff --git a/src/deltaPriority.ts b/src/deltaPriority.ts
+index 242e09e..6481277 100644
+--- a/src/deltaPriority.ts
++++ b/src/deltaPriority.ts
+@@ -173,27 +173,29 @@ export const getToPreferredDelta = (
+           if ('values' in update) {
+             update.values = update.values.reduce(
+               (acc: any, pathValue: PathValue) => {
+-                const latest = getLatest(
+-                  delta.context as Context,
+-                  pathValue.path as Path
+-                )
+-                const isPreferred = isPreferredValue(
+-                  pathValue.path as Path,
+-                  latest,
+-                  update.$source,
+-                  millis
+-                )
+-                if (isPreferred) {
+-                  setLatest(
++                if (pathValue != null) {
++                  const latest = getLatest(
+                     delta.context as Context,
++                    pathValue.path as Path
++                  )
++                  const isPreferred = isPreferredValue(
+                     pathValue.path as Path,
+-                    update.$source as SourceRef,
++                    latest,
++                    update.$source,
+                     millis
+                   )
+-                  acc.push(pathValue)
++                  if (isPreferred) {
++                    setLatest(
++                      delta.context as Context,
++                      pathValue.path as Path,
++                      update.$source as SourceRef,
++                      millis
++                    )
++                    acc.push(pathValue)
++                    return acc
++                  }
+                   return acc
+                 }
+-                return acc
+               },
+               []
+             )
 diff --git a/src/interfaces/ws.js b/src/interfaces/ws.js
-index ed02b3c40..755a75db5 100644
+index e625f00..a0dc7b5 100644
 --- a/src/interfaces/ws.js
 +++ b/src/interfaces/ws.js
-@@ -504,26 +504,27 @@ function processUpdates(app, pathSources, spark, msg) {
+@@ -658,26 +658,27 @@ function processUpdates(app, pathSources, spark, msg) {
  
        if (source) {
          update.values.forEach((valuePath) => {
@@ -121,58 +97,57 @@ index ed02b3c40..755a75db5 100644
            }
          })
        }
-
-From e3a8bfa29b7e30d4bbfce199ff9b6bbcff15f00b Mon Sep 17 00:00:00 2001
-From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
-Date: Sun, 1 Sep 2024 12:26:41 +0300
-Subject: [PATCH 3/4] fix null
-
-diff --git a/src/deltaPriority.ts b/src/deltaPriority.ts
-index b66b7389..7da37df1 100644
---- a/src/deltaPriority.ts
-+++ b/src/deltaPriority.ts
-@@ -148,27 +148,29 @@ export const getToPreferredDelta = (
-           if ('values' in update) {
-             update.values = update.values.reduce(
-               (acc: any, pathValue: PathValue) => {
--                const latest = getLatest(
--                  delta.context as Context,
--                  pathValue.path as Path
--                )
--                const isPreferred = isPreferredValue(
--                  pathValue.path as Path,
--                  latest,
--                  update.$source,
--                  millis
--                )
--                if (isPreferred) {
--                  setLatest(
-+                if (pathValue != null) {
-+                  const latest = getLatest(
-                     delta.context as Context,
-+                    pathValue.path as Path
-+                  )
-+                  const isPreferred = isPreferredValue(
-                     pathValue.path as Path,
--                    update.$source as SourceRef,
-+                    latest,
-+                    update.$source,
-                     millis
-                   )
--                  acc.push(pathValue)
-+                  if (isPreferred) {
-+                    setLatest(
-+                      delta.context as Context,
-+                      pathValue.path as Path,
-+                      update.$source as SourceRef,
-+                      millis
-+                    )
-+                    acc.push(pathValue)
-+                    return acc
-+                  }
-                   return acc
-                 }
--                return acc
-               },
-               []
-             )
+diff --git a/src/tokensecurity.ts b/src/tokensecurity.ts
+index d2f4c08..f37feba 100644
+--- a/src/tokensecurity.ts
++++ b/src/tokensecurity.ts
+@@ -1139,27 +1139,31 @@ function tokenSecurityFactory(
+ 
+         if (hasValues(update)) {
+           return update.values.find((valuePath) => {
+-            return (
+-              strategy.checkACL(
+-                skReq.skPrincipal!.identifier,
+-                context,
+-                valuePath.path,
+-                source!,
+-                'write'
+-              ) === false
+-            )
++            if (valuePath != null) {
++              return (
++                strategy.checkACL(
++                  skReq.skPrincipal!.identifier,
++                  context,
++                  valuePath.path,
++                  source!,
++                  'write'
++                ) === false
++              )
++            }
+           })
+         } else if (hasMeta(update)) {
+           return update.meta.find((metaPath) => {
+-            return (
+-              strategy.checkACL(
+-                skReq.skPrincipal!.identifier,
+-                context,
+-                metaPath.path,
+-                source!,
+-                'write'
+-              ) === false
+-            )
++            if (metaPath != null) {
++              return (
++                strategy.checkACL(
++                  skReq.skPrincipal!.identifier,
++                  context,
++                  metaPath.path,
++                  source!,
++                  'write'
++                ) === false
++              )
++            }
+           })
+         }
+         return false

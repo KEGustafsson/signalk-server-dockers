@@ -1,34 +1,152 @@
-From 0000000000000000000000000000000000000001 Mon Sep 17 00:00:00 2001
-From: KE Gustafsson <ke.gustafsson@gmail.com>
-Date: Sun, 22 Feb 2026 10:00:00 +0200
-Subject: [PATCH] feat(dashboard): add CPU load averages and split send/recv bar
-
-Add 1m/5m/15m CPU load averages to the server statistics event and
-display them in the Dashboard below the uptime callout.
-
-Replace the single Progress bar in the provider activity list with a
-split HTML progress bar: the warning-coloured segment shows the read
-(delta) rate share and an info-coloured segment shows the write rate
-share when writeRate > 0.
-
-Applies to both server-admin-ui (Dashboard.js) and
-server-admin-ui-react19 (Dashboard.tsx).
----
- src/deltastats.ts                                                              |  6 ++++
- packages/server-admin-ui/src/views/Dashboard/Dashboard.js                     | 44 +++++++++++++++++++++++++++------
- packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx            | 52 ++++++++++++++++++++++++++++++++++++++++
- 3 files changed, 94 insertions(+), 8 deletions(-)
-
+diff --git a/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx b/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
+index 03f1bbd..6ee623e 100644
+--- a/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
++++ b/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
+@@ -37,6 +37,11 @@ export default function Dashboard() {
+   const providerStatistics: Record<string, ProviderStatistics> =
+     serverStatistics?.providerStatistics ?? {}
+   const uptime = serverStatistics?.uptime ?? 0
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  const stats = serverStatistics as any
++  const loadAvg1m: string = stats?.loadAvg1m ?? ''
++  const loadAvg5m: string = stats?.loadAvg5m ?? ''
++  const loadAvg15m: string = stats?.loadAvg15m ?? ''
+ 
+   const errorCount = providerStatus.filter((s) => s.type === 'error').length
+   const uptimeNum = typeof uptime === 'number' ? uptime : 0
+@@ -135,11 +140,28 @@ export default function Dashboard() {
+           </span>
+         )}
+         <div className="bars">
+-          <ProgressBar
+-            className="progress-xs"
+-            variant="warning"
+-            now={((providerStats.deltaRate || 0) / deltaRateNum) * 100}
+-          />
++          <div className="progress-xs progress">
++            <div
++              className="progress-bar bg-warning"
++              role="progressbar"
++              style={{
++                width:
++                  ((providerStats.deltaRate || 0) / deltaRateNum) * 100 + '%'
++              }}
++            ></div>
++            {(providerStats.writeRate || 0) > 0 && (
++              <div
++                className="progress-bar bg-info"
++                role="progressbar"
++                style={{
++                  width:
++                    100 -
++                    ((providerStats.deltaRate || 0) / deltaRateNum) * 100 +
++                    '%'
++                }}
++              ></div>
++            )}
++          </div>
+         </div>
+       </li>
+     )
+@@ -219,6 +241,15 @@ export default function Dashboard() {
+                       {uptimeD} days, {uptimeH} hours, {uptimeM} minutes
+                     </strong>
+                   </div>
++                  <div className="callout callout-info">
++                    <small className="text-muted">
++                      Average CPU Load (1/5/15min)
++                    </small>
++                    <br />
++                    <strong className="h5">
++                      {loadAvg1m} {loadAvg5m} {loadAvg15m}
++                    </strong>
++                  </div>
+                 </Col>
+                 <Col xs="12" md="6">
+                   <div className="text-muted" style={{ fontSize: '1rem' }}>
+diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
+index 66543ad..6bb9609 100644
+--- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
++++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
+@@ -21,13 +21,19 @@ const Dashboard = (props) => {
+     numberOfAvailablePaths,
+     wsClients,
+     providerStatistics,
+-    uptime
++    uptime,
++    loadAvg1m,
++    loadAvg5m,
++    loadAvg15m
+   } = props.serverStatistics || {
+     deltaRate: 0,
+     numberOfAvailablePaths: 0,
+     wsClients: 0,
+     providerStatistics: {},
+-    uptime: ''
++    uptime: '',
++    loadAvg1m: '',
++    loadAvg5m: '',
++    loadAvg15m: ''
+   }
+   const providerStatus = props.providerStatus || []
+   const errorCount = providerStatus.filter((s) => s.type === 'error').length
+@@ -116,11 +122,25 @@ const Dashboard = (props) => {
+           </span>
+         )}
+         <div className="bars">
+-          <Progress
+-            className="progress-xs"
+-            color="warning"
+-            value={(providerStats.deltaRate / deltaRate) * 100}
+-          />
++          <div className="progress-xs progress">
++            <div
++              className="progress-bar bg-warning"
++              role="progressbar"
++              style={{
++                width: (providerStats.deltaRate / deltaRate) * 100 + '%'
++              }}
++            ></div>
++            {providerStats.writeRate > 0 && (
++              <div
++                className="progress-bar bg-info"
++                role="progressbar"
++                style={{
++                  width:
++                    100 - (providerStats.deltaRate / deltaRate) * 100 + '%'
++                }}
++              ></div>
++            )}
++          </div>
+         </div>
+       </li>
+     )
+@@ -196,6 +216,15 @@ const Dashboard = (props) => {
+                       {uptimeD} days, {uptimeH} hours, {uptimeM} minutes
+                     </strong>
+                   </div>
++                  <div className="callout callout-info">
++                    <small className="text-muted">
++                      Average CPU Load (1/5/15min)
++                    </small>
++                    <br />
++                    <strong className="h5">
++                      {loadAvg1m} {loadAvg5m} {loadAvg15m}
++                    </strong>
++                  </div>
+                 </Col>
+                 <Col xs="12" md="6">
+                   <div className="text-muted" style={{ fontSize: '1rem' }}>
 diff --git a/src/deltastats.ts b/src/deltastats.ts
-index d59ede8d..00000001 100644
+index d59ede8..e9008c2 100644
 --- a/src/deltastats.ts
 +++ b/src/deltastats.ts
 @@ -17,6 +17,7 @@
-
+ 
  import { isUndefined, values } from 'lodash'
  import { EventEmitter } from 'node:events'
 +import os from 'os'
-
+ 
  const STATS_UPDATE_INTERVAL_SECONDS = 5
  export const CONNECTION_WRITE_EVENT_NAME = 'connectionwrite'
 @@ -73,6 +74,7 @@ export function startDeltaStatistics(
@@ -51,148 +169,3 @@ index d59ede8d..00000001 100644
        }
      })
      app.lastIntervalDeltaCount = app.deltaCount
-diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-index 66543adf7..00000002 100644
---- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-+++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-@@ -14,13 +14,18 @@ import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
- import { useSources } from '../../utils/useSources'
-
- const Dashboard = (props) => {
-   const sources = useSources()
-
-   const {
-     deltaRate,
-     numberOfAvailablePaths,
-     wsClients,
-     providerStatistics,
--    uptime
-+    uptime,
-+    loadAvg1m,
-+    loadAvg5m,
-+    loadAvg15m
-   } = props.serverStatistics || {
-     deltaRate: 0,
-     numberOfAvailablePaths: 0,
-     wsClients: 0,
-     providerStatistics: {},
--    uptime: ''
-+    uptime: '',
-+    loadAvg1m: '',
-+    loadAvg5m: '',
-+    loadAvg15m: ''
-   }
-
-@@ -108,13 +113,33 @@ const Dashboard = (props) => {
-         )}
-         <div className="bars">
--          <Progress
--            className="progress-xs"
--            color="warning"
--            value={(providerStats.deltaRate / deltaRate) * 100}
--          />
-+          <div className="progress-xs progress">
-+            <div
-+              className="progress-bar bg-warning"
-+              role="progressbar"
-+              style={{
-+                width: (providerStats.deltaRate / deltaRate) * 100 + '%'
-+              }}
-+              aria-valuenow={(providerStats.deltaRate / deltaRate) * 100}
-+              aria-valuemin="0"
-+              aria-valuemax="100"
-+            ></div>
-+            {providerStats.writeRate > 0 && (
-+              <div
-+                className="progress-bar bg-info"
-+                role="progressbar"
-+                style={{
-+                  width:
-+                    100 - (providerStats.deltaRate / deltaRate) * 100 + '%'
-+                }}
-+                aria-valuenow={
-+                  100 - (providerStats.deltaRate / deltaRate) * 100
-+                }
-+                aria-valuemin="0"
-+                aria-valuemax="100"
-+              ></div>
-+            )}
-+          </div>
-         </div>
-       </li>
-     )
-@@ -215,6 +240,13 @@ const Dashboard = (props) => {
-                       {uptimeD} days, {uptimeH} hours, {uptimeM} minutes
-                     </strong>
-                   </div>
-+                  <div className="callout callout-primary">
-+                    <small className="text-muted">
-+                      Average CPU Load (1/5/15min)
-+                    </small>
-+                    <br />
-+                    <strong className="h5">
-+                      {loadAvg1m} {loadAvg5m} {loadAvg15m}
-+                    </strong>
-+                  </div>
-                 </Col>
-                 <Col xs="12" md="6">
-                   <div className="text-muted" style={{ fontSize: '1rem' }}>
-
-diff --git a/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx b/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
-index 03f1bbdbb..00000003 100644
---- a/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
-+++ b/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
-@@ -33,6 +33,9 @@ export default function Dashboard() {
-   const deltaRate = serverStatistics?.deltaRate ?? 0
-   const numberOfAvailablePaths = serverStatistics?.numberOfAvailablePaths ?? 0
-   const uptime = serverStatistics?.uptime ?? ''
-+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-+  const stats = serverStatistics as any
-+  const loadAvg1m: string = stats?.loadAvg1m ?? ''
-+  const loadAvg5m: string = stats?.loadAvg5m ?? ''
-+  const loadAvg15m: string = stats?.loadAvg15m ?? ''
-
-@@ -113,11 +116,28 @@ export default function Dashboard() {
-         <div className="bars">
--          <Progress
--            className="progress-xs"
--            color="warning"
--            value={(providerStats.deltaRate / deltaRate) * 100}
--          />
-+          <div className="progress-xs progress">
-+            <div
-+              className="progress-bar bg-warning"
-+              role="progressbar"
-+              style={{
-+                width: (providerStats.deltaRate / deltaRate) * 100 + '%'
-+              }}
-+            ></div>
-+            {(providerStats.writeRate || 0) > 0 && (
-+              <div
-+                className="progress-bar bg-info"
-+                role="progressbar"
-+                style={{
-+                  width:
-+                    100 - (providerStats.deltaRate / deltaRate) * 100 + '%'
-+                }}
-+              ></div>
-+            )}
-+          </div>
-         </div>
-       </li>
-     )
-@@ -215,6 +235,13 @@ export default function Dashboard() {
-                       {uptimeD} days, {uptimeH} hours, {uptimeM} minutes
-                     </strong>
-                   </div>
-+                  <div className="callout callout-primary">
-+                    <small className="text-muted">
-+                      Average CPU Load (1/5/15min)
-+                    </small>
-+                    <br />
-+                    <strong className="h5">
-+                      {loadAvg1m} {loadAvg5m} {loadAvg15m}
-+                    </strong>
-+                  </div>
-                 </Col>
-                 <Col xs="12" md="6">
