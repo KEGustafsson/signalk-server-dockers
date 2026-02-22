@@ -1,0 +1,113 @@
+From e540864da5fc661332a3915b62f8b970a21b60f5 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 22 Feb 2026 12:02:20 +0000
+Subject: [PATCH] fix: useMetaData hook does not react to metadata updates
+
+useMetaData only read from the store once (on mount and on
+context/path changes) but never subscribed to subsequent meta
+updates. Any metadata arriving after initial render was silently
+ignored, leaving the displayed meta stale for the lifetime of the
+component.
+
+Add subscribeMeta(context, path, callback) to ValueEmittingStore,
+mirroring the existing subscribe() method for path values. Call it
+from updateMeta() to notify listeners. Wire useMetaData up to the
+new subscription so it re-renders whenever the server sends updated
+metadata for the watched path.
+
+https://claude.ai/code/session_0142hccyF52oZwDAmLrntwTp
+---
+ .../views/DataBrowser/ValueEmittingStore.js   | 32 ++++++++++++++++++-
+ .../src/views/DataBrowser/usePathData.js      |  7 +++-
+ 2 files changed, 37 insertions(+), 2 deletions(-)
+
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/ValueEmittingStore.js b/packages/server-admin-ui/src/views/DataBrowser/ValueEmittingStore.js
+index 426be40..e6bd5cb 100644
+--- a/packages/server-admin-ui/src/views/DataBrowser/ValueEmittingStore.js
++++ b/packages/server-admin-ui/src/views/DataBrowser/ValueEmittingStore.js
+@@ -16,6 +16,8 @@ class ValueEmittingStore {
+     this.meta = {}
+     // Per-path listeners: Map<"context:path$SourceKey", Set<callback>>
+     this.listeners = new Map()
++    // Per-path meta listeners: Map<"meta:context:path", Set<callback>>
++    this.metaListeners = new Map()
+     // Listeners for structural changes (new paths added)
+     this.structureListeners = new Set()
+     // Version counter for structural changes
+@@ -48,13 +50,20 @@ class ValueEmittingStore {
+   }
+ 
+   /**
+-   * Update metadata for a path
++   * Update metadata for a path and notify subscribers
+    */
+   updateMeta(context, path, metaData) {
+     if (!this.meta[context]) {
+       this.meta[context] = {}
+     }
+     this.meta[context][path] = { ...this.meta[context][path], ...metaData }
++
++    // Notify meta-specific listeners
++    const key = `meta:${context}:${path}`
++    const listeners = this.metaListeners.get(key)
++    if (listeners) {
++      listeners.forEach((callback) => callback(this.meta[context][path]))
++    }
+   }
+ 
+   /**
+@@ -106,6 +115,27 @@ class ValueEmittingStore {
+     }
+   }
+ 
++  /**
++   * Subscribe to metadata updates for a path - returns unsubscribe function
++   */
++  subscribeMeta(context, path, callback) {
++    const key = `meta:${context}:${path}`
++    if (!this.metaListeners.has(key)) {
++      this.metaListeners.set(key, new Set())
++    }
++    this.metaListeners.get(key).add(callback)
++
++    return () => {
++      const listeners = this.metaListeners.get(key)
++      if (listeners) {
++        listeners.delete(callback)
++        if (listeners.size === 0) {
++          this.metaListeners.delete(key)
++        }
++      }
++    }
++  }
++
+   /**
+    * Subscribe to structural changes (new paths added)
+    */
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/usePathData.js b/packages/server-admin-ui/src/views/DataBrowser/usePathData.js
+index 20fe1cb..9e0bf16 100644
+--- a/packages/server-admin-ui/src/views/DataBrowser/usePathData.js
++++ b/packages/server-admin-ui/src/views/DataBrowser/usePathData.js
+@@ -59,13 +59,18 @@ export function usePathData(context, path$SourceKey) {
+ }
+ 
+ /**
+- * Hook to get metadata for a path
++ * Hook to get metadata for a path, updating whenever new meta arrives
+  */
+ export function useMetaData(context, path) {
+   const [meta, setMeta] = useState(() => store.getMeta(context, path))
+ 
+   useEffect(() => {
++    // Sync with current value when context or path changes
+     setMeta(store.getMeta(context, path))
++
++    // Subscribe to future meta updates for this path
++    const unsubscribe = store.subscribeMeta(context, path, setMeta)
++    return unsubscribe
+   }, [context, path])
+ 
+   return meta
+-- 
+2.43.0
+
