@@ -12,7 +12,7 @@ on:
       build_docker_tags_alpine:
         description: 'Build Alpine docker image'
         type: boolean
-        default: false
+        default: true
       build_docker_tags_debian:
         description: 'Build Debian docker image'
         type: boolean
@@ -214,7 +214,7 @@ jobs:
           git clone https://github.com/SignalK/signalk-server.git
           cd signalk-server
           applied=false
-          for dir in ./../patch_latest_2/[0-9]*/; do
+          for dir in ./../patch/[0-9]*/; do
             if [ -d "$dir" ] && ls "$dir"*.patch 1>/dev/null 2>&1; then
               echo "Applying patches from $(basename "$dir")"
               git apply "$dir"*.patch
