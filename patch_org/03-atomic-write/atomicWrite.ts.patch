@@ -1,0 +1,43 @@
+From ccd2cdd2bf84c6169865f18d26722a1e7f1101af Mon Sep 17 00:00:00 2001
+From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
+Date: Tue, 20 Jan 2026 12:11:31 +0200
+Subject: [PATCH] Implement JSON validation in atomic write functions
+
+Added JSON validation for atomic write functions.
+---
+ src/atomicWrite.ts | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/src/atomicWrite.ts b/src/atomicWrite.ts
+index 583f8adbf..bb65651bf 100644
+--- a/src/atomicWrite.ts
++++ b/src/atomicWrite.ts
+@@ -1,6 +1,19 @@
+ import fs from 'fs'
+ 
++function validateJson(data: string): void {
++  try {
++    JSON.parse(data)
++  } catch (err) {
++    console.error('JSON validation failed!')
++    console.error('Error:', err instanceof Error ? err.message : String(err))
++    console.error('Data received:', data)
++    throw new Error(`Invalid JSON: ${err instanceof Error ? err.message : String(err)}`)
++  }
++}
++
+ export function atomicWriteFileSync(filePath: string, data: string): void {
++  validateJson(data)
++
+   const tmp = filePath + '.tmp'
+   try {
+     fs.writeFileSync(tmp, data)
+@@ -17,6 +30,8 @@ export async function atomicWriteFile(
+   filePath: string,
+   data: string
+ ): Promise<void> {
++  validateJson(data)
++
+   const tmp = filePath + '.tmp'
+   try {
+     await fs.promises.writeFile(tmp, data)
