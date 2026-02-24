@@ -1,41 +1,6 @@
-From 52d64bd258c8365ae4742de8a17bccee2cfc1af5 Mon Sep 17 00:00:00 2001
-From: KE Gustafsson <ke.gustafsson@gmail.com>
-Date: Sat, 21 Feb 2026 16:30:26 +0200
-Subject: [PATCH 1/2] fix(admin-ui): show ws n2k labels in source views
-
-Resolve ws.* source references to human-readable labels from
-sources.ws.<device>.n2k.description.
-
-Apply label resolution in Dashboard, Data Browser, and Source Priorities
-for both server-admin-ui and server-admin-ui-react19.
-
-Add shared /sources polling helpers and keep sourceRef fallback when
-no ws n2k description is available.
----
- .../src/hooks/sourceLabelUtils.test.ts        | 46 +++++++++++++++++++
- .../src/hooks/sourceLabelUtils.ts             | 38 +++++++++++++++
- .../src/hooks/useSources.ts                   | 36 +++++++++++++++
- .../src/views/Dashboard/Dashboard.tsx         | 15 ++++--
- .../src/views/DataBrowser/DataRow.tsx         |  8 +++-
- .../DataBrowser/VirtualizedDataTable.tsx      |  3 ++
- .../views/ServerConfig/SourcePriorities.tsx   | 15 ++++--
- .../src/utils/sourceLabelUtils.js             | 29 ++++++++++++
- .../server-admin-ui/src/utils/useSources.js   | 37 +++++++++++++++
- .../src/views/Dashboard/Dashboard.js          | 16 +++++--
- .../src/views/DataBrowser/DataBrowser.js      |  6 +--
- .../src/views/DataBrowser/DataRow.js          |  7 ++-
- .../views/DataBrowser/VirtualizedDataTable.js |  3 ++
- .../views/ServerConfig/SourcePriorities.js    | 42 +++++++++++++++--
- 14 files changed, 279 insertions(+), 22 deletions(-)
- create mode 100644 packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts
- create mode 100644 packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
- create mode 100644 packages/server-admin-ui-react19/src/hooks/useSources.ts
- create mode 100644 packages/server-admin-ui/src/utils/sourceLabelUtils.js
- create mode 100644 packages/server-admin-ui/src/utils/useSources.js
-
 diff --git a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts
 new file mode 100644
-index 000000000..599545af5
+index 0000000..599545a
 --- /dev/null
 +++ b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts
 @@ -0,0 +1,46 @@
@@ -87,7 +52,7 @@ index 000000000..599545af5
 +})
 diff --git a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
 new file mode 100644
-index 000000000..18830ff65
+index 0000000..18830ff
 --- /dev/null
 +++ b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
 @@ -0,0 +1,38 @@
@@ -131,7 +96,7 @@ index 000000000..18830ff65
 +}
 diff --git a/packages/server-admin-ui-react19/src/hooks/useSources.ts b/packages/server-admin-ui-react19/src/hooks/useSources.ts
 new file mode 100644
-index 000000000..3aeb4b013
+index 0000000..3aeb4b0
 --- /dev/null
 +++ b/packages/server-admin-ui-react19/src/hooks/useSources.ts
 @@ -0,0 +1,36 @@
@@ -172,7 +137,7 @@ index 000000000..3aeb4b013
 +  return sources
 +}
 diff --git a/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx b/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
-index a535ffb51..03f1bbdbb 100644
+index a535ffb..03f1bbd 100644
 --- a/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
 +++ b/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
 @@ -10,6 +10,8 @@ import { faSignIn } from '@fortawesome/free-solid-svg-icons/faSignIn'
@@ -236,7 +201,7 @@ index a535ffb51..03f1bbdbb 100644
      return <a href={'#/serverConfiguration/connections/' + id}>{id}</a>
    }
 diff --git a/packages/server-admin-ui-react19/src/views/DataBrowser/DataRow.tsx b/packages/server-admin-ui-react19/src/views/DataBrowser/DataRow.tsx
-index 7a1fe7486..49481c3a6 100644
+index 7085a97..158ffe6 100644
 --- a/packages/server-admin-ui-react19/src/views/DataBrowser/DataRow.tsx
 +++ b/packages/server-admin-ui-react19/src/views/DataBrowser/DataRow.tsx
 @@ -3,6 +3,7 @@ import { usePathData, useMetaData } from './usePathData'
@@ -244,10 +209,10 @@ index 7a1fe7486..49481c3a6 100644
  import CopyToClipboardWithFade from './CopyToClipboardWithFade'
  import { getValueRenderer, DefaultValueRenderer } from './ValueRenderers'
 +import { getSourceDisplayLabel } from '../../hooks/sourceLabelUtils'
- import type { PathData, MetaData } from '../../store'
- 
- interface DataRowProps {
-@@ -14,6 +15,7 @@ interface DataRowProps {
+ import {
+   usePresetDetails,
+   useUnitDefinitions,
+@@ -21,6 +22,7 @@ interface DataRowProps {
    onToggleSource: (source: string) => void
    selectedSources: Set<string>
    showContext: boolean
@@ -255,7 +220,7 @@ index 7a1fe7486..49481c3a6 100644
  }
  
  interface ValueRendererProps {
-@@ -31,7 +33,8 @@ function DataRow({
+@@ -64,7 +66,8 @@ function DataRow({
    isPaused,
    onToggleSource,
    selectedSources,
@@ -265,7 +230,7 @@ index 7a1fe7486..49481c3a6 100644
  }: DataRowProps) {
    // When showContext is true, path$SourceKey is a composite key: context\0realKey
    const nullIdx = showContext ? path$SourceKey.indexOf('\0') : -1
-@@ -122,7 +125,8 @@ function DataRow({
+@@ -196,7 +199,8 @@ function DataRow({
            />
          </label>
          <CopyToClipboardWithFade text={source}>
@@ -276,7 +241,7 @@ index 7a1fe7486..49481c3a6 100644
          {data.pgn && <span>&nbsp;{data.pgn}</span>}
          {data.sentence && <span>&nbsp;{data.sentence}</span>}
 diff --git a/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx b/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
-index 1d6eb1953..e2eaabeec 100644
+index 1d6eb19..e2eaabe 100644
 --- a/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
 +++ b/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
 @@ -8,6 +8,7 @@ import {
@@ -304,7 +269,7 @@ index 1d6eb1953..e2eaabeec 100644
          ))}
  
 diff --git a/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx b/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
-index e90c65730..4ba08030c 100644
+index e90c657..4ba0803 100644
 --- a/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
 +++ b/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
 @@ -14,6 +14,8 @@ import { faFloppyDisk } from '@fortawesome/free-solid-svg-icons/faFloppyDisk'
@@ -373,7 +338,7 @@ index e90c65730..4ba08030c 100644
                    <td style={{ border: 'none' }}>
 diff --git a/packages/server-admin-ui/src/utils/sourceLabelUtils.js b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
 new file mode 100644
-index 000000000..0d1100048
+index 0000000..0d11000
 --- /dev/null
 +++ b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
 @@ -0,0 +1,29 @@
@@ -408,7 +373,7 @@ index 000000000..0d1100048
 +}
 diff --git a/packages/server-admin-ui/src/utils/useSources.js b/packages/server-admin-ui/src/utils/useSources.js
 new file mode 100644
-index 000000000..be2f7471d
+index 0000000..be2f747
 --- /dev/null
 +++ b/packages/server-admin-ui/src/utils/useSources.js
 @@ -0,0 +1,37 @@
@@ -450,7 +415,7 @@ index 000000000..be2f7471d
 +  return sources
 +}
 diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-index b7ecbec79..66543adf7 100644
+index b7ecbec..66543ad 100644
 --- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
 +++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
 @@ -10,8 +10,12 @@ import {
@@ -510,7 +475,7 @@ index b7ecbec79..66543adf7 100644
      return <a href={'#/serverConfiguration/connections/' + id}>{id}</a>
    }
 diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
-index d97b5a4c0..3c9267707 100644
+index 96be177..7dabe26 100644
 --- a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
 +++ b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
 @@ -2,6 +2,7 @@ import React, { Component } from 'react'
@@ -521,7 +486,7 @@ index d97b5a4c0..3c9267707 100644
  import {
    Card,
    CardHeader,
-@@ -32,10 +33,7 @@ const selectedSourcesStorageKey = 'admin.v1.dataBrowser.selectedSources'
+@@ -67,10 +68,7 @@ const selectedSourcesStorageKey = 'admin.v1.dataBrowser.selectedSources'
  const sourceFilterActiveStorageKey = 'admin.v1.dataBrowser.sourceFilterActive'
  
  function fetchSources() {
@@ -534,7 +499,7 @@ index d97b5a4c0..3c9267707 100644
        Object.values(sources).forEach((source) => {
          if (source.type === 'NMEA2000') {
 diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataRow.js b/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
-index 1a7eb4473..71611fa11 100644
+index 77a97d3..b7d8703 100644
 --- a/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
 +++ b/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
 @@ -3,6 +3,7 @@ import { usePathData, useMetaData } from './usePathData'
@@ -543,19 +508,19 @@ index 1a7eb4473..71611fa11 100644
  import { getValueRenderer, DefaultValueRenderer } from './ValueRenderers'
 +import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
  
- /**
-  * DataRow - Individual virtualized row with granular subscription
-@@ -15,7 +16,8 @@ function DataRow({
-   raw,
-   isPaused,
-   onToggleSource,
--  selectedSources
-+  selectedSources,
+ // Cache for default categories to avoid repeated fetches
+ let defaultCategoriesCache = null
+@@ -77,7 +78,8 @@ function DataRow({
+   selectedSources,
+   convertValue,
+   unitDefinitions,
+-  presetDetails
++  presetDetails,
 +  sources
  }) {
    const data = usePathData(context, path$SourceKey)
    const meta = useMetaData(context, data?.path)
-@@ -73,7 +75,8 @@ function DataRow({
+@@ -176,7 +178,8 @@ function DataRow({
            }}
          />
          <CopyToClipboardWithFade text={data.$source}>
@@ -566,7 +531,7 @@ index 1a7eb4473..71611fa11 100644
          {data.pgn && <span>&nbsp;{data.pgn}</span>}
          {data.sentence && <span>&nbsp;{data.sentence}</span>}
 diff --git a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
-index a034be7a6..87d650f0d 100644
+index ed53869..b97585e 100644
 --- a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
 +++ b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
 @@ -1,6 +1,7 @@
@@ -577,24 +542,24 @@ index a034be7a6..87d650f0d 100644
  import './VirtualTable.css'
  
  /**
-@@ -17,6 +18,7 @@ function VirtualizedDataTable({
-   onToggleSourceFilter,
-   sourceFilterActive
+@@ -20,6 +21,7 @@ function VirtualizedDataTable({
+   unitDefinitions,
+   presetDetails
  }) {
 +  const sources = useSources()
    const containerRef = useRef(null)
    const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 })
    const [isNarrowScreen, setIsNarrowScreen] = useState(
-@@ -236,6 +238,7 @@ function VirtualizedDataTable({
-             isPaused={isPaused}
-             onToggleSource={onToggleSource}
-             selectedSources={selectedSources}
+@@ -242,6 +244,7 @@ function VirtualizedDataTable({
+             convertValue={convertValue}
+             unitDefinitions={unitDefinitions}
+             presetDetails={presetDetails}
 +            sources={sources}
            />
          ))}
  
 diff --git a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
-index 20f5c49c5..32a4dbb01 100644
+index 20f5c49..32a4dbb 100644
 --- a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
 +++ b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
 @@ -15,6 +15,8 @@ import {
@@ -682,27 +647,8 @@ index 20f5c49c5..32a4dbb01 100644
                        />
                      </td>
                      <td style={{ border: 'none' }}>
-
-From bb192b4cd997287e7a3778308458aecd937d2536 Mon Sep 17 00:00:00 2001
-From: KE Gustafsson <ke.gustafsson@gmail.com>
-Date: Sat, 21 Feb 2026 16:58:07 +0200
-Subject: [PATCH 2/2] fix(ws): publish device descriptions in sources
-
-Add ws source metadata publishing for approved/authorized devices so
-admin UIs can resolve ws source refs to human-readable labels.
-
-Cache device descriptions and skip duplicate source delta writes for
-performance.
-
-Extend security test to verify /signalk/v1/api/sources exposes ws device
-description under n2k metadata after ws connect.
----
- src/interfaces/ws.js | 100 ++++++++++++++++++++++++++++++++++++++++---
- test/security.js     |  26 +++++++++++
- 2 files changed, 120 insertions(+), 6 deletions(-)
-
 diff --git a/src/interfaces/ws.js b/src/interfaces/ws.js
-index 47992ccee..e625f00da 100644
+index 59a68e9..a604e01 100644
 --- a/src/interfaces/ws.js
 +++ b/src/interfaces/ws.js
 @@ -17,7 +17,11 @@ const _ = require('lodash')
@@ -718,7 +664,7 @@ index 47992ccee..e625f00da 100644
  const {
    findRequest,
    updateRequest,
-@@ -45,6 +49,84 @@ const BACKPRESSURE_EXIT_THRESHOLD = process.env.BACKPRESSURE_EXIT
+@@ -49,6 +53,84 @@ const BACKPRESSURE_EXIT_THRESHOLD = process.env.BACKPRESSURE_EXIT
    ? parseInt(process.env.BACKPRESSURE_EXIT, 10)
    : 1024
  
@@ -803,7 +749,7 @@ index 47992ccee..e625f00da 100644
  module.exports = function (app) {
    'use strict'
  
-@@ -186,6 +268,7 @@ module.exports = function (app) {
+@@ -190,6 +272,7 @@ module.exports = function (app) {
          let principalId
          if (spark.request.skPrincipal) {
            principalId = spark.request.skPrincipal.identifier
@@ -811,7 +757,7 @@ index 47992ccee..e625f00da 100644
          }
  
          debugConnection(
-@@ -288,7 +371,7 @@ module.exports = function (app) {
+@@ -292,7 +375,7 @@ module.exports = function (app) {
                }
  
                if (msg.accessRequest) {
@@ -820,7 +766,7 @@ index 47992ccee..e625f00da 100644
                }
  
                if (msg.login && app.securityStrategy.supportsLogin()) {
-@@ -438,7 +521,7 @@ module.exports = function (app) {
+@@ -442,7 +525,7 @@ module.exports = function (app) {
      })
    }
  
@@ -829,7 +775,7 @@ index 47992ccee..e625f00da 100644
      if (spark.skPendingAccessRequest) {
        spark.write({
          requestId: msg.requestId,
-@@ -461,8 +544,13 @@ module.exports = function (app) {
+@@ -465,8 +548,13 @@ module.exports = function (app) {
              if (res.accessRequest && res.accessRequest.token) {
                spark.request.token = res.accessRequest.token
                app.securityStrategy.authorizeWS(spark.request)
@@ -845,7 +791,7 @@ index 47992ccee..e625f00da 100644
              }
            }
            spark.write(res)
-@@ -531,7 +619,7 @@ function createPrimusAuthorize(authorizeWS) {
+@@ -535,7 +623,7 @@ function createPrimusAuthorize(authorizeWS) {
        const identifier = _.get(req, 'skPrincipal.identifier')
        if (identifier) {
          debug(`authorized username: ${identifier}`)
@@ -855,7 +801,7 @@ index 47992ccee..e625f00da 100644
      } catch (error) {
        // To be able to login or request access via WS with security in place
 diff --git a/test/security.js b/test/security.js
-index 391da01d1..5ad8e4534 100644
+index 391da01..5ad8e45 100644
 --- a/test/security.js
 +++ b/test/security.js
 @@ -506,6 +506,7 @@ describe('Security', () => {
