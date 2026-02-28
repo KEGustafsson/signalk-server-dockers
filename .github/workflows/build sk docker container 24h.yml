@@ -816,26 +816,32 @@ jobs:
           - os: ubuntu
             node: '22.x'
             short_tag: latest-22.x
+            tags_output: ubuntu_22
             enabled: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' && github.event.inputs.build_node_22 == 'true' }}
           - os: ubuntu
             node: '24.x'
             short_tag: latest
+            tags_output: ubuntu_24
             enabled: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' && github.event.inputs.build_node_24 == 'true' }}
           - os: alpine
             node: '22'
             short_tag: latest-alpine-22
+            tags_output: alpine_22
             enabled: ${{ github.event.inputs.build_docker_tags_alpine == 'true' && github.event.inputs.build_node_22 == 'true' }}
           - os: alpine
             node: '24'
             short_tag: latest-alpine
+            tags_output: alpine_24
             enabled: ${{ github.event.inputs.build_docker_tags_alpine == 'true' && github.event.inputs.build_node_24 == 'true' }}
           - os: debian
             node: '22'
             short_tag: latest-debian-22
+            tags_output: debian_22
             enabled: ${{ github.event.inputs.build_docker_tags_debian == 'true' && github.event.inputs.build_node_22 == 'true' }}
           - os: debian
             node: '24'
             short_tag: latest-debian
+            tags_output: debian_24
             enabled: ${{ github.event.inputs.build_docker_tags_debian == 'true' && github.event.inputs.build_node_24 == 'true' }}
     steps:
       - name: Check if variant is enabled
@@ -851,34 +857,37 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y skopeo
-      - name: Get tags for variant
-        if: steps.check.outputs.skip != 'true'
-        id: tags
-        run: |
-          case "${{ matrix.variant.os }}_${{ matrix.variant.node }}" in
-            ubuntu_22.x) TAGS="${{ needs.generate-tags.outputs.ubuntu_22 }}" ;;
-            ubuntu_24.x) TAGS="${{ needs.generate-tags.outputs.ubuntu_24 }}" ;;
-            alpine_22) TAGS="${{ needs.generate-tags.outputs.alpine_22 }}" ;;
-            alpine_24) TAGS="${{ needs.generate-tags.outputs.alpine_24 }}" ;;
-            debian_22) TAGS="${{ needs.generate-tags.outputs.debian_22 }}" ;;
-            debian_24) TAGS="${{ needs.generate-tags.outputs.debian_24 }}" ;;
-          esac
-          echo "$TAGS" | tr ',' '\n' | grep "^${{ env.GHCR_REGISTRY }}/" > ghcr_tags.txt
-          cat ghcr_tags.txt
       - name: Copy images from GHCR to Docker Hub
         if: steps.check.outputs.skip != 'true'
         env:
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          # GHCR source: use GITHUB_TOKEN (read access is sufficient for skopeo copy source)
+          # NOTE: GITHUB_TOKEN cannot be passed as an env var to skopeo directly due to masking.
+          # We use a dedicated read-scoped PAT here, or fall back to GHCR_TOKEN if you have one.
+          # If your GHCR packages are public, you can omit --src-creds entirely.
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
           DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
           DOCKER_HUB_ACCESS_TOKEN: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          
           GHCR_PREFIX="${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}"
           HUB_PREFIX="docker.io/${{ env.DOCKER_HUB_REPO }}"
-          
-          # Copy all versioned tags
+          TAGS="${{ needs.generate-tags.outputs[matrix.variant.tags_output] }}"
+          if [[ -z "$TAGS" ]]; then
+            echo "ERROR: No generated tags found for ${{ matrix.variant.tags_output }}"
+            exit 1
+          fi
+          {
+            echo "$TAGS"
+            echo "${GHCR_PREFIX}:${{ matrix.variant.short_tag }}"
+          } | tr ',' '\n' | grep "^${GHCR_PREFIX}:" | awk '!seen[$0]++' > ghcr_tags.txt
+          if [[ ! -s ghcr_tags.txt ]]; then
+            echo "ERROR: No GHCR tags to copy for ${{ matrix.variant.os }} ${{ matrix.variant.node }}"
+            exit 1
+          fi
+          echo "Tags to copy:"
+          cat ghcr_tags.txt
+          # Copy versioned and short tags in one loop.
           while IFS= read -r ghcr_image; do
             [ -z "$ghcr_image" ] && continue
             
@@ -900,18 +909,6 @@ jobs:
             echo "✓ Successfully copied: $tag"
           done < ghcr_tags.txt
           
-          # Copy short tag
-          echo ""
-          echo "Copying short tag: ${{ matrix.variant.short_tag }}"
-          if ! skopeo copy --all \
-            --retry-times 3 \
-            --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
-            --dest-creds "${DOCKER_HUB_USERNAME}:${DOCKER_HUB_ACCESS_TOKEN}" \
-            "docker://${GHCR_PREFIX}:${{ matrix.variant.short_tag }}" \
-            "docker://${HUB_PREFIX}:${{ matrix.variant.short_tag }}"; then
-            echo "ERROR: Failed to copy short tag"
-            exit 1
-          fi
           echo "✓ Successfully copied all images for ${{ matrix.variant.os }} ${{ matrix.variant.node }}"
 
   housekeeping:
