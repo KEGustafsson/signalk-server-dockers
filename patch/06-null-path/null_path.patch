@@ -47,11 +47,10 @@ index 242e09e..6481277 100644
                },
                []
              )
-diff --git a/src/interfaces/ws.js b/src/interfaces/ws.js
-index e625f00..a0dc7b5 100644
---- a/src/interfaces/ws.js
-+++ b/src/interfaces/ws.js
-@@ -658,26 +658,27 @@ function processUpdates(app, pathSources, spark, msg) {
+diff --git a/src/interfaces/ws.ts b/src/interfaces/ws.ts
+--- a/src/interfaces/ws.ts
++++ b/src/interfaces/ws.ts
+@@ -830,26 +830,27 @@ function processUpdates(
  
        if (source) {
          update.values.forEach((valuePath) => {
@@ -59,10 +58,10 @@ index e625f00..a0dc7b5 100644
 -            pathSources[valuePath.path] = {}
 -          }
 -          if (
--            !pathSources[valuePath.path][source] ||
--            pathSources[valuePath.path][source] !== spark
+-            !pathSources[valuePath.path][source!] ||
+-            pathSources[valuePath.path][source!] !== spark
 -          ) {
--            if (pathSources[valuePath.path][source]) {
+-            if (pathSources[valuePath.path][source!]) {
 -              console.log(
 -                `WARNING: got a new ws client for path ${valuePath.path} source ${source}`
 +          if (valuePath != null) {
@@ -70,10 +69,10 @@ index e625f00..a0dc7b5 100644
 +              pathSources[valuePath.path] = {}
 +            }
 +            if (
-+              !pathSources[valuePath.path][source] ||
-+              pathSources[valuePath.path][source] !== spark
++              !pathSources[valuePath.path][source!] ||
++              pathSources[valuePath.path][source!] !== spark
 +            ) {
-+              if (pathSources[valuePath.path][source]) {
++              if (pathSources[valuePath.path][source!]) {
 +                console.log(
 +                  `WARNING: got a new ws client for path ${valuePath.path} source ${source}`
 +                )
@@ -84,7 +83,7 @@ index e625f00..a0dc7b5 100644
 +                valuePath.path,
 +                spark.id
                )
-+              pathSources[valuePath.path][source] = spark
++              pathSources[valuePath.path][source!] = spark
              }
 -            debug(
 -              'registered spark for source %s path %s = %s',
@@ -93,10 +92,11 @@ index e625f00..a0dc7b5 100644
 -              spark.id
 -            )
 -
--            pathSources[valuePath.path][source] = spark
+-            pathSources[valuePath.path][source!] = spark
            }
          })
        }
+
 diff --git a/src/tokensecurity.ts b/src/tokensecurity.ts
 index d2f4c08..f37feba 100644
 --- a/src/tokensecurity.ts

@@ -647,39 +647,38 @@ index 20f5c49..32a4dbb 100644
                        />
                      </td>
                      <td style={{ border: 'none' }}>
-diff --git a/src/interfaces/ws.js b/src/interfaces/ws.js
-index 59a68e9..a604e01 100644
---- a/src/interfaces/ws.js
-+++ b/src/interfaces/ws.js
-@@ -17,7 +17,11 @@ const _ = require('lodash')
- const ports = require('../ports')
- const cookie = require('cookie')
- const { getSourceId, getMetadata } = require('@signalk/signalk-schema')
--const { requestAccess, InvalidTokenError } = require('../security')
-+const {
-+  requestAccess,
-+  InvalidTokenError,
+diff --git a/src/interfaces/ws.ts b/src/interfaces/ws.ts
+--- a/src/interfaces/ws.ts
++++ b/src/interfaces/ws.ts
+@@ -22,7 +22,8 @@ import { getSourceId, getMetadata } from '@signalk/signalk-schema'
+ import {
+   requestAccess,
+   InvalidTokenError,
+-  WithSecurityStrategy
++  WithSecurityStrategy,
 +  getSecurityConfig
-+} = require('../security')
- const {
-   findRequest,
-   updateRequest,
-@@ -49,6 +53,84 @@ const BACKPRESSURE_EXIT_THRESHOLD = process.env.BACKPRESSURE_EXIT
+ } from '../security'
+ import { WithConfig } from '../app'
+ import {
+@@ -54,6 +55,98 @@ const BACKPRESSURE_EXIT_THRESHOLD = process.env.BACKPRESSURE_EXIT
    ? parseInt(process.env.BACKPRESSURE_EXIT, 10)
    : 1024
  
-+function wsSourceRefFromIdentifier(identifier) {
++function wsSourceRefFromIdentifier(identifier: string): string {
 +  return `ws.${identifier.replace(/\./g, '_')}`
 +}
 +
-+const wsDeviceDescriptionCache = new Map()
++const wsDeviceDescriptionCache = new Map<string, string | null>()
 +
-+function getWsDeviceDescription(app, identifier) {
++function getWsDeviceDescription(
++  app: WsApp,
++  identifier: string
++): string | undefined {
 +  if (
 +    !identifier ||
 +    identifier === 'AUTO' ||
 +    !app.securityStrategy ||
-+    typeof app.securityStrategy.getDevices !== 'function'
++    typeof (app.securityStrategy as any).getDevices !== 'function'
 +  ) {
 +    return undefined
 +  }
@@ -690,13 +689,17 @@ index 59a68e9..a604e01 100644
 +  }
 +
 +  try {
-+    const config = getSecurityConfig(app)
-+    const devices = app.securityStrategy.getDevices(config)
++    const config = getSecurityConfig(
++      app as unknown as WithSecurityStrategy & { config: any }
++    )
++    const devices = (app.securityStrategy as any).getDevices(config)
 +    if (!Array.isArray(devices)) {
 +      wsDeviceDescriptionCache.set(identifier, null)
 +      return undefined
 +    }
-+    const device = devices.find((candidate) => candidate.clientId === identifier)
++    const device = devices.find(
++      (candidate: any) => candidate.clientId === identifier
++    )
 +    const description =
 +      device && device.description ? device.description : undefined
 +    wsDeviceDescriptionCache.set(identifier, description || null)
@@ -704,7 +707,7 @@ index 59a68e9..a604e01 100644
 +  } catch (error) {
 +    debugConnection(
 +      `could not resolve ws device description for ${identifier}: ${
-+        error && error.message ? error.message : error
++        error && (error as Error).message ? (error as Error).message : error
 +      }`
 +    )
 +    wsDeviceDescriptionCache.set(identifier, null)
@@ -712,13 +715,20 @@ index 59a68e9..a604e01 100644
 +  }
 +}
 +
-+function publishWsDeviceSourceMetadata(app, identifier) {
-+  if (!app.deltaCache || typeof app.deltaCache.setSourceDelta !== 'function') {
++function publishWsDeviceSourceMetadata(
++  app: WsApp,
++  identifier: string | undefined
++): void {
++  if (
++    !identifier ||
++    !app.deltaCache ||
++    typeof app.deltaCache.setSourceDelta !== 'function'
++  ) {
 +    return
 +  }
 +
 +  const sourceRef = wsSourceRefFromIdentifier(identifier)
-+  if (sourceRef in app.deltaCache.sourceDeltas) {
++  if (app.deltaCache.sourceDeltas && sourceRef in app.deltaCache.sourceDeltas) {
 +    return
 +  }
 +
@@ -743,63 +753,56 @@ index 59a68e9..a604e01 100644
 +    ]
 +  }
 +
-+  app.deltaCache.setSourceDelta(sourceRef, sourceDelta)
++  app.deltaCache.setSourceDelta!(sourceRef, sourceDelta)
 +}
 +
- module.exports = function (app) {
-   'use strict'
+ interface BackpressureState {
+   active: boolean
+   accumulator: Map<string, AccumulatedItem>
+@@ -182,6 +275,8 @@ interface DeltaCache {
+     filter: (delta: WithContext) => boolean,
+     principal?: SkPrincipal
+   ) => Delta[]
++  setSourceDelta?: (key: string, delta: unknown) => void
++  sourceDeltas?: Record<string, unknown>
+ }
  
-@@ -190,6 +272,7 @@ module.exports = function (app) {
-         let principalId
-         if (spark.request.skPrincipal) {
-           principalId = spark.request.skPrincipal.identifier
-+          publishWsDeviceSourceMetadata(app, principalId)
-         }
+ interface WsAppConfig {
+@@ -415,6 +510,7 @@ function wsInterface(app: WsApp): WsApi {
+           let principalId: string | undefined
+           if (spark.request.skPrincipal) {
+             principalId = spark.request.skPrincipal.identifier
++            publishWsDeviceSourceMetadata(app, principalId)
+           }
  
-         debugConnection(
-@@ -292,7 +375,7 @@ module.exports = function (app) {
-               }
- 
-               if (msg.accessRequest) {
--                processAccessRequest(spark, msg)
-+                processAccessRequest(app, spark, msg)
-               }
- 
-               if (msg.login && app.securityStrategy.supportsLogin()) {
-@@ -442,7 +525,7 @@ module.exports = function (app) {
-     })
-   }
- 
--  function processAccessRequest(spark, msg) {
-+  function processAccessRequest(app, spark, msg) {
-     if (spark.skPendingAccessRequest) {
-       spark.write({
-         requestId: msg.requestId,
-@@ -465,8 +548,13 @@ module.exports = function (app) {
+           debugConnection(
+@@ -713,9 +809,13 @@ function wsInterface(app: WsApp): WsApi {
              if (res.accessRequest && res.accessRequest.token) {
                spark.request.token = res.accessRequest.token
                app.securityStrategy.authorizeWS(spark.request)
 -              spark.request.source =
--                'ws.' + spark.request.skPrincipal.identifier.replace(/\./g, '_')
+-                'ws.' +
+-                spark.request.skPrincipal!.identifier.replace(/\./g, '_')
 +              spark.request.source = wsSourceRefFromIdentifier(
-+                spark.request.skPrincipal.identifier
++                spark.request.skPrincipal!.identifier
 +              )
 +              publishWsDeviceSourceMetadata(
 +                app,
-+                spark.request.skPrincipal.identifier
++                spark.request.skPrincipal!.identifier
 +              )
              }
            }
            spark.write(res)
-@@ -535,7 +623,7 @@ function createPrimusAuthorize(authorizeWS) {
-       const identifier = _.get(req, 'skPrincipal.identifier')
+@@ -789,7 +889,7 @@ function createPrimusAuthorize(
+       const identifier = req.skPrincipal?.identifier
        if (identifier) {
          debug(`authorized username: ${identifier}`)
 -        req.source = 'ws.' + identifier.replace(/\./g, '_')
 +        req.source = wsSourceRefFromIdentifier(identifier)
        }
      } catch (error) {
-       // To be able to login or request access via WS with security in place
+       if (
+
 diff --git a/test/security.js b/test/security.js
 index 391da01..5ad8e45 100644
 --- a/test/security.js
