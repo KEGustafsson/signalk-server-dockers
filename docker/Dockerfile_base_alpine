@@ -1,6 +1,6 @@
 ARG NODE
 #FROM node:${NODE}-alpine
-FROM dhi.io/node:${NODE}-alpine3.23
+FROM dhi.io/node:24-alpine3.23
 
 COPY docker/avahi/avahi-dbus.conf docker/bluez/bluezuser.conf /etc/dbus-1/system.d/
 
