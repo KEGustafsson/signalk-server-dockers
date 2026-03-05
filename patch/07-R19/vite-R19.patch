@@ -1,0 +1,105 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/packages/server-admin-ui-react19/vite.config.js b/packages/server-admin-ui-react19/vite.config.js
+index ed23473da9e7ace82d44febea639d13cd3e7b016..606e745369fa8490b542ae7027c6929baa5e55d5 100644
+--- a/packages/server-admin-ui-react19/vite.config.js
++++ b/packages/server-admin-ui-react19/vite.config.js
+@@ -1,33 +1,36 @@
+ /// <reference types="vitest" />
+ import path from 'node:path'
++import { createRequire } from 'node:module'
+ import { defineConfig } from 'vite'
+ import react from '@vitejs/plugin-react'
+-import { federation } from '@module-federation/vite'
+ 
+ import '@signalk/server-admin-ui-dependencies'
+ 
++const require = createRequire(import.meta.url)
++const { federation } = require('@module-federation/vite')
++
+ // %ADDONSCRIPTS% is replaced server-side at request time with actual addon script tags.
+ function replaceAddonScripts() {
+   return {
+     name: 'replace-addon-scripts',
+     transformIndexHtml: {
+       order: 'pre',
+       handler(html) {
+         if (process.env.NODE_ENV !== 'production') {
+           return html.replace(
+             '%ADDONSCRIPTS%',
+             '<!-- addon scripts not available in dev mode -->'
+           )
+         }
+         return html
+       }
+     }
+   }
+ }
+ 
+ // Strip obsolete SVG font references from @font-face declarations (~2.5MB savings)
+ function stripSvgFonts() {
+   return {
+     name: 'strip-svg-fonts',
+     enforce: 'post',
+     transform(code, id) {
+@@ -74,57 +77,54 @@ function stripSvgFonts() {
+ export default defineConfig({
+   base: './',
+   publicDir: 'public_src',
+   // Module Federation requires top-level await (ES2023)
+   esbuild: {
+     target: 'es2023'
+   },
+   optimizeDeps: {
+     esbuildOptions: {
+       target: 'es2023'
+     }
+   },
+   plugins: [
+     replaceAddonScripts(),
+     stripSvgFonts(),
+     react({
+       babel: {
+         plugins: [['babel-plugin-react-compiler', {}]],
+         presets: [['@babel/preset-react', { runtime: 'automatic' }]]
+       }
+     }),
+     federation({
+       name: 'adminUI',
+       filename: 'remoteEntry.js',
+       remotes: {},
+-      dts: false, // dts plugin tries to connect on port 16322 in dev mode
++      dts: false,
+       shared: {
+         react: {
+           singleton: true,
+-          // Must specify React 19 explicitly — the monorepo root has React 16
+-          // (from the old admin UI) which Module Federation picks up otherwise,
+-          // causing "Cannot read properties of undefined (reading 'ReactCurrentOwner')"
+           requiredVersion: '^19.0.0',
+           version: '19.2.0'
+         },
+         'react-dom': {
+           singleton: true,
+           requiredVersion: '^19.0.0',
+           version: '19.2.0'
+         }
+       }
+     })
+   ],
+   css: {
+     preprocessorOptions: {
+       scss: {
+         quietDeps: true,
+         // Bootstrap 5 still uses @import internally
+         silenceDeprecations: ['import']
+       }
+     }
+   },
+   server: {
+     port: 5173,
+     host: 'localhost',
+     proxy: {
+       '/signalk': {
+ 
+EOF
+)
