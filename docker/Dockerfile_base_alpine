@@ -33,6 +33,7 @@ RUN npm config rm proxy \
 RUN addgroup -g 1000 node \
  && adduser -u 1000 -G node -s /bin/sh -D node \
  && addgroup -S dialout 2>/dev/null || true \
+ && addgroup -g 20 dialout \
  && addgroup node dialout \
  && addgroup node i2c \
  && addgroup node spi \
