@@ -34,7 +34,6 @@ RUN addgroup -g 1000 node \
  && adduser -u 1000 -G node -s /bin/sh -D node \
  && addgroup node i2c \
  && addgroup node spi \
- && addgroup node netdev \
  && addgroup node docker \
  && echo 'node ALL=(ALL) NOPASSWD:/bin/date' >> /etc/sudoers \
  && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
