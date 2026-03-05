@@ -10,7 +10,7 @@ on:
       build_docker_tags_alpine:
         description: 'Build Alpine docker image'
         type: boolean
-        default: false
+        default: true
       build_docker_tags_debian:
         description: 'Build Debian docker image'
         type: boolean
