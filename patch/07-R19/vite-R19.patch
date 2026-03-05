@@ -1,11 +1,10 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
 diff --git a/packages/server-admin-ui-react19/vite.config.js b/packages/server-admin-ui-react19/vite.config.js
-index ed23473da9e7ace82d44febea639d13cd3e7b016..606e745369fa8490b542ae7027c6929baa5e55d5 100644
+index ed23473da9e7ace82d44febea639d13cd3e7b016..a7cbeeb8b881e7c17dfffce86bc7ed8b525ff4d6 100644
 --- a/packages/server-admin-ui-react19/vite.config.js
 +++ b/packages/server-admin-ui-react19/vite.config.js
-@@ -1,33 +1,36 @@
+@@ -1,33 +1,35 @@
  /// <reference types="vitest" />
- import path from 'node:path'
+-import path from 'node:path'
 +import { createRequire } from 'node:module'
  import { defineConfig } from 'vite'
  import react from '@vitejs/plugin-react'
@@ -41,7 +40,7 @@ index ed23473da9e7ace82d44febea639d13cd3e7b016..606e745369fa8490b542ae7027c6929b
      name: 'strip-svg-fonts',
      enforce: 'post',
      transform(code, id) {
-@@ -74,57 +77,54 @@ function stripSvgFonts() {
+@@ -74,57 +76,54 @@ function stripSvgFonts() {
  export default defineConfig({
    base: './',
    publicDir: 'public_src',
@@ -100,6 +99,56 @@ index ed23473da9e7ace82d44febea639d13cd3e7b016..606e745369fa8490b542ae7027c6929b
      host: 'localhost',
      proxy: {
        '/signalk': {
+@@ -145,49 +144,43 @@ export default defineConfig({
+       '/@': {
+         target: 'http://localhost:3000',
+         changeOrigin: true,
+         bypass: (req) => {
+           if (
+             req.url.startsWith('/@vite') ||
+             req.url.startsWith('/@react-refresh') ||
+             req.url.startsWith('/@fs') ||
+             req.url.startsWith('/@id')
+           ) {
+             return req.url
+           }
+         }
+       }
+     }
+   },
+   build: {
+     outDir: 'public',
+     sourcemap: true,
+     target: 'es2023',
+     assetsInlineLimit: 0, // Prevent inlining assets to allow server-side logo override
+     cssCodeSplit: false // Generate single CSS file to ensure it's always loaded
+   },
+   resolve: {
+     alias: {
+-      // Force all React imports to resolve to our local React 19 packages.
+-      // Without this, dependencies (react-select/Emotion, etc.) resolve to the
+-      // root workspace's React 16, causing "Cannot read properties of undefined
+-      // (reading 'ReactCurrentOwner')" at runtime.
+-      react: path.resolve(__dirname, 'node_modules/react'),
+-      'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
+       path: false,
+       events: 'events',
+       buffer: 'buffer'
+     }
+   },
+   test: {
+     globals: true,
+     environment: 'jsdom',
+     setupFiles: ['./src/test/setup.ts'],
+     include: ['src/**/*.{test,spec}.{ts,tsx}'],
+     coverage: {
+       provider: 'v8',
+       reporter: ['text', 'json', 'html'],
+       include: ['src/**/*.{ts,tsx}'],
+       exclude: ['src/test/**', 'src/**/*.d.ts']
+     }
+   }
+ })
  
 EOF
 )
