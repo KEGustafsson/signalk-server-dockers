@@ -1,8 +1,8 @@
 diff --git a/package.json b/package.json
-index 135da24..13925f6 100644
+index 4181677..c7ce98c 100644
 --- a/package.json
 +++ b/package.json
-@@ -117,7 +117,6 @@
+@@ -118,7 +118,6 @@
      "listr": "^0.14.1",
      "lodash": "^4.17.21",
      "mathjs": "^12.4.0",
@@ -11,7 +11,7 @@ index 135da24..13925f6 100644
      "moment": "^2.10.6",
      "morgan": "^1.5.0",
 diff --git a/src/discovery.js b/src/discovery.js
-index 5da0aee..212f7af 100644
+index cd3631d..cdf0d33 100644
 --- a/src/discovery.js
 +++ b/src/discovery.js
 @@ -18,7 +18,7 @@ import { createDebug } from './debug'
@@ -59,24 +59,26 @@ index 5da0aee..212f7af 100644
 +            )
            ) {
 -            debug('discoverSignalkWs found data[' + wsType + ']:', data)
--            const providerId = wsType + '-' + data.host + ':' + data.port
+-            const providerId = `${wsType}-${data.host}:${data.port} (${data.addresses[0]})`
 +            debug('discoverSignalkWs found service[' + wsType + ']:', service)
-+            const providerId = wsType + '-' + service.host + ':' + service.port
++            const providerId = `${wsType}-${service.host}:${service.port} (${service.addresses[0]})`
              app.emit('discovered', {
                id: providerId,
                enabled: false,
-@@ -228,8 +223,8 @@ module.exports.runDiscovery = function (app) {
+@@ -228,9 +223,9 @@ module.exports.runDiscovery = function (app) {
                      type: 'SignalK',
                      subOptions: {
                        type: wsType,
 -                      host: data.host,
 -                      port: data.port,
+-                      address: data.addresses[0],
 +                      host: service.host,
 +                      port: service.port,
-                       providerId: providerId
++                      address: service.addresses[0],
+                       providerId
                      },
-                     providerId: providerId
-@@ -243,6 +238,13 @@ module.exports.runDiscovery = function (app) {
+                     providerId
+@@ -244,6 +239,13 @@ module.exports.runDiscovery = function (app) {
          }
        })
  
