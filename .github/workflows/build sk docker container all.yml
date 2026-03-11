@@ -134,10 +134,11 @@ jobs:
       - name: signalk-server download and patch
         id: git
         run: |
-          git clone https://github.com/SignalK/signalk-server.git
+          # git clone https://github.com/SignalK/signalk-server.git
+          git clone https://github.com/tkurki/signalk-server.git
           cd signalk-server
           # git fetch --tags
-          # git checkout v2.21.3
+          git checkout pnpm
           applied=false
           for dir in ./../patch/[0-9]*/; do
             if [ -d "$dir" ] && ls "$dir"*.patch 1>/dev/null 2>&1; then
