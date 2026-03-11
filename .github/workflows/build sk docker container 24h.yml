@@ -129,12 +129,17 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '24.x'
+          cache: 'pnpm'
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.3
       - name: specification
         run: |
           git clone https://github.com/SignalK/specification.git
           cd specification
-          npm i
-          npm pack
+          pnpm install --no-frozen-lockfile
+          pnpm pack
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
@@ -154,19 +159,24 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '24.x'
+          cache: 'pnpm'
       - uses: actions/download-artifact@v7
         with:
           name: specification
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.3
       - name: nmea0183-signalk
         run: |
           git clone https://github.com/SignalK/nmea0183-signalk.git
           cd nmea0183-signalk
           mv ../*.tgz .
-          npm i --save *.tgz
+          pnpm add *.tgz
           rm -rf node_modules
-          rm -f package-lock.json
+          rm -f pnpm-lock.yaml
           rm -f *.tgz
-          npm pack
+          pnpm pack
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
@@ -190,6 +200,11 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '24.x'
+          cache: 'pnpm'
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.3
       - name: signalk-server tags
         id: tags
         run: |
@@ -232,16 +247,14 @@ jobs:
         run: |
           cd signalk-server
           mv ./../*.tgz .
-          rm -f package-lock.json
+          rm -f pnpm-lock.yaml
           rm -rf node_modules
-          npm cache clean -f
-          npm install npm@latest -g
-          npm install --package-lock-only
-          npm ci && npm cache clean --force
-          npm run build:all
-          npm pack --workspaces
+          pnpm config set node-linker hoisted
+          pnpm install --no-frozen-lockfile
+          pnpm run build:all
+          pnpm -r pack
           rm -f signalk-typedoc-signalk-theme*.tgz
-          npm pack
+          pnpm pack
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
