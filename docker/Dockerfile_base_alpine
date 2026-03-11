@@ -20,15 +20,9 @@ RUN apk add --no-cache \
  && chmod 777 /var/run/dbus /var/run/avahi-daemon \
  && chown -R avahi:avahi /var/run/avahi-daemon
 
-RUN npm config rm proxy \
- && npm config rm https-proxy \
- && npm config set fetch-retries 5 \
- && npm config set fetch-retry-mintimeout 60000 \
- && npm config set fetch-retry-maxtimeout 120000 \
- && npm config set registry "https://registry.npmjs.org/" \
- && npm config set @backup:registry "https://registry.yarnpkg.com/" \
- && npm cache clean -f \
- && npm install -g pm2 \
+RUN corepack enable \
+ && corepack prepare pnpm@10.6.3 --activate \
+ && pnpm add -g pm2 \
  && rm -rf /tmp/* /var/tmp/*
 
 RUN addgroup -g 1000 node \

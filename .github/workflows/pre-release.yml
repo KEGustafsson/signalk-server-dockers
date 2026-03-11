@@ -59,20 +59,26 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.3
 
       - name: Validate REST API
         run: |
-          npm install ws
+          pnpm add ws
           node docker/tests/validate_rest.js
 
       - name: Install Playwright
         run: |
-          npm install --save-dev @playwright/test
-          npx playwright install --with-deps
+          pnpm add --save-dev @playwright/test
+          pnpm exec playwright install --with-deps
 
       - name: Run UI tests
         run: |
-          npx playwright test
+          pnpm exec playwright test
 
       - name: Upload Playwright artifacts on failure
         if: failure()
