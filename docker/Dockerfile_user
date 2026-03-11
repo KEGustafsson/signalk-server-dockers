@@ -5,24 +5,19 @@ USER node
 WORKDIR /home/node/signalk
 
 RUN mkdir -p /home/node/.signalk/ /home/node/signalk/ \
-  && npm config rm proxy \
-  && npm config rm https-proxy \
-  && npm config set fetch-retries 5 \
-  && npm config set fetch-retry-mintimeout 60000 \
-  && npm config set fetch-retry-maxtimeout 120000 \
-  && npm cache clean -f
+  && pnpm config set node-linker hoisted
 
 FROM base AS tarballs_installed
 COPY --chown=node:node *.tgz .
 
 RUN set -x; \
-    npm init -y && \
+    echo "{}" > package.json && \
     SERVER_TARBALL=$(ls signalk-server-*.tgz | head -n 1) && \
     echo "Found Server: $SERVER_TARBALL" && \
     EXTRAS=$(ls *.tgz | grep -v "$SERVER_TARBALL" || true) && \
     echo "Found Extras: $EXTRAS" && \
-    if [ -n "$EXTRAS" ]; then npm install $EXTRAS; fi && \
-    npm install "$SERVER_TARBALL" --install-strategy=nested && \
+    if [ -n "$EXTRAS" ]; then pnpm add $EXTRAS; fi && \
+    pnpm add "$SERVER_TARBALL" && \
     if [ -d node_modules/@signalk ]; then \
         dest="node_modules/signalk-server/node_modules" && \
         mkdir -p "$dest/@signalk" && \
@@ -30,7 +25,7 @@ RUN set -x; \
         mkdir -p "$dest/@mxtommy" && \
         if [ -d node_modules/@mxtommy/kip ]; then cp -rf node_modules/@mxtommy/kip "$dest/@mxtommy/"; fi; \
     fi && \
-    npm cache clean --force && \
+    pnpm store prune && \
     rm *.tgz
 
 FROM base
