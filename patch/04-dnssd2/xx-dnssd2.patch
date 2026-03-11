@@ -11,7 +11,7 @@ index 4181677..c7ce98c 100644
      "moment": "^2.10.6",
      "morgan": "^1.5.0",
 diff --git a/src/discovery.js b/src/discovery.js
-index cd3631d..cdf0d33 100644
+index 5da0aee..cdf0d33 100644
 --- a/src/discovery.js
 +++ b/src/discovery.js
 @@ -18,7 +18,7 @@ import { createDebug } from './debug'
@@ -21,16 +21,16 @@ index cd3631d..cdf0d33 100644
 -const mdns = require('mdns-js')
 +const dnssd = require('dnssd2')
  const { networkInterfaces } = require('os')
- 
+
  module.exports.runDiscovery = function (app) {
 @@ -196,28 +196,23 @@ module.exports.runDiscovery = function (app) {
- 
+
    function discoverSignalkWs(wsType) {
      try {
 -      mdns.excludeInterface('0.0.0.0')
 -      var browser = mdns.createBrowser(mdns.tcp('signalk-' + wsType))
 +      const browser = new dnssd.Browser(dnssd.tcp('signalk-' + wsType))
- 
+
 -      browser.on('ready', function onReady() {
 -        try {
 -          debug('looking for SignalK ' + wsType)
@@ -59,29 +59,33 @@ index cd3631d..cdf0d33 100644
 +            )
            ) {
 -            debug('discoverSignalkWs found data[' + wsType + ']:', data)
--            const providerId = `${wsType}-${data.host}:${data.port} (${data.addresses[0]})`
+-            const providerId = wsType + '-' + data.host + ':' + data.port
 +            debug('discoverSignalkWs found service[' + wsType + ']:', service)
 +            const providerId = `${wsType}-${service.host}:${service.port} (${service.addresses[0]})`
              app.emit('discovered', {
                id: providerId,
                enabled: false,
-@@ -228,9 +223,9 @@ module.exports.runDiscovery = function (app) {
+@@ -228,11 +223,12 @@ module.exports.runDiscovery = function (app) {
                      type: 'SignalK',
                      subOptions: {
                        type: wsType,
 -                      host: data.host,
 -                      port: data.port,
--                      address: data.addresses[0],
+-                      providerId: providerId
 +                      host: service.host,
 +                      port: service.port,
 +                      address: service.addresses[0],
-                       providerId
++                      providerId
                      },
-                     providerId
-@@ -244,6 +239,13 @@ module.exports.runDiscovery = function (app) {
+-                    providerId: providerId
++                    providerId
+                   }
+                 }
+               ]
+@@ -243,6 +239,13 @@ module.exports.runDiscovery = function (app) {
          }
        })
- 
+
 +      browser.on('error', (err) => {
 +        debug('discoverSignalkWs browser error:', err)
 +      })
@@ -99,7 +103,7 @@ index 3d366b6..2c3ca80 100644
 @@ -25,16 +25,6 @@ const ports = require('./ports')
  module.exports = function mdnsResponder(app) {
    const config = app.config
- 
+
 -  let mdns = dnssd
 -
 -  try {
@@ -114,14 +118,14 @@ index 3d366b6..2c3ca80 100644
      debug('Mdns disabled by configuration')
      return
 @@ -57,7 +47,7 @@ module.exports = function mdnsResponder(app) {
- 
+
    const types = []
    types.push({
 -    type: app.config.settings.ssl ? mdns.tcp('https') : mdns.tcp('http'),
 +    type: app.config.settings.ssl ? dnssd.tcp('https') : dnssd.tcp('http'),
      port: ports.getExternalPort(app)
    })
- 
+
 @@ -73,7 +63,7 @@ module.exports = function mdnsResponder(app) {
          service.name.charAt(0) === '_'
        ) {
