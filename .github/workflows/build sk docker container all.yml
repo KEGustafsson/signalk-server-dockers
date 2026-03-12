@@ -64,7 +64,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '24.x'
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: specification
       - name: nmea0183-signalk
@@ -135,10 +135,10 @@ jobs:
             fi
           done
           if [ "$applied" = false ]; then echo "No patches to apply"; fi
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: nmea0183-signalk
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: specification
       - name: signalk-server build
@@ -282,7 +282,7 @@ jobs:
       - name: Checkout
         if: steps.check.outputs.skip != 'true'
         uses: actions/checkout@v6
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         if: steps.check.outputs.skip != 'true'
         with:
           name: packed-modules
@@ -357,7 +357,7 @@ jobs:
       - name: Checkout
         if: steps.check.outputs.skip != 'true'
         uses: actions/checkout@v6
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         if: steps.check.outputs.skip != 'true'
         with:
           name: packed-modules
@@ -432,7 +432,7 @@ jobs:
       - name: Checkout
         if: steps.check.outputs.skip != 'true'
         uses: actions/checkout@v6
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         if: steps.check.outputs.skip != 'true'
         with:
           name: packed-modules
