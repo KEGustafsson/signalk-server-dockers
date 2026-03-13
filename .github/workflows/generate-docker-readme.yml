@@ -64,8 +64,8 @@ jobs:
             echo "- Source branch: \`${GITHUB_REF_NAME}\`"
             echo "- Docker Hub repository: [\`${DOCKERHUB_NAMESPACE}/${DOCKERHUB_REPOSITORY}\`](${HUB_REPO_URL})"
             echo
-            echo "| Tag | Last updated | Digest | linux/amd64 | linux/arm64 | linux/arm/v7 |"
-            echo "|---|---|---|---:|---:|---:|"
+            echo "| Tag | Last updated | Digest | Images by arch |"
+            echo "|---|---|---|---|"
           } > "${OUTPUT_FILE}"
 
           while IFS= read -r TAG; do
@@ -81,53 +81,39 @@ jobs:
               DIGEST="$(jq -r '.digest // ""' "${TMP_FILE}")"
               SAFE_TAG_PAGE_URL="${HUB_TAGS_URL}?name=${SAFE_TAG}"
 
-              AMD64_SIZE="$(jq -r '
+              ARCH_DETAILS="$(jq -r '
                 (.images // [])
                 | map(
                     select(
-                      (.os == "linux")
-                      and (.architecture == "amd64")
+                      (.os // "") != ""
+                      and (.architecture // "") != ""
+                      and (.os != "unknown")
+                      and (.architecture != "unknown")
                     )
-                    | .size
+                    | {
+                        platform:
+                          (if (.variant // "") != "" then
+                            "\(.os)/\(.architecture)/\(.variant)"
+                          else
+                            "\(.os)/\(.architecture)"
+                          end),
+                        size_mb: ((.size // 0) / 1000000 | floor)
+                      }
                   )
-                | first // empty
-                | if . == "" then "" else ((. / 1000000) | floor | tostring) + " MB" end
+                | unique_by(.platform)
+                | sort_by(.platform)
+                | if length == 0 then
+                    "n/a"
+                  else
+                    "<table>" +
+                    (map("<tr><td><code>\(.platform)</code></td><td>\(.size_mb) MB</td></tr>") | join("")) +
+                    "</table>"
+                  end
               ' "${TMP_FILE}")"
 
-              ARM64_SIZE="$(jq -r '
-                (.images // [])
-                | map(
-                    select(
-                      (.os == "linux")
-                      and (.architecture == "arm64")
-                    )
-                    | .size
-                  )
-                | first // empty
-                | if . == "" then "" else ((. / 1000000) | floor | tostring) + " MB" end
-              ' "${TMP_FILE}")"
-
-              ARMV7_SIZE="$(jq -r '
-                (.images // [])
-                | map(
-                    select(
-                      (.os == "linux")
-                      and (.architecture == "arm")
-                      and (.variant == "v7")
-                    )
-                    | .size
-                  )
-                | first // empty
-                | if . == "" then "" else ((. / 1000000) | floor | tostring) + " MB" end
-              ' "${TMP_FILE}")"
-
-              [ -n "${AMD64_SIZE}" ] || AMD64_SIZE="-"
-              [ -n "${ARM64_SIZE}" ] || ARM64_SIZE="-"
-              [ -n "${ARMV7_SIZE}" ] || ARMV7_SIZE="-"
-
-              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${LAST_UPDATED} | [\`${DIGEST}\`](${SAFE_TAG_PAGE_URL}) | ${AMD64_SIZE} | ${ARM64_SIZE} | ${ARMV7_SIZE} |" >> "${OUTPUT_FILE}"
+              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${LAST_UPDATED} | [\`${DIGEST}\`](${SAFE_TAG_PAGE_URL}) | ${ARCH_DETAILS} |" >> "${OUTPUT_FILE}"
             else
-              echo "| [\`${TAG}\`](${TAG_PAGE_URL}) | not found |  | - | - | - |" >> "${OUTPUT_FILE}"
+              echo "| [\`${TAG}\`](${TAG_PAGE_URL}) | not found |  | not found |" >> "${OUTPUT_FILE}"
             fi
           done <<< "${TAGS}"
 
