@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - master
+      - main
     paths:
       - '.github/workflows/generate-docker-readme.yml'
 
@@ -53,10 +54,13 @@ jobs:
           {
             echo "# Docker Hub tag metadata"
             echo
-            echo "This file is generated automatically by \`.github/workflows/generate-docker-readme.yml\`."
+            echo "Generated automatically from Docker Hub tag endpoints."
             echo
-            echo "Repository: \`${DOCKERHUB_NAMESPACE}/${DOCKERHUB_REPOSITORY}\`"
-            echo
+            echo "- Workflow run: \`${GITHUB_RUN_NUMBER}\`"
+            echo "- Workflow attempt: \`${GITHUB_RUN_ATTEMPT}\`"
+            echo "- Generated at: \`$(date -u '+%Y-%m-%d %H:%M:%S UTC')\`"
+            echo "- Source branch: \`${GITHUB_REF_NAME}\`"
+            echo "- Repository: \`${DOCKERHUB_NAMESPACE}/${DOCKERHUB_REPOSITORY}\`"
             echo
             echo "| Tag | Last updated | Digest | Size (bytes) |"
             echo "|---|---|---|---:|"
@@ -80,9 +84,6 @@ jobs:
             fi
           done <<< "${TAGS}"
 
-          echo >> "${OUTPUT_FILE}"
-          echo "Generated on: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "${OUTPUT_FILE}"
-
           rm -f "${TMP_FILE}"
 
       - name: Commit and push Docker-Readme.md
@@ -90,13 +91,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          if git diff --quiet -- "${OUTPUT_FILE}"; then
-            echo "No changes to ${OUTPUT_FILE}"
-            exit 0
-          fi
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add "${OUTPUT_FILE}"
-          git commit -m "Update Docker-Readme.md [skip ci]"
+          git commit -m "Update Docker-Readme.md for run ${GITHUB_RUN_NUMBER} [skip ci]"
           git push
