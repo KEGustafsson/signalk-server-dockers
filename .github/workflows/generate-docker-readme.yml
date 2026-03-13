@@ -3,7 +3,7 @@ name: Generate Docker README tag metadata
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 2 * * *'
   push:
     branches:
       - master
@@ -18,8 +18,8 @@ jobs:
       contents: write
 
     env:
-      DOCKERHUB_NAMESPACE: signalk
-      DOCKERHUB_REPOSITORY: signalk-server
+      DOCKERHUB_NAMESPACE: kegustafsson
+      DOCKERHUB_REPOSITORY: signalk-server-dockers
       OUTPUT_FILE: Docker-Readme.md
       TAGS: |
         latest
@@ -85,7 +85,7 @@ jobs:
                   else
                     sub("\\.[0-9]+Z$"; "Z")
                     | strptime("%Y-%m-%dT%H:%M:%SZ")
-                    | strftime("%H:%M:%S")
+                    | strftime("%Y-%m-%d %H:%M:%S")
                   end
               ' "${TMP_FILE}")"
 
