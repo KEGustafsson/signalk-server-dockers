@@ -77,7 +77,18 @@ jobs:
 
             if [ "${HTTP_CODE}" = "200" ]; then
               SAFE_TAG="$(jq -r '.name // ""' "${TMP_FILE}")"
-              LAST_PUSHED="$(jq -r '.tag_last_pushed // .last_updated // ""' "${TMP_FILE}")"
+
+              LAST_PUSHED="$(jq -r '
+                (.tag_last_pushed // .last_updated // "")
+                | if . == "" then
+                    ""
+                  else
+                    sub("\\.[0-9]+Z$"; "Z")
+                    | strptime("%Y-%m-%dT%H:%M:%SZ")
+                    | strftime("%H:%M:%S")
+                  end
+              ' "${TMP_FILE}")"
+
               DIGEST="$(jq -r '.digest // ""' "${TMP_FILE}")"
               SAFE_TAG_PAGE_URL="${HUB_TAGS_URL}?name=${SAFE_TAG}"
 
