@@ -64,7 +64,7 @@ jobs:
             echo "- Source branch: \`${GITHUB_REF_NAME}\`"
             echo "- Docker Hub repository: [\`${DOCKERHUB_NAMESPACE}/${DOCKERHUB_REPOSITORY}\`](${HUB_REPO_URL})"
             echo
-            echo "| Tag | Last updated | Digest | Size (bytes) | Architectures |"
+            echo "| Tag | Last updated | Digest | Total size (MB) | Images by arch |"
             echo "|---|---|---|---:|---|"
           } > "${OUTPUT_FILE}"
 
@@ -79,26 +79,38 @@ jobs:
               SAFE_TAG="$(jq -r '.name // ""' "${TMP_FILE}")"
               LAST_UPDATED="$(jq -r '.last_updated // ""' "${TMP_FILE}")"
               DIGEST="$(jq -r '.digest // ""' "${TMP_FILE}")"
-              SIZE="$(jq -r '.full_size // ""' "${TMP_FILE}")"
+              SIZE_MB="$(jq -r '(.full_size // 0) / 1000000 | floor' "${TMP_FILE}")"
 
-              ARCHES="$(jq -r '
+              ARCH_DETAILS="$(jq -r '
                 (.images // [])
                 | map(
-                    if (.variant // "") != "" then
-                      "\(.os // "unknown")/\(.architecture // "unknown")/\(.variant)"
-                    else
-                      "\(.os // "unknown")/\(.architecture // "unknown")"
-                    end
+                    select(
+                      (.os // "") != ""
+                      and (.architecture // "") != ""
+                      and (.os != "unknown")
+                      and (.architecture != "unknown")
+                    )
+                    | {
+                        platform:
+                          (if (.variant // "") != "" then
+                            "\(.os)/\(.architecture)/\(.variant)"
+                          else
+                            "\(.os)/\(.architecture)"
+                          end),
+                        size_mb: ((.size // 0) / 1000000 | floor)
+                      }
                   )
-                | unique
+                | unique_by(.platform)
+                | sort_by(.platform)
+                | map("\(.platform) (\(.size_mb) MB)")
                 | join("<br>")
               ' "${TMP_FILE}")"
 
               SAFE_TAG_PAGE_URL="${HUB_TAGS_URL}?name=${SAFE_TAG}"
 
-              [ -n "${ARCHES}" ] || ARCHES="n/a"
+              [ -n "${ARCH_DETAILS}" ] || ARCH_DETAILS="n/a"
 
-              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${LAST_UPDATED} | [\`${DIGEST}\`](${SAFE_TAG_PAGE_URL}) | ${SIZE} | ${ARCHES} |" >> "${OUTPUT_FILE}"
+              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${LAST_UPDATED} | [\`${DIGEST}\`](${SAFE_TAG_PAGE_URL}) | ${SIZE_MB} | ${ARCH_DETAILS} |" >> "${OUTPUT_FILE}"
             else
               echo "| [\`${TAG}\`](${TAG_PAGE_URL}) | not found |  |  | not found |" >> "${OUTPUT_FILE}"
             fi
