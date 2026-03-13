@@ -18,8 +18,8 @@ jobs:
       contents: write
 
     env:
-      DOCKERHUB_NAMESPACE: kegustafsson
-      DOCKERHUB_REPOSITORY: signalk-server-dockers
+      DOCKERHUB_NAMESPACE: signalk
+      DOCKERHUB_REPOSITORY: signalk-server
       OUTPUT_FILE: Docker-Readme.md
       TAGS: |
         latest
