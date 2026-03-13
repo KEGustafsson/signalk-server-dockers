@@ -1,0 +1,102 @@
+name: Generate Docker README tag metadata
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/generate-docker-readme.yml'
+
+jobs:
+  generate-readme:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    env:
+      DOCKERHUB_NAMESPACE: kegustafsson
+      DOCKERHUB_REPOSITORY: signalk-server-dockers
+      OUTPUT_FILE: Docker-Readme.md
+      TAGS: |
+        latest
+        latest-24.x
+        latest-24-alpine
+        latest-22-alpine
+        master-24.x
+        master-22.x
+        master-24-alpine
+        master-22-alpine
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install jq
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Generate Docker-Readme.md
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          API_BASE="https://hub.docker.com/v2/namespaces/${DOCKERHUB_NAMESPACE}/repositories/${DOCKERHUB_REPOSITORY}/tags"
+          TMP_FILE="$(mktemp)"
+
+          {
+            echo "# Docker Hub tag metadata"
+            echo
+            echo "This file is generated automatically by \`.github/workflows/generate-docker-readme.yml\`."
+            echo
+            echo "Repository: \`${DOCKERHUB_NAMESPACE}/${DOCKERHUB_REPOSITORY}\`"
+            echo
+            echo
+            echo "| Tag | Last updated | Digest | Size (bytes) |"
+            echo "|---|---|---|---:|"
+          } > "${OUTPUT_FILE}"
+
+          while IFS= read -r TAG; do
+            [ -n "${TAG}" ] || continue
+
+            URL="${API_BASE}/${TAG}"
+            HTTP_CODE="$(curl -sS -L -o "${TMP_FILE}" -w '%{http_code}' "${URL}")"
+
+            if [ "${HTTP_CODE}" = "200" ]; then
+              SAFE_TAG="$(jq -r '.name // ""' "${TMP_FILE}")"
+              LAST_UPDATED="$(jq -r '.last_updated // ""' "${TMP_FILE}")"
+              DIGEST="$(jq -r '.digest // ""' "${TMP_FILE}")"
+              SIZE="$(jq -r '.full_size // ""' "${TMP_FILE}")"
+
+              echo "| \`${SAFE_TAG}\` | ${LAST_UPDATED} | \`${DIGEST}\` | ${SIZE} |" >> "${OUTPUT_FILE}"
+            else
+              echo "| \`${TAG}\` | not found |  |  |" >> "${OUTPUT_FILE}"
+            fi
+          done <<< "${TAGS}"
+
+          echo >> "${OUTPUT_FILE}"
+          echo "Generated on: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "${OUTPUT_FILE}"
+
+          rm -f "${TMP_FILE}"
+
+      - name: Commit and push Docker-Readme.md
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet -- "${OUTPUT_FILE}"; then
+            echo "No changes to ${OUTPUT_FILE}"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${OUTPUT_FILE}"
+          git commit -m "Update Docker-Readme.md [skip ci]"
+          git push
