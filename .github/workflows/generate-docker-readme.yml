@@ -64,8 +64,8 @@ jobs:
             echo "- Source branch: \`${GITHUB_REF_NAME}\`"
             echo "- Docker Hub repository: [\`${DOCKERHUB_NAMESPACE}/${DOCKERHUB_REPOSITORY}\`](${HUB_REPO_URL})"
             echo
-            echo "| Tag | Last updated | Digest | Architecture | Size (MB) |"
-            echo "|---|---|---|---|---:|"
+            echo "| Tag | Last updated | Digest | Images by arch |"
+            echo "|---|---|---|---|"
           } > "${OUTPUT_FILE}"
 
           while IFS= read -r TAG; do
@@ -81,7 +81,7 @@ jobs:
               DIGEST="$(jq -r '.digest // ""' "${TMP_FILE}")"
               SAFE_TAG_PAGE_URL="${HUB_TAGS_URL}?name=${SAFE_TAG}"
 
-              ARCH_ROWS="$(jq -r '
+              ARCH_DETAILS="$(jq -r '
                 (.images // [])
                 | map(
                     select(
@@ -102,17 +102,15 @@ jobs:
                   )
                 | unique_by(.platform)
                 | sort_by(.platform)
-                | .[]
-                | "| [`'"${SAFE_TAG}"'`]('"${SAFE_TAG_PAGE_URL}"') | '"${LAST_UPDATED}"' | [`'"${DIGEST}"'`]('"${SAFE_TAG_PAGE_URL}"') | \(.platform) | \(.size_mb) |"
+                | map("\(.platform): \(.size_mb) MB")
+                | join("<br>")
               ' "${TMP_FILE}")"
 
-              if [ -n "${ARCH_ROWS}" ]; then
-                printf '%s\n' "${ARCH_ROWS}" >> "${OUTPUT_FILE}"
-              else
-                echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${LAST_UPDATED} | [\`${DIGEST}\`](${SAFE_TAG_PAGE_URL}) | n/a | n/a |" >> "${OUTPUT_FILE}"
-              fi
+              [ -n "${ARCH_DETAILS}" ] || ARCH_DETAILS="n/a"
+
+              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${LAST_UPDATED} | [\`${DIGEST}\`](${SAFE_TAG_PAGE_URL}) | ${ARCH_DETAILS} |" >> "${OUTPUT_FILE}"
             else
-              echo "| [\`${TAG}\`](${TAG_PAGE_URL}) | not found |  | not found |  |" >> "${OUTPUT_FILE}"
+              echo "| [\`${TAG}\`](${TAG_PAGE_URL}) | not found |  | not found |" >> "${OUTPUT_FILE}"
             fi
           done <<< "${TAGS}"
 
