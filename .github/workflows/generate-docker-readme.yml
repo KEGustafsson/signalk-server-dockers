@@ -64,8 +64,8 @@ jobs:
             echo "- Source branch: \`${GITHUB_REF_NAME}\`"
             echo "- Docker Hub repository: [\`${DOCKERHUB_NAMESPACE}/${DOCKERHUB_REPOSITORY}\`](${HUB_REPO_URL})"
             echo
-            echo "| Tag | Last updated | Digest | Total size (MB) | Images by arch |"
-            echo "|---|---|---|---:|---|"
+            echo "| Tag | Last updated | Digest | Architecture | Size (MB) |"
+            echo "|---|---|---|---|---:|"
           } > "${OUTPUT_FILE}"
 
           while IFS= read -r TAG; do
@@ -79,9 +79,9 @@ jobs:
               SAFE_TAG="$(jq -r '.name // ""' "${TMP_FILE}")"
               LAST_UPDATED="$(jq -r '.last_updated // ""' "${TMP_FILE}")"
               DIGEST="$(jq -r '.digest // ""' "${TMP_FILE}")"
-              SIZE_MB="$(jq -r '(.full_size // 0) / 1000000 | floor' "${TMP_FILE}")"
+              SAFE_TAG_PAGE_URL="${HUB_TAGS_URL}?name=${SAFE_TAG}"
 
-              ARCH_DETAILS="$(jq -r '
+              ARCH_ROWS="$(jq -r '
                 (.images // [])
                 | map(
                     select(
@@ -102,17 +102,17 @@ jobs:
                   )
                 | unique_by(.platform)
                 | sort_by(.platform)
-                | map("\(.platform) (\(.size_mb) MB)")
-                | join("<br>")
+                | .[]
+                | "| [`'"${SAFE_TAG}"'`]('"${SAFE_TAG_PAGE_URL}"') | '"${LAST_UPDATED}"' | [`'"${DIGEST}"'`]('"${SAFE_TAG_PAGE_URL}"') | \(.platform) | \(.size_mb) |"
               ' "${TMP_FILE}")"
 
-              SAFE_TAG_PAGE_URL="${HUB_TAGS_URL}?name=${SAFE_TAG}"
-
-              [ -n "${ARCH_DETAILS}" ] || ARCH_DETAILS="n/a"
-
-              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${LAST_UPDATED} | [\`${DIGEST}\`](${SAFE_TAG_PAGE_URL}) | ${SIZE_MB} | ${ARCH_DETAILS} |" >> "${OUTPUT_FILE}"
+              if [ -n "${ARCH_ROWS}" ]; then
+                printf '%s\n' "${ARCH_ROWS}" >> "${OUTPUT_FILE}"
+              else
+                echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${LAST_UPDATED} | [\`${DIGEST}\`](${SAFE_TAG_PAGE_URL}) | n/a | n/a |" >> "${OUTPUT_FILE}"
+              fi
             else
-              echo "| [\`${TAG}\`](${TAG_PAGE_URL}) | not found |  |  | not found |" >> "${OUTPUT_FILE}"
+              echo "| [\`${TAG}\`](${TAG_PAGE_URL}) | not found |  | not found |  |" >> "${OUTPUT_FILE}"
             fi
           done <<< "${TAGS}"
 
