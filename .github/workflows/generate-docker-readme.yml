@@ -3,7 +3,7 @@ name: Generate Docker README tag metadata
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '0 0 * * *'
   push:
     branches:
       - master
@@ -18,8 +18,8 @@ jobs:
       contents: write
 
     env:
-      DOCKERHUB_NAMESPACE: kegustafsson
-      DOCKERHUB_REPOSITORY: signalk-server-dockers
+      DOCKERHUB_NAMESPACE: signalk
+      DOCKERHUB_REPOSITORY: signalk-server
       OUTPUT_FILE: Docker-Readme.md
       TAGS: |
         latest
@@ -85,7 +85,7 @@ jobs:
                   else
                     sub("\\.[0-9]+Z$"; "Z")
                     | strptime("%Y-%m-%dT%H:%M:%SZ")
-                    | strftime("%Y-%m-%d %H:%M:%S")
+                    | strftime("%Y-%m-%d %H:%M:%S UTC")
                   end
               ' "${TMP_FILE}")"
 
@@ -134,10 +134,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           git add "${OUTPUT_FILE}"
           git commit -m "Update Docker-Readme.md for run ${GITHUB_RUN_NUMBER} [skip ci]"
           git push
