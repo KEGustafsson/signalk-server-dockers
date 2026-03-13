@@ -49,6 +49,7 @@ jobs:
           set -euo pipefail
 
           API_BASE="https://hub.docker.com/v2/namespaces/${DOCKERHUB_NAMESPACE}/repositories/${DOCKERHUB_REPOSITORY}/tags"
+          HUB_TAGS_URL="https://hub.docker.com/r/${DOCKERHUB_NAMESPACE}/${DOCKERHUB_REPOSITORY}/tags"
           TMP_FILE="$(mktemp)"
 
           {
@@ -60,7 +61,7 @@ jobs:
             echo "- Workflow attempt: \`${GITHUB_RUN_ATTEMPT}\`"
             echo "- Generated at: \`$(date -u '+%Y-%m-%d %H:%M:%S UTC')\`"
             echo "- Source branch: \`${GITHUB_REF_NAME}\`"
-            echo "- Repository: \`${DOCKERHUB_NAMESPACE}/${DOCKERHUB_REPOSITORY}\`"
+            echo "- Docker Hub repository: [\`${DOCKERHUB_NAMESPACE}/${DOCKERHUB_REPOSITORY}\`](https://hub.docker.com/r/${DOCKERHUB_NAMESPACE}/${DOCKERHUB_REPOSITORY})"
             echo
             echo "| Tag | Last updated | Digest | Size (bytes) |"
             echo "|---|---|---|---:|"
@@ -72,15 +73,19 @@ jobs:
             URL="${API_BASE}/${TAG}"
             HTTP_CODE="$(curl -sS -L -o "${TMP_FILE}" -w '%{http_code}' "${URL}")"
 
+            TAG_PAGE_URL="${HUB_TAGS_URL}?name=${TAG}"
+
             if [ "${HTTP_CODE}" = "200" ]; then
               SAFE_TAG="$(jq -r '.name // ""' "${TMP_FILE}")"
               LAST_UPDATED="$(jq -r '.last_updated // ""' "${TMP_FILE}")"
               DIGEST="$(jq -r '.digest // ""' "${TMP_FILE}")"
               SIZE="$(jq -r '.full_size // ""' "${TMP_FILE}")"
 
-              echo "| \`${SAFE_TAG}\` | ${LAST_UPDATED} | \`${DIGEST}\` | ${SIZE} |" >> "${OUTPUT_FILE}"
+              SAFE_TAG_PAGE_URL="${HUB_TAGS_URL}?name=${SAFE_TAG}"
+
+              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${LAST_UPDATED} | [\`${DIGEST}\`](${SAFE_TAG_PAGE_URL}) | ${SIZE} |" >> "${OUTPUT_FILE}"
             else
-              echo "| \`${TAG}\` | not found |  |  |" >> "${OUTPUT_FILE}"
+              echo "| [\`${TAG}\`](${TAG_PAGE_URL}) | not found |  |  |" >> "${OUTPUT_FILE}"
             fi
           done <<< "${TAGS}"
 
