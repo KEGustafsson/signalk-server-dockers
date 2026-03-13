@@ -2,13 +2,13 @@
 
 Generated automatically from Docker Hub tag endpoints.
 
-- Workflow run: `10`
+- Workflow run: `11`
 - Workflow attempt: `1`
-- Generated at: `2026-03-13 21:16:35 UTC`
+- Generated at: `2026-03-13 21:54:59 UTC`
 - Source branch: `main`
 - Docker Hub repository: [`signalk/signalk-server`](https://hub.docker.com/r/signalk/signalk-server)
 
-| Tag | Last updated | Digest | Images by arch |
+| Tag | Last pushed | Digest | Images by arch |
 |---|---|---|---|
 | [`latest`](https://hub.docker.com/r/signalk/signalk-server/tags?name=latest) | 2026-03-12T17:17:59.369559Z | [`sha256:4b0baa0abd3aa1dbfcd97c145d790125a2fc498d03158de6ab4263d47a8ed348`](https://hub.docker.com/r/signalk/signalk-server/tags?name=latest) | <table><tr><td><code>linux/amd64</code></td><td>426 MB</td></tr><tr><td><code>linux/arm64</code></td><td>422 MB</td></tr></table> |
 | [`latest-24.x`](https://hub.docker.com/r/signalk/signalk-server/tags?name=latest-24.x) | 2026-03-12T17:17:52.639847Z | [`sha256:3263d76cd8790954367f3a5ba2690087533d76d2c80c1381ea2bfd8777c8a4c7`](https://hub.docker.com/r/signalk/signalk-server/tags?name=latest-24.x) | <table><tr><td><code>linux/amd64</code></td><td>425 MB</td></tr><tr><td><code>linux/arm64</code></td><td>421 MB</td></tr></table> |
