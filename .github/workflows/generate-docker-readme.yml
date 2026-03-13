@@ -102,8 +102,8 @@ jobs:
                   )
                 | unique_by(.platform)
                 | sort_by(.platform)
-                | map("\(.platform): \(.size_mb) MB")
-                | join("<br>")
+                | map("\(.platform)<br>\(.size_mb) MB")
+                | join("<br><br>")
               ' "${TMP_FILE}")"
 
               [ -n "${ARCH_DETAILS}" ] || ARCH_DETAILS="n/a"
