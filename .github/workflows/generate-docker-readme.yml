@@ -109,7 +109,7 @@ jobs:
                             "\(.os)/\(.architecture)"
                           end
                         ),
-                        size_mb: ((.size // 0) / 1000000)
+                        size_bytes: (.size // 0)
                       }
                   )
                 | unique_by(.platform)
@@ -129,7 +129,7 @@ jobs:
                 if length == 0 then
                   "n/a"
                 else
-                  map((.size_mb | tostring | sub("\\.0+$"; "") | sub("(\\.[0-9])([0-9]+)$"; "\\1")) + "&nbsp;MB")
+                  map((((.size_bytes / 1000000) * 100 | round) / 100 | tostring) + "&nbsp;MB")
                   | join("<br>")
                 end
               ' <<< "${IMAGE_ROWS_JSON}")"
