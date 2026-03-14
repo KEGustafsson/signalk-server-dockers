@@ -64,7 +64,7 @@ jobs:
             echo "- Source branch: \`${GITHUB_REF_NAME}\`"
             echo "- Docker Hub repository: [\`${DOCKERHUB_NAMESPACE}/${DOCKERHUB_REPOSITORY}\`](${HUB_REPO_URL})"
             echo
-            echo "| Tag | Last pushed | Images by arch |"
+            echo "| Tag | Images by arch | Last pushed |"
             echo "|---|---|---|"
           } > "${OUTPUT_FILE}"
 
@@ -121,7 +121,7 @@ jobs:
                   end
               ' "${TMP_FILE}")"
 
-              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${LAST_PUSHED} | ${ARCH_DETAILS} |" >> "${OUTPUT_FILE}"
+              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${ARCH_DETAILS} | ${LAST_PUSHED} |" >> "${OUTPUT_FILE}"
             else
               echo "| [\`${TAG}\`](${TAG_PAGE_URL}) | not found | not found |" >> "${OUTPUT_FILE}"
             fi
