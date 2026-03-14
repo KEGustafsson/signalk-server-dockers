@@ -1,140 +1,28 @@
-name: Generate Docker README tag metadata
-
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * *'
-  push:
-    branches:
-      - master
-      - main
-    paths:
-      - '.github/workflows/generate-docker-readme.yml'
-
-jobs:
-  generate-readme:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    env:
-      DOCKERHUB_NAMESPACE: signalk
-      DOCKERHUB_REPOSITORY: signalk-server
-      OUTPUT_FILE: Docker-Readme.md
-      TAGS: |
-        latest
-        latest-24.x
-        latest-24-alpine
-        latest-22-alpine
-        master-24.x
-        master-22.x
-        master-24-alpine
-        master-22-alpine
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install jq
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
-
-      - name: Generate Docker-Readme.md
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          API_BASE="https://hub.docker.com/v2/namespaces/${DOCKERHUB_NAMESPACE}/repositories/${DOCKERHUB_REPOSITORY}/tags"
-          HUB_REPO_URL="https://hub.docker.com/r/${DOCKERHUB_NAMESPACE}/${DOCKERHUB_REPOSITORY}"
-          HUB_TAGS_URL="${HUB_REPO_URL}/tags"
-          TMP_FILE="$(mktemp)"
-
-          {
-            echo "# Docker Hub tag metadata"
-            echo
-            echo "Generated automatically from Docker Hub tag endpoints."
-            echo
-            echo "- Workflow run: \`${GITHUB_RUN_NUMBER}\`"
-            echo "- Workflow attempt: \`${GITHUB_RUN_ATTEMPT}\`"
-            echo "- Generated at: \`$(date -u '+%Y-%m-%d %H:%M:%S UTC')\`"
-            echo "- Source branch: \`${GITHUB_REF_NAME}\`"
-            echo "- Docker Hub repository: [\`${DOCKERHUB_NAMESPACE}/${DOCKERHUB_REPOSITORY}\`](${HUB_REPO_URL})"
-            echo
-            echo "| Tag | Images by arch | Last pushed |"
-            echo "|---|---|---|"
-          } > "${OUTPUT_FILE}"
-
-          while IFS= read -r TAG; do
-            [ -n "${TAG}" ] || continue
-
-            URL="${API_BASE}/${TAG}"
-            HTTP_CODE="$(curl -sS -L -o "${TMP_FILE}" -w '%{http_code}' "${URL}")"
-            TAG_PAGE_URL="${HUB_TAGS_URL}?name=${TAG}"
-
-            if [ "${HTTP_CODE}" = "200" ]; then
-              SAFE_TAG="$(jq -r '.name // ""' "${TMP_FILE}")"
-
-              LAST_PUSHED="$(jq -r '
-                (.tag_last_pushed // .last_updated // "")
-                | if . == "" then
-                    ""
-                  else
-                    sub("\\.[0-9]+Z$"; "Z")
-                    | strptime("%Y-%m-%dT%H:%M:%SZ")
-                    | strftime("%Y-%m-%d %H:%M:%S UTC")
-                  end
-              ' "${TMP_FILE}")"
-
-              SAFE_TAG_PAGE_URL="${HUB_TAGS_URL}?name=${SAFE_TAG}"
-
-              ARCH_DETAILS="$(jq -r '
-                (.images // [])
-                | map(
-                    select(
-                      (.os // "") != ""
-                      and (.architecture // "") != ""
-                      and (.os != "unknown")
-                      and (.architecture != "unknown")
-                    )
-                    | {
-                        platform:
-                          (if (.variant // "") != "" then
-                            "\(.os)/\(.architecture)/\(.variant)"
-                          else
-                            "\(.os)/\(.architecture)"
-                          end),
-                        size_mb: ((.size // 0) / 1000000 | floor)
-                      }
-                  )
-                | unique_by(.platform)
-                | sort_by(.platform)
-                | if length == 0 then
-                    "n/a"
-                  else
-                    "<table>" +
-                    (map("<tr><td><code>\(.platform)</code></td><td>\(.size_mb) MB</td></tr>") | join("")) +
-                    "</table>"
-                  end
-              ' "${TMP_FILE}")"
-
-              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${ARCH_DETAILS} | ${LAST_PUSHED} |" >> "${OUTPUT_FILE}"
+ARCH_DETAILS="$(jq -r '
+  (.images // [])
+  | map(
+      select(
+        (.os // "") != ""
+        and (.architecture // "") != ""
+        and (.os != "unknown")
+        and (.architecture != "unknown")
+      )
+      | {
+          platform:
+            (if (.variant // "") != "" then
+              "\(.os)/\(.architecture)/\(.variant)"
             else
-              echo "| [\`${TAG}\`](${TAG_PAGE_URL}) | not found | not found |" >> "${OUTPUT_FILE}"
-            fi
-          done <<< "${TAGS}"
-
-          rm -f "${TMP_FILE}"
-
-      - name: Commit and push Docker-Readme.md
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "${OUTPUT_FILE}"
-          git commit -m "Update Docker-Readme.md for run ${GITHUB_RUN_NUMBER} [skip ci]"
-          git push
+              "\(.os)/\(.architecture)"
+            end),
+          size_mb: ((.size // 0) / 1000000 | floor)
+        }
+    )
+  | unique_by(.platform)
+  | sort_by(.platform)
+  | if length == 0 then
+      "n/a"
+    else
+      map("<div><code>\(.platform)</code><br>\(.size_mb) MB</div>")
+      | join("<br>")
+    end
+' "${TMP_FILE}")"
