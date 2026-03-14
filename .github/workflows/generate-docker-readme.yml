@@ -64,8 +64,8 @@ jobs:
             echo "- Source branch: \`${GITHUB_REF_NAME}\`"
             echo "- Docker Hub repository: [\`${DOCKERHUB_NAMESPACE}/${DOCKERHUB_REPOSITORY}\`](${HUB_REPO_URL})"
             echo
-            echo "| Tag | Images by arch | Last pushed |"
-            echo "|---|---|---|"
+            echo "| Tag | Images by arch | Size | Last pushed |"
+            echo "|---|---|---|---|"
           } > "${OUTPUT_FILE}"
 
           while IFS= read -r TAG; do
@@ -100,29 +100,45 @@ jobs:
                       and (.os != "unknown")
                       and (.architecture != "unknown")
                     )
-                    | {
-                        platform:
-                          (if (.variant // "") != "" then
-                            "\(.os)/\(.architecture)/\(.variant)"
-                          else
-                            "\(.os)/\(.architecture)"
-                          end),
-                        size_mb: ((.size // 0) / 1000000 | floor)
-                      }
+                    | if (.variant // "") != "" then
+                        "\(.os)/\(.architecture)/\(.variant)"
+                      else
+                        "\(.os)/\(.architecture)"
+                      end
                   )
-                | unique_by(.platform)
-                | sort_by(.platform)
+                | unique
+                | sort
                 | if length == 0 then
                     "n/a"
                   else
-                    map("<code>\(.platform)</code><br>\(.size_mb) MB")
-                    | join("<br><br>")
+                    map("<code>\(.)</code>")
+                    | join("<br>")
                   end
               ' "${TMP_FILE}")"
 
-              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${ARCH_DETAILS} | ${LAST_PUSHED} |" >> "${OUTPUT_FILE}"
+              SIZE_DETAILS="$(jq -r '
+                (.images // [])
+                | map(
+                    select(
+                      (.os // "") != ""
+                      and (.architecture // "") != ""
+                      and (.os != "unknown")
+                      and (.architecture != "unknown")
+                    )
+                    | ((.size // 0) / 1000000 | floor | tostring) + " MB"
+                  )
+                | unique
+                | sort
+                | if length == 0 then
+                    "n/a"
+                  else
+                    join("<br>")
+                  end
+              ' "${TMP_FILE}")"
+
+              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${ARCH_DETAILS} | ${SIZE_DETAILS} | ${LAST_PUSHED} |" >> "${OUTPUT_FILE}"
             else
-              echo "| [\`${TAG}\`](${TAG_PAGE_URL}) | not found | not found |" >> "${OUTPUT_FILE}"
+              echo "| [\`${TAG}\`](${TAG_PAGE_URL}) | not found | not found | not found |" >> "${OUTPUT_FILE}"
             fi
           done <<< "${TAGS}"
 
