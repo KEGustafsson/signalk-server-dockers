@@ -115,12 +115,12 @@ jobs:
                 | if length == 0 then
                     "n/a"
                   else
-                    "<table style=\"border-collapse:collapse;border-spacing:0;background:transparent;color:inherit;\">" +
+                    "<table style=\"border-collapse:collapse;border-spacing:0;width:auto;background:transparent;color:inherit;\">" +
                     (
                       map(
-                        "<tr>" +
-                        "<td style=\"padding:2px 10px 2px 0;border:none;background:transparent;color:inherit;\"><code>\(.platform)</code></td>" +
-                        "<td style=\"padding:2px 0 2px 0;border:none;background:transparent;color:inherit;white-space:nowrap;\">\(.size_mb) MB</td>" +
+                        "<tr style=\"background:transparent;color:inherit;\">" +
+                        "<td style=\"border:0 !important;padding:2px 10px 2px 0;background:transparent !important;color:inherit;box-shadow:none;\"><code>\(.platform)</code></td>" +
+                        "<td style=\"border:0 !important;padding:2px 0 2px 0;background:transparent !important;color:inherit;white-space:nowrap;box-shadow:none;\">\(.size_mb) MB</td>" +
                         "</tr>"
                       )
                       | join("")
