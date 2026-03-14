@@ -26,6 +26,10 @@ jobs:
         latest-24.x
         latest-24-alpine
         latest-22-alpine
+        master-24.x
+        master-22.x
+        master-24-alpine
+        master-22-alpine
 
     steps:
       - name: Check out repository
@@ -88,7 +92,7 @@ jobs:
 
               SAFE_TAG_PAGE_URL="${HUB_TAGS_URL}?name=${SAFE_TAG}"
 
-              ARCH_DETAILS="$(jq -r '
+              IMAGE_ROWS_JSON="$(jq -c '
                 (.images // [])
                 | map(
                     select(
@@ -97,42 +101,38 @@ jobs:
                       and (.os != "unknown")
                       and (.architecture != "unknown")
                     )
-                    | if (.variant // "") != "" then
-                        "\(.os)/\(.architecture)/\(.variant)"
-                      else
-                        "\(.os)/\(.architecture)"
-                      end
-                    | gsub("/"; "&#8288;/&#8288;")
-                    | "<code>" + . + "</code>"
+                    | {
+                        platform: (
+                          if (.variant // "") != "" then
+                            "\(.os)/\(.architecture)/\(.variant)"
+                          else
+                            "\(.os)/\(.architecture)"
+                          end
+                        ),
+                        size_mb: ((.size // 0) / 1000000 | floor)
+                      }
                   )
-                | unique
-                | sort
-                | if length == 0 then
-                    "n/a"
-                  else
-                    join("<br>")
-                  end
+                | unique_by(.platform)
+                | sort_by(.platform)
               ' "${TMP_FILE}")"
 
+              ARCH_DETAILS="$(jq -r '
+                if length == 0 then
+                  "n/a"
+                else
+                  map(.platform | gsub("/"; "&#8288;/&#8288;") | "<code>" + . + "</code>")
+                  | join("<br>")
+                end
+              ' <<< "${IMAGE_ROWS_JSON}")"
+
               SIZE_DETAILS="$(jq -r '
-                (.images // [])
-                | map(
-                    select(
-                      (.os // "") != ""
-                      and (.architecture // "") != ""
-                      and (.os != "unknown")
-                      and (.architecture != "unknown")
-                    )
-                    | ((.size // 0) / 1000000 | floor | tostring) + "&nbsp;MB"
-                  )
-                | unique
-                | sort
-                | if length == 0 then
-                    "n/a"
-                  else
-                    join("<br>")
-                  end
-              ' "${TMP_FILE}")"
+                if length == 0 then
+                  "n/a"
+                else
+                  map((.size_mb | tostring) + "&nbsp;MB")
+                  | join("<br>")
+                end
+              ' <<< "${IMAGE_ROWS_JSON}")"
 
               echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${ARCH_DETAILS} | ${SIZE_DETAILS} | ${LAST_PUSHED} |" >> "${OUTPUT_FILE}"
             else
