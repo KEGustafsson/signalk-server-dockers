@@ -102,10 +102,12 @@ jobs:
                       and (.architecture != "unknown")
                     )
                     | if (.variant // "") != "" then
-                        "<code>\(.os)/\(.architecture)/\(.variant)</code>"
+                        "\(.os)/\(.architecture)/\(.variant)"
                       else
-                        "<code>\(.os)/\(.architecture)</code>"
+                        "\(.os)/\(.architecture)"
                       end
+                    | gsub("/"; "&#8288;/&#8288;")
+                    | "<code>" + . + "</code>"
                   )
                 | unique
                 | sort
