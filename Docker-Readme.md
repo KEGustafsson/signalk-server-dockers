@@ -2,19 +2,19 @@
 
 Generated automatically from Docker Hub tag endpoints.
 
-- Workflow run: `24`
+- Workflow run: `25`
 - Workflow attempt: `1`
-- Generated at: `2026-03-14 07:10:17 UTC`
+- Generated at: `2026-03-14 07:13:35 UTC`
 - Source branch: `main`
 - Docker Hub repository: [`signalk/signalk-server`](https://hub.docker.com/r/signalk/signalk-server)
 
 | Tag | Images by arch | Size | Last pushed |
 |---|---|---|---|
-| [`latest`](https://hub.docker.com/r/signalk/signalk-server/tags?name=latest) | <span style="white-space: nowrap;"><code>linux/amd64</code></span><br><span style="white-space: nowrap;"><code>linux/arm64</code></span> | <span style="white-space: nowrap;">422 MB</span><br><span style="white-space: nowrap;">426 MB</span> | <span style="white-space: nowrap;">2026-03-12 17:17:59 UTC</span> |
-| [`latest-24.x`](https://hub.docker.com/r/signalk/signalk-server/tags?name=latest-24.x) | <span style="white-space: nowrap;"><code>linux/amd64</code></span><br><span style="white-space: nowrap;"><code>linux/arm64</code></span> | <span style="white-space: nowrap;">421 MB</span><br><span style="white-space: nowrap;">425 MB</span> | <span style="white-space: nowrap;">2026-03-12 17:17:52 UTC</span> |
-| [`latest-24-alpine`](https://hub.docker.com/r/signalk/signalk-server/tags?name=latest-24-alpine) | <span style="white-space: nowrap;"><code>linux/amd64</code></span><br><span style="white-space: nowrap;"><code>linux/arm64</code></span> | <span style="white-space: nowrap;">311 MB</span><br><span style="white-space: nowrap;">319 MB</span> | <span style="white-space: nowrap;">2026-03-12 17:18:10 UTC</span> |
-| [`latest-22-alpine`](https://hub.docker.com/r/signalk/signalk-server/tags?name=latest-22-alpine) | <span style="white-space: nowrap;"><code>linux/amd64</code></span><br><span style="white-space: nowrap;"><code>linux/arm64</code></span> | <span style="white-space: nowrap;">312 MB</span><br><span style="white-space: nowrap;">320 MB</span> | <span style="white-space: nowrap;">2026-03-12 17:18:07 UTC</span> |
-| [`master-24.x`](https://hub.docker.com/r/signalk/signalk-server/tags?name=master-24.x) | <span style="white-space: nowrap;"><code>linux/amd64</code></span><br><span style="white-space: nowrap;"><code>linux/arm64</code></span> | <span style="white-space: nowrap;">363 MB</span><br><span style="white-space: nowrap;">367 MB</span> | <span style="white-space: nowrap;">2026-03-14 06:21:50 UTC</span> |
-| [`master-22.x`](https://hub.docker.com/r/signalk/signalk-server/tags?name=master-22.x) | <span style="white-space: nowrap;"><code>linux/amd64</code></span><br><span style="white-space: nowrap;"><code>linux/arm64</code></span> | <span style="white-space: nowrap;">364 MB</span><br><span style="white-space: nowrap;">368 MB</span> | <span style="white-space: nowrap;">2026-03-14 06:21:51 UTC</span> |
-| [`master-24-alpine`](https://hub.docker.com/r/signalk/signalk-server/tags?name=master-24-alpine) | <span style="white-space: nowrap;"><code>linux/amd64</code></span><br><span style="white-space: nowrap;"><code>linux/arm64</code></span> | <span style="white-space: nowrap;">253 MB</span><br><span style="white-space: nowrap;">261 MB</span> | <span style="white-space: nowrap;">2026-03-14 06:21:53 UTC</span> |
-| [`master-22-alpine`](https://hub.docker.com/r/signalk/signalk-server/tags?name=master-22-alpine) | <span style="white-space: nowrap;"><code>linux/amd64</code></span><br><span style="white-space: nowrap;"><code>linux/arm64</code></span> | <span style="white-space: nowrap;">254 MB</span><br><span style="white-space: nowrap;">262 MB</span> | <span style="white-space: nowrap;">2026-03-14 06:21:43 UTC</span> |
+| [`latest`](https://hub.docker.com/r/signalk/signalk-server/tags?name=latest) | <code>linux/amd64</code><br><code>linux/arm64</code> | 422&nbsp;MB<br>426&nbsp;MB | 2026-03-12&nbsp;17:17:59&nbsp;UTC |
+| [`latest-24.x`](https://hub.docker.com/r/signalk/signalk-server/tags?name=latest-24.x) | <code>linux/amd64</code><br><code>linux/arm64</code> | 421&nbsp;MB<br>425&nbsp;MB | 2026-03-12&nbsp;17:17:52&nbsp;UTC |
+| [`latest-24-alpine`](https://hub.docker.com/r/signalk/signalk-server/tags?name=latest-24-alpine) | <code>linux/amd64</code><br><code>linux/arm64</code> | 311&nbsp;MB<br>319&nbsp;MB | 2026-03-12&nbsp;17:18:10&nbsp;UTC |
+| [`latest-22-alpine`](https://hub.docker.com/r/signalk/signalk-server/tags?name=latest-22-alpine) | <code>linux/amd64</code><br><code>linux/arm64</code> | 312&nbsp;MB<br>320&nbsp;MB | 2026-03-12&nbsp;17:18:07&nbsp;UTC |
+| [`master-24.x`](https://hub.docker.com/r/signalk/signalk-server/tags?name=master-24.x) | <code>linux/amd64</code><br><code>linux/arm64</code> | 363&nbsp;MB<br>367&nbsp;MB | 2026-03-14&nbsp;06:21:50&nbsp;UTC |
+| [`master-22.x`](https://hub.docker.com/r/signalk/signalk-server/tags?name=master-22.x) | <code>linux/amd64</code><br><code>linux/arm64</code> | 364&nbsp;MB<br>368&nbsp;MB | 2026-03-14&nbsp;06:21:51&nbsp;UTC |
+| [`master-24-alpine`](https://hub.docker.com/r/signalk/signalk-server/tags?name=master-24-alpine) | <code>linux/amd64</code><br><code>linux/arm64</code> | 253&nbsp;MB<br>261&nbsp;MB | 2026-03-14&nbsp;06:21:53&nbsp;UTC |
+| [`master-22-alpine`](https://hub.docker.com/r/signalk/signalk-server/tags?name=master-22-alpine) | <code>linux/amd64</code><br><code>linux/arm64</code> | 254&nbsp;MB<br>262&nbsp;MB | 2026-03-14&nbsp;06:21:43&nbsp;UTC |
