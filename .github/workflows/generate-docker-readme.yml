@@ -26,10 +26,6 @@ jobs:
         latest-24.x
         latest-24-alpine
         latest-22-alpine
-        master-24.x
-        master-22.x
-        master-24-alpine
-        master-22-alpine
 
     steps:
       - name: Check out repository
