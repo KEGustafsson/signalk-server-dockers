@@ -111,7 +111,7 @@ jobs:
                 | if length == 0 then
                     "n/a"
                   else
-                    map("<code>\(.)</code>")
+                    map("<span style=\"white-space: nowrap;\"><code>\(.)</code></span>")
                     | join("<br>")
                   end
               ' "${TMP_FILE}")"
@@ -132,11 +132,14 @@ jobs:
                 | if length == 0 then
                     "n/a"
                   else
-                    join("<br>")
+                    map("<span style=\"white-space: nowrap;\">\(.)</span>")
+                    | join("<br>")
                   end
               ' "${TMP_FILE}")"
 
-              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${ARCH_DETAILS} | ${SIZE_DETAILS} | ${LAST_PUSHED} |" >> "${OUTPUT_FILE}"
+              LAST_PUSHED_HTML="<span style=\"white-space: nowrap;\">${LAST_PUSHED}</span>"
+
+              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${ARCH_DETAILS} | ${SIZE_DETAILS} | ${LAST_PUSHED_HTML} |" >> "${OUTPUT_FILE}"
             else
               echo "| [\`${TAG}\`](${TAG_PAGE_URL}) | not found | not found | not found |" >> "${OUTPUT_FILE}"
             fi
