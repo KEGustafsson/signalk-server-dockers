@@ -64,8 +64,8 @@ jobs:
             echo "- Source branch: \`${GITHUB_REF_NAME}\`"
             echo "- Docker Hub repository: [\`${DOCKERHUB_NAMESPACE}/${DOCKERHUB_REPOSITORY}\`](${HUB_REPO_URL})"
             echo
-            echo "| Tag | Last pushed | Digest | Images by arch |"
-            echo "|---|---|---|---|"
+            echo "| Tag | Last pushed | Images by arch |"
+            echo "|---|---|---|"
           } > "${OUTPUT_FILE}"
 
           while IFS= read -r TAG; do
@@ -89,7 +89,6 @@ jobs:
                   end
               ' "${TMP_FILE}")"
 
-              DIGEST="$(jq -r '.digest // ""' "${TMP_FILE}")"
               SAFE_TAG_PAGE_URL="${HUB_TAGS_URL}?name=${SAFE_TAG}"
 
               ARCH_DETAILS="$(jq -r '
@@ -122,9 +121,9 @@ jobs:
                   end
               ' "${TMP_FILE}")"
 
-              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${LAST_PUSHED} | [\`${DIGEST}\`](${SAFE_TAG_PAGE_URL}) | ${ARCH_DETAILS} |" >> "${OUTPUT_FILE}"
+              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${LAST_PUSHED} | ${ARCH_DETAILS} |" >> "${OUTPUT_FILE}"
             else
-              echo "| [\`${TAG}\`](${TAG_PAGE_URL}) | not found |  | not found |" >> "${OUTPUT_FILE}"
+              echo "| [\`${TAG}\`](${TAG_PAGE_URL}) | not found | not found |" >> "${OUTPUT_FILE}"
             fi
           done <<< "${TAGS}"
 
