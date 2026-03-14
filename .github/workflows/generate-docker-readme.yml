@@ -86,6 +86,7 @@ jobs:
                     sub("\\.[0-9]+Z$"; "Z")
                     | strptime("%Y-%m-%dT%H:%M:%SZ")
                     | strftime("%Y-%m-%d %H:%M:%S UTC")
+                    | gsub(" "; "&nbsp;")
                   end
               ' "${TMP_FILE}")"
 
@@ -101,9 +102,9 @@ jobs:
                       and (.architecture != "unknown")
                     )
                     | if (.variant // "") != "" then
-                        "\(.os)/\(.architecture)/\(.variant)"
+                        "<code>\(.os)/\(.architecture)/\(.variant)</code>"
                       else
-                        "\(.os)/\(.architecture)"
+                        "<code>\(.os)/\(.architecture)</code>"
                       end
                   )
                 | unique
@@ -111,8 +112,7 @@ jobs:
                 | if length == 0 then
                     "n/a"
                   else
-                    map("<span style=\"white-space: nowrap;\"><code>\(.)</code></span>")
-                    | join("<br>")
+                    join("<br>")
                   end
               ' "${TMP_FILE}")"
 
@@ -125,21 +125,18 @@ jobs:
                       and (.os != "unknown")
                       and (.architecture != "unknown")
                     )
-                    | ((.size // 0) / 1000000 | floor | tostring) + " MB"
+                    | ((.size // 0) / 1000000 | floor | tostring) + "&nbsp;MB"
                   )
                 | unique
                 | sort
                 | if length == 0 then
                     "n/a"
                   else
-                    map("<span style=\"white-space: nowrap;\">\(.)</span>")
-                    | join("<br>")
+                    join("<br>")
                   end
               ' "${TMP_FILE}")"
 
-              LAST_PUSHED_HTML="<span style=\"white-space: nowrap;\">${LAST_PUSHED}</span>"
-
-              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${ARCH_DETAILS} | ${SIZE_DETAILS} | ${LAST_PUSHED_HTML} |" >> "${OUTPUT_FILE}"
+              echo "| [\`${SAFE_TAG}\`](${SAFE_TAG_PAGE_URL}) | ${ARCH_DETAILS} | ${SIZE_DETAILS} | ${LAST_PUSHED} |" >> "${OUTPUT_FILE}"
             else
               echo "| [\`${TAG}\`](${TAG_PAGE_URL}) | not found | not found | not found |" >> "${OUTPUT_FILE}"
             fi
