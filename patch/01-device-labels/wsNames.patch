@@ -1,8 +1,8 @@
-diff --git a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts
+diff --git a/packages/server-admin-ui/src/hooks/sourceLabelUtils.test.ts b/packages/server-admin-ui/src/hooks/sourceLabelUtils.test.ts
 new file mode 100644
 index 0000000..599545a
 --- /dev/null
-+++ b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.test.ts
++++ b/packages/server-admin-ui/src/hooks/sourceLabelUtils.test.ts
 @@ -0,0 +1,46 @@
 +import { describe, it, expect } from 'vitest'
 +import { getSourceDisplayLabel } from './sourceLabelUtils'
@@ -50,11 +50,11 @@ index 0000000..599545a
 +    expect(getSourceDisplayLabel('nmea0183.tcp', sources)).toBe('nmea0183.tcp')
 +  })
 +})
-diff --git a/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
+diff --git a/packages/server-admin-ui/src/hooks/sourceLabelUtils.ts b/packages/server-admin-ui/src/hooks/sourceLabelUtils.ts
 new file mode 100644
 index 0000000..18830ff
 --- /dev/null
-+++ b/packages/server-admin-ui-react19/src/hooks/sourceLabelUtils.ts
++++ b/packages/server-admin-ui/src/hooks/sourceLabelUtils.ts
 @@ -0,0 +1,38 @@
 +interface SourceMetadata {
 +  n2k?: {
@@ -94,11 +94,11 @@ index 0000000..18830ff
 +  const description = metadata?.n2k?.description
 +  return description || sourceRef
 +}
-diff --git a/packages/server-admin-ui-react19/src/hooks/useSources.ts b/packages/server-admin-ui-react19/src/hooks/useSources.ts
+diff --git a/packages/server-admin-ui/src/hooks/useSources.ts b/packages/server-admin-ui/src/hooks/useSources.ts
 new file mode 100644
 index 0000000..3aeb4b0
 --- /dev/null
-+++ b/packages/server-admin-ui-react19/src/hooks/useSources.ts
++++ b/packages/server-admin-ui/src/hooks/useSources.ts
 @@ -0,0 +1,36 @@
 +import { useState, useEffect } from 'react'
 +
@@ -136,12 +136,12 @@ index 0000000..3aeb4b0
 +
 +  return sources
 +}
-diff --git a/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx b/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
-index a535ffb..03f1bbd 100644
---- a/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
-+++ b/packages/server-admin-ui-react19/src/views/Dashboard/Dashboard.tsx
-@@ -10,6 +10,8 @@ import { faSignIn } from '@fortawesome/free-solid-svg-icons/faSignIn'
- import { faSignOut } from '@fortawesome/free-solid-svg-icons/faSignOut'
+diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx b/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
+index 84a25cb..f1ca060 100644
+--- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
++++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
+@@ -7,6 +7,8 @@ import Col from 'react-bootstrap/Col'
+ import Table from 'react-bootstrap/Table'
  import { useServerStats, useWsStatus, useStore } from '../../store'
  import type { ProviderStatistics } from '../../store/types'
 +import { useSources } from '../../hooks/useSources'
@@ -149,7 +149,7 @@ index a535ffb..03f1bbd 100644
  import '../../fa-pulse.css'
  
  interface ProviderStatusItem {
-@@ -27,6 +29,7 @@ export default function Dashboard() {
+@@ -24,6 +26,7 @@ export default function Dashboard() {
    const providerStatus =
      (useStore((state) => state.providerStatus) as ProviderStatusItem[]) || []
    const navigate = useNavigate()
@@ -157,15 +157,15 @@ index a535ffb..03f1bbd 100644
  
    const deltaRate = serverStatistics?.deltaRate ?? 0
    const numberOfAvailablePaths = serverStatistics?.numberOfAvailablePaths ?? 0
-@@ -74,6 +77,7 @@ export default function Dashboard() {
+@@ -71,6 +74,7 @@ export default function Dashboard() {
      providerStats: ProviderStatistics,
      linkType: string
    ): ReactNode => {
 +    const label = getSourceDisplayLabel(providerId, sources)
-     const iconStyle = {
-       fontSize: '18px',
-       marginLeft: '5px',
-@@ -100,7 +104,7 @@ export default function Dashboard() {
+     return (
+       <li key={providerId} onClick={() => navigate(`/dashboard`)}>
+         <i
+@@ -89,7 +93,7 @@ export default function Dashboard() {
          <span className="title">
            {linkType === 'plugin'
              ? pluginNameLink(providerId)
@@ -174,7 +174,7 @@ index a535ffb..03f1bbd 100644
          </span>
          {(providerStats.writeRate || 0) > 0 && (
            <span className="value" style={{ fontWeight: 'normal' }}>
-@@ -160,7 +164,10 @@ export default function Dashboard() {
+@@ -149,7 +153,10 @@ export default function Dashboard() {
          <td>
            {status.statusType === 'plugin'
              ? pluginNameLink(status.id)
@@ -186,7 +186,7 @@ index a535ffb..03f1bbd 100644
          </td>
          <td>
            <p className="text-danger">{lastError}</p>
-@@ -313,11 +320,11 @@ function pluginNameLink(id: string): ReactNode {
+@@ -302,11 +309,11 @@ function pluginNameLink(id: string): ReactNode {
    return <a href={'#/serverConfiguration/plugins/' + id}>{id}</a>
  }
  
@@ -200,10 +200,10 @@ index a535ffb..03f1bbd 100644
    } else {
      return <a href={'#/serverConfiguration/connections/' + id}>{id}</a>
    }
-diff --git a/packages/server-admin-ui-react19/src/views/DataBrowser/DataRow.tsx b/packages/server-admin-ui-react19/src/views/DataBrowser/DataRow.tsx
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataRow.tsx b/packages/server-admin-ui/src/views/DataBrowser/DataRow.tsx
 index 7085a97..158ffe6 100644
---- a/packages/server-admin-ui-react19/src/views/DataBrowser/DataRow.tsx
-+++ b/packages/server-admin-ui-react19/src/views/DataBrowser/DataRow.tsx
+--- a/packages/server-admin-ui/src/views/DataBrowser/DataRow.tsx
++++ b/packages/server-admin-ui/src/views/DataBrowser/DataRow.tsx
 @@ -3,6 +3,7 @@ import { usePathData, useMetaData } from './usePathData'
  import TimestampCell from './TimestampCell'
  import CopyToClipboardWithFade from './CopyToClipboardWithFade'
@@ -240,10 +240,10 @@ index 7085a97..158ffe6 100644
          </CopyToClipboardWithFade>{' '}
          {data.pgn && <span>&nbsp;{data.pgn}</span>}
          {data.sentence && <span>&nbsp;{data.sentence}</span>}
-diff --git a/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx b/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.tsx b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.tsx
 index 1d6eb19..e2eaabe 100644
---- a/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
-+++ b/packages/server-admin-ui-react19/src/views/DataBrowser/VirtualizedDataTable.tsx
+--- a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.tsx
++++ b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.tsx
 @@ -8,6 +8,7 @@ import {
  } from 'react'
  import DataRow from './DataRow'
@@ -268,10 +268,10 @@ index 1d6eb19..e2eaabe 100644
            />
          ))}
  
-diff --git a/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx b/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
+diff --git a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.tsx b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.tsx
 index e90c657..4ba0803 100644
---- a/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
-+++ b/packages/server-admin-ui-react19/src/views/ServerConfig/SourcePriorities.tsx
+--- a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.tsx
++++ b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.tsx
 @@ -14,6 +14,8 @@ import { faFloppyDisk } from '@fortawesome/free-solid-svg-icons/faFloppyDisk'
  import Creatable from 'react-select/creatable'
  import uniq from 'lodash.uniq'
@@ -336,317 +336,6 @@ index e90c657..4ba0803 100644
                      />
                    </td>
                    <td style={{ border: 'none' }}>
-diff --git a/packages/server-admin-ui/src/utils/sourceLabelUtils.js b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
-new file mode 100644
-index 0000000..0d11000
---- /dev/null
-+++ b/packages/server-admin-ui/src/utils/sourceLabelUtils.js
-@@ -0,0 +1,29 @@
-+function getWsSourceMetadata(sourceRef, sources) {
-+  if (
-+    !sourceRef?.startsWith('ws.') ||
-+    !sources ||
-+    typeof sources !== 'object'
-+  ) {
-+    return null
-+  }
-+
-+  const parts = sourceRef.split('.')
-+  const wsDeviceId = parts[1]
-+  if (!wsDeviceId) {
-+    return null
-+  }
-+
-+  const wsSources = sources.ws
-+  if (!wsSources || typeof wsSources !== 'object') {
-+    return null
-+  }
-+
-+  const node = wsSources[wsDeviceId]
-+  return node && typeof node === 'object' ? node : null
-+}
-+
-+export function getSourceDisplayLabel(sourceRef, sources = {}) {
-+  const metadata = getWsSourceMetadata(sourceRef, sources)
-+  const description = metadata?.n2k?.description
-+  return description || sourceRef
-+}
-diff --git a/packages/server-admin-ui/src/utils/useSources.js b/packages/server-admin-ui/src/utils/useSources.js
-new file mode 100644
-index 0000000..be2f747
---- /dev/null
-+++ b/packages/server-admin-ui/src/utils/useSources.js
-@@ -0,0 +1,37 @@
-+import { useState, useEffect } from 'react'
-+
-+export function fetchSourcesData() {
-+  return fetch('/signalk/v1/api/sources', {
-+    credentials: 'include'
-+  }).then((response) => response.json())
-+}
-+
-+export function useSources(pollInterval = 30000) {
-+  const [sources, setSources] = useState({})
-+
-+  useEffect(() => {
-+    let canceled = false
-+
-+    const doFetch = () => {
-+      fetchSourcesData()
-+        .then((data) => {
-+          if (!canceled) {
-+            setSources(data)
-+          }
-+        })
-+        .catch(() => undefined)
-+    }
-+
-+    doFetch()
-+    const interval = pollInterval > 0
-+      ? setInterval(doFetch, pollInterval)
-+      : null
-+
-+    return () => {
-+      canceled = true
-+      if (interval) clearInterval(interval)
-+    }
-+  }, [pollInterval])
-+
-+  return sources
-+}
-diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-index b7ecbec..66543ad 100644
---- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-+++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.js
-@@ -10,8 +10,12 @@ import {
-   Table
- } from 'reactstrap'
- import '../../fa-pulse.css'
-+import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
-+import { useSources } from '../../utils/useSources'
- 
- const Dashboard = (props) => {
-+  const sources = useSources()
-+
-   const {
-     deltaRate,
-     numberOfAvailablePaths,
-@@ -66,6 +70,7 @@ const Dashboard = (props) => {
-   }
- 
-   const renderActivity = (providerId, providerStats, linkType) => {
-+    const label = getSourceDisplayLabel(providerId, sources)
-     return (
-       <li key={providerId} onClick={() => props.history.push(`/dashboard`)}>
-         <i
-@@ -84,7 +89,7 @@ const Dashboard = (props) => {
-         <span className="title">
-           {linkType === 'plugin'
-             ? pluginNameLink(providerId)
--            : providerIdLink(providerId)}
-+            : providerIdLink(providerId, label)}
-         </span>
-         {providerStats.writeRate > 0 && (
-           <span className="value">
-@@ -136,7 +141,10 @@ const Dashboard = (props) => {
-         <td>
-           {status.statusType === 'plugin'
-             ? pluginNameLink(status.id)
--            : providerIdLink(status.id)}
-+            : providerIdLink(
-+                status.id,
-+                getSourceDisplayLabel(status.id, sources)
-+              )}
-         </td>
-         <td>
-           <p className="text-danger">{lastError}</p>
-@@ -286,11 +294,11 @@ function pluginNameLink(id) {
-   return <a href={'#/serverConfiguration/plugins/' + id}>{id}</a>
- }
- 
--function providerIdLink(id) {
-+function providerIdLink(id, label) {
-   if (id === 'defaults') {
-     return <a href={'#/serverConfiguration/settings'}>{id}</a>
-   } else if (id.startsWith('ws.')) {
--    return <a href={'#/security/devices'}>{id}</a>
-+    return <a href={'#/security/devices'}>{label || id}</a>
-   } else {
-     return <a href={'#/serverConfiguration/connections/' + id}>{id}</a>
-   }
-diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
-index 96be177..7dabe26 100644
---- a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
-+++ b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.js
-@@ -2,6 +2,7 @@ import React, { Component } from 'react'
- import { connect } from 'react-redux'
- import { JSONTree } from 'react-json-tree'
- import Select from 'react-select'
-+import { fetchSourcesData } from '../../utils/useSources'
- import {
-   Card,
-   CardHeader,
-@@ -67,10 +68,7 @@ const selectedSourcesStorageKey = 'admin.v1.dataBrowser.selectedSources'
- const sourceFilterActiveStorageKey = 'admin.v1.dataBrowser.sourceFilterActive'
- 
- function fetchSources() {
--  fetch(`/signalk/v1/api/sources`, {
--    credentials: 'include'
--  })
--    .then((response) => response.json())
-+  fetchSourcesData()
-     .then((sources) => {
-       Object.values(sources).forEach((source) => {
-         if (source.type === 'NMEA2000') {
-diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataRow.js b/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
-index 77a97d3..b7d8703 100644
---- a/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
-+++ b/packages/server-admin-ui/src/views/DataBrowser/DataRow.js
-@@ -3,6 +3,7 @@ import { usePathData, useMetaData } from './usePathData'
- import TimestampCell from './TimestampCell'
- import CopyToClipboardWithFade from './CopyToClipboardWithFade'
- import { getValueRenderer, DefaultValueRenderer } from './ValueRenderers'
-+import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
- 
- // Cache for default categories to avoid repeated fetches
- let defaultCategoriesCache = null
-@@ -77,7 +78,8 @@ function DataRow({
-   selectedSources,
-   convertValue,
-   unitDefinitions,
--  presetDetails
-+  presetDetails,
-+  sources
- }) {
-   const data = usePathData(context, path$SourceKey)
-   const meta = useMetaData(context, data?.path)
-@@ -176,7 +178,8 @@ function DataRow({
-           }}
-         />
-         <CopyToClipboardWithFade text={data.$source}>
--          {data.$source} <i className="far fa-copy"></i>
-+          {getSourceDisplayLabel(data.$source, sources)}{' '}
-+          <i className="far fa-copy"></i>
-         </CopyToClipboardWithFade>
-         {data.pgn && <span>&nbsp;{data.pgn}</span>}
-         {data.sentence && <span>&nbsp;{data.sentence}</span>}
-diff --git a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
-index ed53869..b97585e 100644
---- a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
-+++ b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.js
-@@ -1,6 +1,7 @@
- import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
- import DataRow from './DataRow'
- import granularSubscriptionManager from './GranularSubscriptionManager'
-+import { useSources } from '../../utils/useSources'
- import './VirtualTable.css'
- 
- /**
-@@ -20,6 +21,7 @@ function VirtualizedDataTable({
-   unitDefinitions,
-   presetDetails
- }) {
-+  const sources = useSources()
-   const containerRef = useRef(null)
-   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 })
-   const [isNarrowScreen, setIsNarrowScreen] = useState(
-@@ -242,6 +244,7 @@ function VirtualizedDataTable({
-             convertValue={convertValue}
-             unitDefinitions={unitDefinitions}
-             presetDetails={presetDetails}
-+            sources={sources}
-           />
-         ))}
- 
-diff --git a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
-index 20f5c49..32a4dbb 100644
---- a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
-+++ b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.js
-@@ -15,6 +15,8 @@ import {
- import Creatable from 'react-select/creatable'
- import remove from 'lodash.remove'
- import uniq from 'lodash.uniq'
-+import { getSourceDisplayLabel } from '../../utils/sourceLabelUtils'
-+import { fetchSourcesData } from '../../utils/useSources'
- 
- export const SOURCEPRIOS_PRIO_CHANGED = 'SOURCEPRIOS_PPRIO_CHANGED'
- export const SOURCEPRIOS_PRIO_DELETED = 'SOURCEPRIOS_PRIO_DELETED'
-@@ -189,8 +191,11 @@ class PrefsEditor extends Component {
-             <tbody>
-               {[...this.props.priorities, { sourceRef: '', timeout: '' }].map(
-                 ({ sourceRef, timeout }, index) => {
-+                  const { resolveSourceLabel } = this.props
-                   const options = this.state.sourceRefs.map((sourceRef) => ({
--                    label: sourceRef,
-+                    label: resolveSourceLabel
-+                      ? resolveSourceLabel(sourceRef)
-+                      : sourceRef,
-                     value: sourceRef
-                   }))
-                   return (
-@@ -200,7 +205,12 @@ class PrefsEditor extends Component {
-                         <Creatable
-                           menuPortalTarget={document.body}
-                           options={options}
--                          value={{ value: sourceRef, label: sourceRef }}
-+                          value={{
-+                            value: sourceRef,
-+                            label: resolveSourceLabel
-+                              ? resolveSourceLabel(sourceRef)
-+                              : sourceRef
-+                          }}
-                           onChange={(e) => {
-                             this.props.dispatch({
-                               type: SOURCEPRIOS_PRIO_CHANGED,
-@@ -348,7 +358,8 @@ class SourcePriorities extends Component {
-   constructor(props) {
-     super(props)
-     this.state = {
--      availablePaths: []
-+      availablePaths: [],
-+      sources: {}
-     }
-     fetchAvailablePaths((pathsArray) => {
-       this.setState({
-@@ -358,6 +369,30 @@ class SourcePriorities extends Component {
-         }))
-       })
-     })
-+    this.resolveSourceLabel = this.resolveSourceLabel.bind(this)
-+  }
-+
-+  componentDidMount() {
-+    this.fetchSources()
-+    this.sourcesInterval = setInterval(() => this.fetchSources(), 30000)
-+  }
-+
-+  componentWillUnmount() {
-+    if (this.sourcesInterval) {
-+      clearInterval(this.sourcesInterval)
-+    }
-+  }
-+
-+  fetchSources() {
-+    fetchSourcesData()
-+      .then((sources) => {
-+        this.setState({ sources })
-+      })
-+      .catch(() => undefined)
-+  }
-+
-+  resolveSourceLabel(sourceRef) {
-+    return getSourceDisplayLabel(sourceRef, this.state.sources)
-   }
- 
-   render() {
-@@ -421,6 +456,7 @@ class SourcePriorities extends Component {
-                         dispatch={this.props.dispatch}
-                         isSaving={this.props.saveState.isSaving}
-                         pathIndex={index}
-+                        resolveSourceLabel={this.resolveSourceLabel}
-                       />
-                     </td>
-                     <td style={{ border: 'none' }}>
 diff --git a/src/interfaces/ws.ts b/src/interfaces/ws.ts
 --- a/src/interfaces/ws.ts
 +++ b/src/interfaces/ws.ts
