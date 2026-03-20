@@ -2,8 +2,7 @@ diff --git a/package.json b/package.json
 index 4181677..c7ce98c 100644
 --- a/package.json
 +++ b/package.json
-@@ -118,7 +118,6 @@
-     "listr": "^0.14.1",
+@@ -112,6 +112,5 @@
      "lodash": "^4.17.21",
      "mathjs": "^12.4.0",
 -    "mdns-js": "^1.0.3",
