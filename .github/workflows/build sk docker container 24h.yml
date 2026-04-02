@@ -945,14 +945,19 @@ jobs:
 
   slack:
     name: Slack notification
+    if: always()
     runs-on: ubuntu-latest
-    needs: [housekeeping]
+    needs: [housekeeping, signalk-server]
     steps:
       - name: Determine status
         id: status
         run: |
           TAG="${{ needs.signalk-server.outputs.tag }}"
-          if [[ "${{ needs.housekeeping.result }}" == "success" ]]; then
+          if [[ "${{ needs.signalk-server.result }}" == "failure" || "${{ needs.housekeeping.result }}" == "failure" ]]; then
+            echo "message=❌ Docker build workflow failed for $TAG" >> $GITHUB_OUTPUT
+          elif [[ "${{ needs.signalk-server.result }}" == "cancelled" || "${{ needs.housekeeping.result }}" == "cancelled" ]]; then
+            echo "message=⚠️ Docker build workflow was cancelled for $TAG" >> $GITHUB_OUTPUT
+          elif [[ "${{ needs.housekeeping.result }}" == "success" || "${{ needs.housekeeping.result }}" == "skipped" ]]; then
             echo "message=✅ Docker images successfully built and published: $TAG" >> $GITHUB_OUTPUT
           else
             echo "message=⚠️ Docker build workflow completed with issues for $TAG" >> $GITHUB_OUTPUT

@@ -410,11 +410,22 @@ jobs:
 
   slack:
     name: Slack update
-    if: |
-      always()
+    if: always()
     runs-on: ubuntu-latest
-    needs: [housekeeping]
+    needs: [housekeeping, build-ubuntu-images, build-alpine-images, build-debian-images]
     steps:
+      - name: Determine status
+        id: status
+        run: |
+          if [[ "${{ needs.build-ubuntu-images.result }}" == "failure" || "${{ needs.build-alpine-images.result }}" == "failure" || "${{ needs.build-debian-images.result }}" == "failure" || "${{ needs.housekeeping.result }}" == "failure" ]]; then
+            echo "message=❌ Base image build failed" >> $GITHUB_OUTPUT
+          elif [[ "${{ needs.build-ubuntu-images.result }}" == "cancelled" || "${{ needs.build-alpine-images.result }}" == "cancelled" || "${{ needs.build-debian-images.result }}" == "cancelled" ]]; then
+            echo "message=⚠️ Base image build was cancelled" >> $GITHUB_OUTPUT
+          else
+            echo "message=✅ Ubuntu 24.04 + Alpine base images ready" >> $GITHUB_OUTPUT
+          fi
       - name: Slack notification
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"Ubuntu 24.04 + Alpine base images ready"}' https://hooks.slack.com/services/${{ secrets.SLACK }}
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"${{ steps.status.outputs.message }}\"}" \
+            https://hooks.slack.com/services/${{ secrets.SLACK }}
