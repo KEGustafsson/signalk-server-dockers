@@ -1,0 +1,22 @@
+From 82a76a568bd86b1a1420a9299d9a079f3b606269 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 3 Apr 2026 05:11:38 +0000
+Subject: [PATCH] fix(assemblyscript): remove suboptimal converge option
+
+https://claude.ai/code/session_01RNKm53t3PF7PMuhZ1ToVYE
+---
+ packages/assemblyscript-plugin-sdk/asconfig.json | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/packages/assemblyscript-plugin-sdk/asconfig.json b/packages/assemblyscript-plugin-sdk/asconfig.json
+index 053cf7733..d3b91141c 100644
+--- a/packages/assemblyscript-plugin-sdk/asconfig.json
++++ b/packages/assemblyscript-plugin-sdk/asconfig.json
+@@ -5,7 +5,6 @@
+       "sourceMap": false,
+       "optimize": true,
+       "shrinkLevel": 2,
+-      "converge": true,
+       "noAssert": true,
+       "runtime": "stub",
+       "use": "abort="
