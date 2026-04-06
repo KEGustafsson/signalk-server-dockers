@@ -337,6 +337,7 @@ index e90c657..4ba0803 100644
                    </td>
                    <td style={{ border: 'none' }}>
 diff --git a/src/interfaces/ws.ts b/src/interfaces/ws.ts
+index e0f7608..4f4b4ac 100644
 --- a/src/interfaces/ws.ts
 +++ b/src/interfaces/ws.ts
 @@ -22,7 +22,8 @@ import { getSourceId, getMetadata } from '@signalk/signalk-schema'
@@ -349,9 +350,9 @@ diff --git a/src/interfaces/ws.ts b/src/interfaces/ws.ts
  } from '../security'
  import { WithConfig } from '../app'
  import {
-@@ -54,6 +55,98 @@ const BACKPRESSURE_EXIT_THRESHOLD = process.env.BACKPRESSURE_EXIT
-   ? parseInt(process.env.BACKPRESSURE_EXIT, 10)
-   : 1024
+@@ -50,6 +51,98 @@ import { Delta, hasValues } from '@signalk/server-api'
+ const debug = createDebug('signalk-server:interfaces:ws')
+ const debugConnection = createDebug('signalk-server:interfaces:ws:connections')
  
 +function wsSourceRefFromIdentifier(identifier: string): string {
 +  return `ws.${identifier.replace(/\./g, '_')}`
@@ -445,10 +446,10 @@ diff --git a/src/interfaces/ws.ts b/src/interfaces/ws.ts
 +  app.deltaCache.setSourceDelta!(sourceRef, sourceDelta)
 +}
 +
- interface BackpressureState {
-   active: boolean
-   accumulator: Map<string, AccumulatedItem>
-@@ -182,6 +275,8 @@ interface DeltaCache {
+ interface SkPrincipal {
+   identifier: string
+ }
+@@ -175,6 +268,8 @@ interface DeltaCache {
      filter: (delta: WithContext) => boolean,
      principal?: SkPrincipal
    ) => Delta[]
@@ -457,7 +458,7 @@ diff --git a/src/interfaces/ws.ts b/src/interfaces/ws.ts
  }
  
  interface WsAppConfig {
-@@ -415,6 +510,7 @@ function wsInterface(app: WsApp): WsApi {
+@@ -416,6 +511,7 @@ function wsInterface(app: WsApp): WsApi {
            let principalId: string | undefined
            if (spark.request.skPrincipal) {
              principalId = spark.request.skPrincipal.identifier
@@ -465,7 +466,7 @@ diff --git a/src/interfaces/ws.ts b/src/interfaces/ws.ts
            }
  
            debugConnection(
-@@ -713,9 +809,13 @@ function wsInterface(app: WsApp): WsApi {
+@@ -699,9 +795,13 @@ function wsInterface(app: WsApp): WsApi {
              if (res.accessRequest && res.accessRequest.token) {
                spark.request.token = res.accessRequest.token
                app.securityStrategy.authorizeWS(spark.request)
@@ -482,7 +483,7 @@ diff --git a/src/interfaces/ws.ts b/src/interfaces/ws.ts
              }
            }
            spark.write(res)
-@@ -789,7 +889,7 @@ function createPrimusAuthorize(
+@@ -776,7 +876,7 @@ function createPrimusAuthorize(
        const identifier = req.skPrincipal?.identifier
        if (identifier) {
          debug(`authorized username: ${identifier}`)
@@ -491,7 +492,6 @@ diff --git a/src/interfaces/ws.ts b/src/interfaces/ws.ts
        }
      } catch (error) {
        if (
-
 diff --git a/test/security.js b/test/security.js
 index 391da01..5ad8e45 100644
 --- a/test/security.js
@@ -536,3 +536,4 @@ index 391da01..5ad8e45 100644
    })
  
    it('Device access request and denial works', async function () {
+
