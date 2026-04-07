@@ -1,7 +1,7 @@
 From 319489424a3fb4cfdc5488337669f89c276e8b82 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 6 Apr 2026 22:56:13 +0000
-Subject: [PATCH 1/3] feat(appstore): add plugin removal confirmation with data
+Subject: [PATCH 1/7] feat(appstore): add plugin removal confirmation with data
  preservation option
 
 Replace browser confirm() dialog with a styled Bootstrap Modal that shows
@@ -590,7 +590,7 @@ index 1b352f9e8..193962578 100644
 From ba283f2a4f2d4e87e3992ff87e411d319d0a7560 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 7 Apr 2026 06:27:44 +0000
-Subject: [PATCH 2/3] fix(appstore): async filesystem ops, symlink safety, and
+Subject: [PATCH 2/7] fix(appstore): async filesystem ops, symlink safety, and
  cleanup
 
 - Convert getDirectorySize and getPluginDataSize to async using
@@ -921,7 +921,7 @@ index 193962578..1276a839c 100644
 From b497d41295b77bbd9050b7b57c94b0c460509f19 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 7 Apr 2026 07:42:31 +0000
-Subject: [PATCH 3/3] fix(admin-ui): change delete prompt slider to checkbox
+Subject: [PATCH 3/7] fix(admin-ui): change delete prompt slider to checkbox
  and update label
 
 https://claude.ai/code/session_015RBimNp4huM1jUWCHjGchN
@@ -951,3 +951,186 @@ index a3518ebb2..72e9c333b 100644
                  </label>
                </div>
                {deleteData && (
+
+From d608e188a86eefcea0ae89d1f3abba92a91d4e72 Mon Sep 17 00:00:00 2001
+From: KE Gustafsson <ke.gustafsson@gmail.com>
+Date: Tue, 7 Apr 2026 17:37:20 +0300
+Subject: [PATCH 4/7] fix: format
+
+---
+ .../views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx  | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx b/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx
+index 72e9c333b..e2f486fdf 100644
+--- a/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx
++++ b/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx
+@@ -428,7 +428,8 @@ export default function ActionCellRenderer({
+                   className="form-check-label"
+                   htmlFor={`deleteDataCheck-${app.name}`}
+                 >
+-                  Also delete plugin configuration and data ({formatBytes(dataSize.totalBytes)})
++                  Also delete plugin configuration and data (
++                  {formatBytes(dataSize.totalBytes)})
+                 </label>
+               </div>
+               {deleteData && (
+
+From 6620efbaaa940efb0af8ed5d90e65493725d5d51 Mon Sep 17 00:00:00 2001
+From: KE Gustafsson <ke.gustafsson@gmail.com>
+Date: Tue, 7 Apr 2026 17:49:05 +0300
+Subject: [PATCH 5/7] fix: issues raised by coderabbit
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+ActionCellRenderer.tsx — Remove button now has disabled={loadingDataSize} so it can't be clicked while data size is loading.
+
+ActionCellRenderer.tsx — handleConfirmRemove is now async, awaits the fetch, checks response.ok, and sets removeError state on failure (displayed as an alert in the modal body). Modal only closes on success. removeError is cleared when the modal opens.
+
+src/modules.ts — Removed the redundant !stats.isSymbolicLink() guard from the stats.isDirectory() check in walk, since lstat already reports symlinks as symlinks rather than directories.
+---
+ .../cell-renderers/ActionCellRenderer.tsx     | 45 +++++++++++++++----
+ src/modules.ts                                |  2 +-
+ 2 files changed, 37 insertions(+), 10 deletions(-)
+
+diff --git a/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx b/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx
+index e2f486fdf..81074a7ca 100644
+--- a/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx
++++ b/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx
+@@ -65,6 +65,7 @@ export default function ActionCellRenderer({
+   const [deleteData, setDeleteData] = useState(false)
+   const [dataSize, setDataSize] = useState<PluginDataSize | null>(null)
+   const [loadingDataSize, setLoadingDataSize] = useState(false)
++  const [removeError, setRemoveError] = useState<string | null>(null)
+ 
+   const handleInstallClick = () => {
+     fetch(
+@@ -135,6 +136,7 @@ export default function ActionCellRenderer({
+ 
+   const handleRemoveClick = async () => {
+     setDeleteData(false)
++    setRemoveError(null)
+     setShowRemoveModal(true)
+     setLoadingDataSize(true)
+     setDataSize(null)
+@@ -154,14 +156,30 @@ export default function ActionCellRenderer({
+     }
+   }
+ 
+-  const handleConfirmRemove = () => {
+-    fetch(`${window.serverRoutesPrefix}/appstore/remove/${app.name}`, {
+-      method: 'POST',
+-      headers: { 'Content-Type': 'application/json' },
+-      credentials: 'include',
+-      body: JSON.stringify({ deleteData })
+-    })
+-    setShowRemoveModal(false)
++  const handleConfirmRemove = async () => {
++    setRemoveError(null)
++    try {
++      const response = await fetch(
++        `${window.serverRoutesPrefix}/appstore/remove/${app.name}`,
++        {
++          method: 'POST',
++          headers: { 'Content-Type': 'application/json' },
++          credentials: 'include',
++          body: JSON.stringify({ deleteData })
++        }
++      )
++      if (!response.ok) {
++        setRemoveError(
++          `Failed to remove ${app.name}: server returned ${response.status}`
++        )
++        return
++      }
++      setShowRemoveModal(false)
++    } catch (error) {
++      setRemoveError(
++        `Failed to remove ${app.name}: ${error instanceof Error ? error.message : String(error)}`
++      )
++    }
+   }
+ 
+   let content: ReactNode
+@@ -451,12 +469,21 @@ export default function ActionCellRenderer({
+               <small>No plugin data found on disk.</small>
+             </p>
+           ) : null}
++          {removeError && (
++            <div className="alert alert-danger mt-3 py-2 mb-0" role="alert">
++              <small>{removeError}</small>
++            </div>
++          )}
+         </Modal.Body>
+         <Modal.Footer>
+           <Button variant="secondary" onClick={() => setShowRemoveModal(false)}>
+             Cancel
+           </Button>
+-          <Button variant="danger" onClick={handleConfirmRemove}>
++          <Button
++            variant="danger"
++            onClick={handleConfirmRemove}
++            disabled={loadingDataSize}
++          >
+             <FontAwesomeIcon className="me-2" icon={faTrashCan} />
+             Remove
+           </Button>
+diff --git a/src/modules.ts b/src/modules.ts
+index 976d23a96..6c2a76996 100644
+--- a/src/modules.ts
++++ b/src/modules.ts
+@@ -268,7 +268,7 @@ async function getDirectorySize(dir: string): Promise<{
+         if (stats.isFile()) {
+           totalBytes += stats.size
+           fileCount++
+-        } else if (stats.isDirectory() && !stats.isSymbolicLink()) {
++        } else if (stats.isDirectory()) {
+           await walk(entryPath)
+         }
+       } catch {
+
+From 46589e9936e433a2d7eff8664f2172b7f34f1f56 Mon Sep 17 00:00:00 2001
+From: KE Gustafsson <ke.gustafsson@gmail.com>
+Date: Tue, 7 Apr 2026 17:52:16 +0300
+Subject: [PATCH 6/7] fix: remove comment raised by coerabbit
+
+---
+ .../views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx    | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx b/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx
+index 81074a7ca..3941da87a 100644
+--- a/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx
++++ b/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx
+@@ -413,7 +413,6 @@ export default function ActionCellRenderer({
+           )}
+         </Modal.Body>
+       </Modal>
+-      {/* Remove Confirmation Modal */}
+       <Modal show={showRemoveModal} onHide={() => setShowRemoveModal(false)}>
+         <Modal.Header closeButton>
+           <Modal.Title>Remove {app.name}</Modal.Title>
+
+From fdffcbd21997e0ded6edd29475a0b36af0ba7351 Mon Sep 17 00:00:00 2001
+From: KE Gustafsson <ke.gustafsson@gmail.com>
+Date: Tue, 7 Apr 2026 17:57:35 +0300
+Subject: [PATCH 7/7] fix: issue raised by coderabbit
+
+---
+ src/modules.ts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/modules.ts b/src/modules.ts
+index 6c2a76996..4359152d5 100644
+--- a/src/modules.ts
++++ b/src/modules.ts
+@@ -302,7 +302,7 @@ async function getPluginDataSize(
+   const dataDir = pluginDataDir(configPath, pluginId)
+   try {
+     const dirStats = await fs.promises.lstat(dataDir)
+-    if (dirStats.isDirectory() && !dirStats.isSymbolicLink()) {
++    if (dirStats.isDirectory()) {
+       const dirSize = await getDirectorySize(dataDir)
+       totalBytes += dirSize.totalBytes
+       fileCount += dirSize.fileCount
