@@ -340,7 +340,7 @@ diff --git a/src/interfaces/ws.ts b/src/interfaces/ws.ts
 index e0f7608..4f4b4ac 100644
 --- a/src/interfaces/ws.ts
 +++ b/src/interfaces/ws.ts
-@@ -22,7 +22,8 @@ import { getSourceId, getMetadata } from '@signalk/signalk-schema'
+@@ -22,11 +22,12 @@ import { getSourceId, getMetadata } from '@signalk/signalk-schema'
  import {
    requestAccess,
    InvalidTokenError,
@@ -348,6 +348,10 @@ index e0f7608..4f4b4ac 100644
 +  WithSecurityStrategy,
 +  getSecurityConfig
  } from '../security'
+ import {
+   LoginRateLimiter,
+   LOGIN_RATE_LIMIT_MESSAGE
+ } from '../login-rate-limiter'
  import { WithConfig } from '../app'
  import {
 @@ -50,6 +51,98 @@ import { Delta, hasValues } from '@signalk/server-api'
