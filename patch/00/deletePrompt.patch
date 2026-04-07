@@ -1,8 +1,9 @@
-From 319489424a3fb4cfdc5488337669f89c276e8b82 Mon Sep 17 00:00:00 2001
-From: Claude <noreply@anthropic.com>
-Date: Mon, 6 Apr 2026 22:56:13 +0000
-Subject: [PATCH 1/2] feat(appstore): add plugin removal confirmation with data
- preservation option
+From e8c9f47450748f61628a5760ed6c66e808032634 Mon Sep 17 00:00:00 2001
+From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
+Date: Tue, 7 Apr 2026 09:21:56 +0200
+Subject: [PATCH] Delete prompt2 (#63)
+
+* feat(appstore): add plugin removal confirmation with data preservation option
 
 Replace browser confirm() dialog with a styled Bootstrap Modal that shows
 plugin data size and lets users choose whether to keep or delete plugin
@@ -12,21 +13,36 @@ Adds GET /appstore/datasize/:name endpoint to calculate plugin data size,
 and extends the remove endpoint to accept a deleteData parameter.
 
 https://claude.ai/code/session_01KuBQxKn17sPSDvnxTLZqBF
+
+* fix(appstore): async filesystem ops, symlink safety, and cleanup
+
+- Convert getDirectorySize and getPluginDataSize to async using
+  fs.promises to avoid blocking the event loop on HTTP requests
+- Use lstat instead of stat to prevent following symlinks in
+  directory size calculation
+- Remove cleanupAfterRemove from module.exports (internal detail)
+- Add GB tier to formatBytes utility
+
+https://claude.ai/code/session_01DK47Pa6tLMsZzzoXj85Dzp
+
+---------
+
+Co-authored-by: Claude <noreply@anthropic.com>
 ---
- .../ActionCellRenderer.test.tsx               |  22 +++
- .../cell-renderers/ActionCellRenderer.tsx     | 117 ++++++++++++-
- src/interfaces/appstore.js                    |  48 +++++-
- src/modules.ts                                |  71 +++++++-
- test/modules.js                               | 156 +++++++++++++++++-
- 5 files changed, 394 insertions(+), 20 deletions(-)
+ .../ActionCellRenderer.test.tsx               |  27 ++++
+ .../cell-renderers/ActionCellRenderer.tsx     | 119 +++++++++++++++++-
+ src/interfaces/appstore.js                    |  51 ++++++--
+ src/modules.ts                                |  80 +++++++++++-
+ test/modules.js                               |  66 +++++++++-
+ 5 files changed, 323 insertions(+), 20 deletions(-)
  create mode 100644 packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.test.tsx
 
 diff --git a/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.test.tsx b/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.test.tsx
 new file mode 100644
-index 000000000..4c26737cb
+index 000000000..8105ed1ab
 --- /dev/null
 +++ b/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.test.tsx
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,27 @@
 +import { describe, it, expect } from 'vitest'
 +import { formatBytes } from './ActionCellRenderer'
 +
@@ -48,12 +64,17 @@ index 000000000..4c26737cb
 +    expect(formatBytes(2621440)).toBe('2.5 MB')
 +    expect(formatBytes(10485760)).toBe('10.0 MB')
 +  })
++
++  it('formats gigabytes', () => {
++    expect(formatBytes(1073741824)).toBe('1.0 GB')
++    expect(formatBytes(2684354560)).toBe('2.5 GB')
++  })
 +})
 diff --git a/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx b/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx
-index ed12d377c..52e39a867 100644
+index ed12d377c..a3518ebb2 100644
 --- a/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx
 +++ b/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx
-@@ -12,9 +12,22 @@ import { faCloudArrowDown } from '@fortawesome/free-solid-svg-icons/faCloudArrow
+@@ -12,9 +12,24 @@ import { faCloudArrowDown } from '@fortawesome/free-solid-svg-icons/faCloudArrow
  import { faGear } from '@fortawesome/free-solid-svg-icons/faGear'
  import { faArrowUpRightFromSquare } from '@fortawesome/free-solid-svg-icons/faArrowUpRightFromSquare'
  import { faLink } from '@fortawesome/free-solid-svg-icons/faLink'
@@ -70,13 +91,15 @@ index ed12d377c..52e39a867 100644
 +export function formatBytes(bytes: number): string {
 +  if (bytes < 1024) return `${bytes} B`
 +  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
++  if (bytes < 1024 * 1024 * 1024)
++    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
++  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
 +}
 +
  interface AppData {
    name: string
    version?: string
-@@ -46,6 +59,10 @@ export default function ActionCellRenderer({
+@@ -46,6 +61,10 @@ export default function ActionCellRenderer({
    const [distTags, setDistTags] = useState<Record<string, string>>({})
    const [loadingVersions, setLoadingVersions] = useState(false)
    const [showAllVersions, setShowAllVersions] = useState(false)
@@ -87,7 +110,7 @@ index ed12d377c..52e39a867 100644
  
    const handleInstallClick = () => {
      fetch(
-@@ -114,15 +131,37 @@ export default function ActionCellRenderer({
+@@ -114,15 +133,37 @@ export default function ActionCellRenderer({
      }
    }
  
@@ -131,7 +154,7 @@ index ed12d377c..52e39a867 100644
    let content: ReactNode
    let status: string | undefined
    let progress: ReactNode | undefined
-@@ -354,6 +393,72 @@ export default function ActionCellRenderer({
+@@ -354,6 +395,72 @@ export default function ActionCellRenderer({
            )}
          </Modal.Body>
        </Modal>
@@ -205,7 +228,7 @@ index ed12d377c..52e39a867 100644
    )
  }
 diff --git a/src/interfaces/appstore.js b/src/interfaces/appstore.js
-index 9d7da115b..a436fffc3 100644
+index 9d7da115b..26bc61743 100644
 --- a/src/interfaces/appstore.js
 +++ b/src/interfaces/appstore.js
 @@ -19,7 +19,7 @@ const debug = createDebug('signalk-server:interfaces:appstore')
@@ -236,7 +259,7 @@ index 9d7da115b..a436fffc3 100644
                  }
                  res.json(`Removing ${name}...`)
                }
-@@ -127,6 +132,32 @@ module.exports = function (app) {
+@@ -127,6 +132,35 @@ module.exports = function (app) {
          }
        )
  
@@ -245,7 +268,7 @@ index 9d7da115b..a436fffc3 100644
 +          `${SERVERROUTESPREFIX}/appstore/datasize/:name`,
 +          `${SERVERROUTESPREFIX}/appstore/datasize/:org/:name`
 +        ],
-+        (req, res) => {
++        async (req, res) => {
 +          let name = req.params.name
 +          if (req.params.org) {
 +            name = req.params.org + '/' + name
@@ -257,7 +280,10 @@ index 9d7da115b..a436fffc3 100644
 +            return
 +          }
 +          try {
-+            const dataSize = getPluginDataSize(app.config.configPath, pluginId)
++            const dataSize = await getPluginDataSize(
++              app.config.configPath,
++              pluginId
++            )
 +            res.json(dataSize)
 +          } catch (error) {
 +            console.error('Failed to get plugin data size:', error)
@@ -269,7 +295,7 @@ index 9d7da115b..a436fffc3 100644
        app.get(`${SERVERROUTESPREFIX}/appstore/available/`, (req, res) => {
          const installedNames = getInstalledPackageNames()
  
-@@ -404,13 +435,13 @@ module.exports = function (app) {
+@@ -404,13 +438,13 @@ module.exports = function (app) {
      updateSKModule(module, version, false)
    }
  
@@ -286,7 +312,7 @@ index 9d7da115b..a436fffc3 100644
      moduleInstalling = {
        name: module,
        output: [],
-@@ -442,7 +473,7 @@ module.exports = function (app) {
+@@ -442,7 +476,7 @@ module.exports = function (app) {
        if (moduleInstallQueue.length) {
          const next = moduleInstallQueue.splice(0, 1)[0]
          if (next.isRemove) {
@@ -295,7 +321,7 @@ index 9d7da115b..a436fffc3 100644
          } else {
            installSKModule(next.name, next.version)
          }
-@@ -459,7 +490,8 @@ module.exports = function (app) {
+@@ -459,7 +493,8 @@ module.exports = function (app) {
          onData,
          onErr,
          onClose,
@@ -306,7 +332,7 @@ index 9d7da115b..a436fffc3 100644
      } else {
        installModule(app.config, module, version, onData, onErr, onClose)
 diff --git a/src/modules.ts b/src/modules.ts
-index caac3d14f..32901d549 100644
+index caac3d14f..976d23a96 100644
 --- a/src/modules.ts
 +++ b/src/modules.ts
 @@ -176,10 +176,11 @@ function removeModule(
@@ -342,62 +368,72 @@ index caac3d14f..32901d549 100644
      const configFile = pluginConfigPath(configPath, pluginId)
      if (fs.existsSync(configFile)) {
        try {
-@@ -245,6 +247,63 @@ function cleanupAfterRemove(
+@@ -245,6 +247,73 @@ function cleanupAfterRemove(
    }
  }
  
-+function getDirectorySize(dir: string): {
++async function getDirectorySize(dir: string): Promise<{
 +  totalBytes: number
 +  fileCount: number
-+} {
++}> {
 +  let totalBytes = 0
 +  let fileCount = 0
 +
-+  function walk(d: string): void {
-+    if (!fs.existsSync(d)) return
-+    for (const entry of fs.readdirSync(d)) {
++  async function walk(d: string): Promise<void> {
++    let entries
++    try {
++      entries = await fs.promises.readdir(d)
++    } catch {
++      return
++    }
++    for (const entry of entries) {
 +      try {
 +        const entryPath = path.join(d, entry)
-+        const stats = fs.statSync(entryPath)
++        const stats = await fs.promises.lstat(entryPath)
 +        if (stats.isFile()) {
 +          totalBytes += stats.size
 +          fileCount++
-+        } else if (stats.isDirectory()) {
-+          walk(entryPath)
++        } else if (stats.isDirectory() && !stats.isSymbolicLink()) {
++          await walk(entryPath)
 +        }
 +      } catch {
-+        // entry may have been removed between readdir and stat
++        // entry may have been removed between readdir and lstat
 +      }
 +    }
 +  }
 +
-+  walk(dir)
++  await walk(dir)
 +  return { totalBytes, fileCount }
 +}
 +
-+function getPluginDataSize(
++async function getPluginDataSize(
 +  configPath: string,
 +  pluginId: string
-+): { totalBytes: number; fileCount: number; hasData: boolean } {
++): Promise<{ totalBytes: number; fileCount: number; hasData: boolean }> {
 +  let totalBytes = 0
 +  let fileCount = 0
 +
 +  const configFile = pluginConfigPath(configPath, pluginId)
-+  if (fs.existsSync(configFile)) {
-+    try {
-+      const stats = fs.statSync(configFile)
++  try {
++    const stats = await fs.promises.lstat(configFile)
++    if (stats.isFile()) {
 +      totalBytes += stats.size
 +      fileCount++
-+    } catch {
-+      // ignore
 +    }
++  } catch {
++    // file does not exist or inaccessible
 +  }
 +
 +  const dataDir = pluginDataDir(configPath, pluginId)
-+  if (fs.existsSync(dataDir)) {
-+    const dirSize = getDirectorySize(dataDir)
-+    totalBytes += dirSize.totalBytes
-+    fileCount += dirSize.fileCount
++  try {
++    const dirStats = await fs.promises.lstat(dataDir)
++    if (dirStats.isDirectory() && !dirStats.isSymbolicLink()) {
++      const dirSize = await getDirectorySize(dataDir)
++      totalBytes += dirSize.totalBytes
++      fileCount += dirSize.fileCount
++    }
++  } catch {
++    // directory does not exist or inaccessible
 +  }
 +
 +  return { totalBytes, fileCount, hasData: totalBytes > 0 }
@@ -406,123 +442,32 @@ index caac3d14f..32901d549 100644
  export function restoreModules(
    config: Config,
    onData: (output: any) => void,
-@@ -538,5 +597,7 @@ module.exports = {
+@@ -538,5 +607,6 @@ module.exports = {
    getKeywords,
    restoreModules,
    importOrRequire,
 -  runNpm
 +  runNpm,
-+  cleanupAfterRemove,
 +  getPluginDataSize
  }
 diff --git a/test/modules.js b/test/modules.js
-index 1b352f9e8..193962578 100644
+index 1b352f9e8..1276a839c 100644
 --- a/test/modules.js
 +++ b/test/modules.js
-@@ -7,7 +7,9 @@ const {
+@@ -7,7 +7,8 @@ const {
    checkForNewServerVersion,
    getLatestServerVersion,
    importOrRequire,
 -  runNpm
 +  runNpm,
-+  cleanupAfterRemove,
 +  getPluginDataSize
  } = require('../dist/modules')
  
  describe('modulesWithKeyword', () => {
-@@ -309,3 +311,155 @@ describe('runNpm version validation', () => {
+@@ -309,3 +310,66 @@ describe('runNpm version validation', () => {
      return testVersion('git+https://attacker.com/malicious-plugin.git', false)
    })
  })
-+
-+describe('cleanupAfterRemove', () => {
-+  let tempDir
-+
-+  beforeEach(() => {
-+    tempDir = path.join(
-+      require('os').tmpdir(),
-+      '_skservertest_cleanup' + Date.now()
-+    )
-+    fs.mkdirSync(tempDir, { recursive: true })
-+  })
-+
-+  afterEach(() => {
-+    fs.rmSync(tempDir, { recursive: true, force: true })
-+  })
-+
-+  function setupPluginData(pluginId) {
-+    const configDataDir = path.join(tempDir, 'plugin-config-data')
-+    fs.mkdirSync(configDataDir, { recursive: true })
-+
-+    const configFile = path.join(configDataDir, pluginId + '.json')
-+    fs.writeFileSync(configFile, JSON.stringify({ enabled: true }))
-+
-+    const dataDir = path.join(configDataDir, pluginId)
-+    fs.mkdirSync(dataDir, { recursive: true })
-+    fs.writeFileSync(path.join(dataDir, 'data.txt'), 'test data content')
-+
-+    return { configFile, dataDir }
-+  }
-+
-+  function setupPackageJson(packageName) {
-+    const packageJson = {
-+      dependencies: { [packageName]: '1.0.0' }
-+    }
-+    const packageJsonPath = path.join(tempDir, 'package.json')
-+    fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2))
-+    return packageJsonPath
-+  }
-+
-+  it('removes plugin config and data when deleteData is true', () => {
-+    const { configFile, dataDir } = setupPluginData('test-plugin')
-+    setupPackageJson('test-package')
-+
-+    cleanupAfterRemove(tempDir, 'test-package', 'test-plugin', true)
-+
-+    chai.expect(fs.existsSync(configFile)).to.equal(false)
-+    chai.expect(fs.existsSync(dataDir)).to.equal(false)
-+  })
-+
-+  it('preserves plugin config and data when deleteData is false', () => {
-+    const { configFile, dataDir } = setupPluginData('test-plugin')
-+    setupPackageJson('test-package')
-+
-+    cleanupAfterRemove(tempDir, 'test-package', 'test-plugin', false)
-+
-+    chai.expect(fs.existsSync(configFile)).to.equal(true)
-+    chai.expect(fs.existsSync(dataDir)).to.equal(true)
-+  })
-+
-+  it('preserves plugin config and data when deleteData is not provided', () => {
-+    const { configFile, dataDir } = setupPluginData('test-plugin')
-+    setupPackageJson('test-package')
-+
-+    cleanupAfterRemove(tempDir, 'test-package', 'test-plugin')
-+
-+    chai.expect(fs.existsSync(configFile)).to.equal(true)
-+    chai.expect(fs.existsSync(dataDir)).to.equal(true)
-+  })
-+
-+  it('always removes node_modules directory and package.json entry', () => {
-+    const { configFile, dataDir } = setupPluginData('test-plugin')
-+    const packageJsonPath = setupPackageJson('test-package')
-+
-+    const nodeModulesDir = path.join(tempDir, 'node_modules', 'test-package')
-+    fs.mkdirSync(nodeModulesDir, { recursive: true })
-+    fs.writeFileSync(
-+      path.join(nodeModulesDir, 'index.js'),
-+      'module.exports = {}'
-+    )
-+
-+    cleanupAfterRemove(tempDir, 'test-package', 'test-plugin', false)
-+
-+    chai.expect(fs.existsSync(nodeModulesDir)).to.equal(false)
-+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
-+    chai.expect(packageJson.dependencies).to.not.have.property('test-package')
-+    chai.expect(fs.existsSync(configFile)).to.equal(true)
-+    chai.expect(fs.existsSync(dataDir)).to.equal(true)
-+  })
-+})
 +
 +describe('getPluginDataSize', () => {
 +  let tempDir
@@ -539,7 +484,7 @@ index 1b352f9e8..193962578 100644
 +    fs.rmSync(tempDir, { recursive: true, force: true })
 +  })
 +
-+  it('returns correct size for plugin with config and data files', () => {
++  it('returns correct size for plugin with config and data files', async () => {
 +    const configDataDir = path.join(tempDir, 'plugin-config-data')
 +    fs.mkdirSync(configDataDir, { recursive: true })
 +
@@ -554,22 +499,22 @@ index 1b352f9e8..193962578 100644
 +    fs.writeFileSync(path.join(dataDir, 'data1.txt'), 'hello')
 +    fs.writeFileSync(path.join(dataDir, 'data2.txt'), 'world')
 +
-+    const result = getPluginDataSize(tempDir, 'test-plugin')
++    const result = await getPluginDataSize(tempDir, 'test-plugin')
 +
 +    chai.expect(result.hasData).to.equal(true)
 +    chai.expect(result.fileCount).to.equal(3) // config + 2 data files
 +    chai.expect(result.totalBytes).to.be.greaterThan(0)
 +  })
 +
-+  it('returns zero and hasData false for plugin with no data', () => {
-+    const result = getPluginDataSize(tempDir, 'nonexistent-plugin')
++  it('returns zero and hasData false for plugin with no data', async () => {
++    const result = await getPluginDataSize(tempDir, 'nonexistent-plugin')
 +
 +    chai.expect(result.hasData).to.equal(false)
 +    chai.expect(result.fileCount).to.equal(0)
 +    chai.expect(result.totalBytes).to.equal(0)
 +  })
 +
-+  it('handles config file only without data directory', () => {
++  it('handles config file only without data directory', async () => {
 +    const configDataDir = path.join(tempDir, 'plugin-config-data')
 +    fs.mkdirSync(configDataDir, { recursive: true })
 +
@@ -579,341 +524,10 @@ index 1b352f9e8..193962578 100644
 +      configContent
 +    )
 +
-+    const result = getPluginDataSize(tempDir, 'test-plugin')
++    const result = await getPluginDataSize(tempDir, 'test-plugin')
 +
 +    chai.expect(result.hasData).to.equal(true)
 +    chai.expect(result.fileCount).to.equal(1)
 +    chai.expect(result.totalBytes).to.be.greaterThan(0)
 +  })
 +})
-
-From ba283f2a4f2d4e87e3992ff87e411d319d0a7560 Mon Sep 17 00:00:00 2001
-From: Claude <noreply@anthropic.com>
-Date: Tue, 7 Apr 2026 06:27:44 +0000
-Subject: [PATCH 2/2] fix(appstore): async filesystem ops, symlink safety, and
- cleanup
-
-- Convert getDirectorySize and getPluginDataSize to async using
-  fs.promises to avoid blocking the event loop on HTTP requests
-- Use lstat instead of stat to prevent following symlinks in
-  directory size calculation
-- Remove cleanupAfterRemove from module.exports (internal detail)
-- Add GB tier to formatBytes utility
-
-https://claude.ai/code/session_01DK47Pa6tLMsZzzoXj85Dzp
----
- .../ActionCellRenderer.test.tsx               |   5 +
- .../cell-renderers/ActionCellRenderer.tsx     |   4 +-
- src/interfaces/appstore.js                    |   7 +-
- src/modules.ts                                |  53 +++++----
- test/modules.js                               | 102 ++----------------
- 5 files changed, 50 insertions(+), 121 deletions(-)
-
-diff --git a/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.test.tsx b/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.test.tsx
-index 4c26737cb..8105ed1ab 100644
---- a/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.test.tsx
-+++ b/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.test.tsx
-@@ -19,4 +19,9 @@ describe('formatBytes', () => {
-     expect(formatBytes(2621440)).toBe('2.5 MB')
-     expect(formatBytes(10485760)).toBe('10.0 MB')
-   })
-+
-+  it('formats gigabytes', () => {
-+    expect(formatBytes(1073741824)).toBe('1.0 GB')
-+    expect(formatBytes(2684354560)).toBe('2.5 GB')
-+  })
- })
-diff --git a/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx b/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx
-index 52e39a867..a3518ebb2 100644
---- a/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx
-+++ b/packages/server-admin-ui/src/views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx
-@@ -25,7 +25,9 @@ interface PluginDataSize {
- export function formatBytes(bytes: number): string {
-   if (bytes < 1024) return `${bytes} B`
-   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
--  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-+  if (bytes < 1024 * 1024 * 1024)
-+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
- }
- 
- interface AppData {
-diff --git a/src/interfaces/appstore.js b/src/interfaces/appstore.js
-index a436fffc3..26bc61743 100644
---- a/src/interfaces/appstore.js
-+++ b/src/interfaces/appstore.js
-@@ -137,7 +137,7 @@ module.exports = function (app) {
-           `${SERVERROUTESPREFIX}/appstore/datasize/:name`,
-           `${SERVERROUTESPREFIX}/appstore/datasize/:org/:name`
-         ],
--        (req, res) => {
-+        async (req, res) => {
-           let name = req.params.name
-           if (req.params.org) {
-             name = req.params.org + '/' + name
-@@ -149,7 +149,10 @@ module.exports = function (app) {
-             return
-           }
-           try {
--            const dataSize = getPluginDataSize(app.config.configPath, pluginId)
-+            const dataSize = await getPluginDataSize(
-+              app.config.configPath,
-+              pluginId
-+            )
-             res.json(dataSize)
-           } catch (error) {
-             console.error('Failed to get plugin data size:', error)
-diff --git a/src/modules.ts b/src/modules.ts
-index 32901d549..976d23a96 100644
---- a/src/modules.ts
-+++ b/src/modules.ts
-@@ -247,58 +247,68 @@ function cleanupAfterRemove(
-   }
- }
- 
--function getDirectorySize(dir: string): {
-+async function getDirectorySize(dir: string): Promise<{
-   totalBytes: number
-   fileCount: number
--} {
-+}> {
-   let totalBytes = 0
-   let fileCount = 0
- 
--  function walk(d: string): void {
--    if (!fs.existsSync(d)) return
--    for (const entry of fs.readdirSync(d)) {
-+  async function walk(d: string): Promise<void> {
-+    let entries
-+    try {
-+      entries = await fs.promises.readdir(d)
-+    } catch {
-+      return
-+    }
-+    for (const entry of entries) {
-       try {
-         const entryPath = path.join(d, entry)
--        const stats = fs.statSync(entryPath)
-+        const stats = await fs.promises.lstat(entryPath)
-         if (stats.isFile()) {
-           totalBytes += stats.size
-           fileCount++
--        } else if (stats.isDirectory()) {
--          walk(entryPath)
-+        } else if (stats.isDirectory() && !stats.isSymbolicLink()) {
-+          await walk(entryPath)
-         }
-       } catch {
--        // entry may have been removed between readdir and stat
-+        // entry may have been removed between readdir and lstat
-       }
-     }
-   }
- 
--  walk(dir)
-+  await walk(dir)
-   return { totalBytes, fileCount }
- }
- 
--function getPluginDataSize(
-+async function getPluginDataSize(
-   configPath: string,
-   pluginId: string
--): { totalBytes: number; fileCount: number; hasData: boolean } {
-+): Promise<{ totalBytes: number; fileCount: number; hasData: boolean }> {
-   let totalBytes = 0
-   let fileCount = 0
- 
-   const configFile = pluginConfigPath(configPath, pluginId)
--  if (fs.existsSync(configFile)) {
--    try {
--      const stats = fs.statSync(configFile)
-+  try {
-+    const stats = await fs.promises.lstat(configFile)
-+    if (stats.isFile()) {
-       totalBytes += stats.size
-       fileCount++
--    } catch {
--      // ignore
-     }
-+  } catch {
-+    // file does not exist or inaccessible
-   }
- 
-   const dataDir = pluginDataDir(configPath, pluginId)
--  if (fs.existsSync(dataDir)) {
--    const dirSize = getDirectorySize(dataDir)
--    totalBytes += dirSize.totalBytes
--    fileCount += dirSize.fileCount
-+  try {
-+    const dirStats = await fs.promises.lstat(dataDir)
-+    if (dirStats.isDirectory() && !dirStats.isSymbolicLink()) {
-+      const dirSize = await getDirectorySize(dataDir)
-+      totalBytes += dirSize.totalBytes
-+      fileCount += dirSize.fileCount
-+    }
-+  } catch {
-+    // directory does not exist or inaccessible
-   }
- 
-   return { totalBytes, fileCount, hasData: totalBytes > 0 }
-@@ -598,6 +608,5 @@ module.exports = {
-   restoreModules,
-   importOrRequire,
-   runNpm,
--  cleanupAfterRemove,
-   getPluginDataSize
- }
-diff --git a/test/modules.js b/test/modules.js
-index 193962578..1276a839c 100644
---- a/test/modules.js
-+++ b/test/modules.js
-@@ -8,7 +8,6 @@ const {
-   getLatestServerVersion,
-   importOrRequire,
-   runNpm,
--  cleanupAfterRemove,
-   getPluginDataSize
- } = require('../dist/modules')
- 
-@@ -312,95 +311,6 @@ describe('runNpm version validation', () => {
-   })
- })
- 
--describe('cleanupAfterRemove', () => {
--  let tempDir
--
--  beforeEach(() => {
--    tempDir = path.join(
--      require('os').tmpdir(),
--      '_skservertest_cleanup' + Date.now()
--    )
--    fs.mkdirSync(tempDir, { recursive: true })
--  })
--
--  afterEach(() => {
--    fs.rmSync(tempDir, { recursive: true, force: true })
--  })
--
--  function setupPluginData(pluginId) {
--    const configDataDir = path.join(tempDir, 'plugin-config-data')
--    fs.mkdirSync(configDataDir, { recursive: true })
--
--    const configFile = path.join(configDataDir, pluginId + '.json')
--    fs.writeFileSync(configFile, JSON.stringify({ enabled: true }))
--
--    const dataDir = path.join(configDataDir, pluginId)
--    fs.mkdirSync(dataDir, { recursive: true })
--    fs.writeFileSync(path.join(dataDir, 'data.txt'), 'test data content')
--
--    return { configFile, dataDir }
--  }
--
--  function setupPackageJson(packageName) {
--    const packageJson = {
--      dependencies: { [packageName]: '1.0.0' }
--    }
--    const packageJsonPath = path.join(tempDir, 'package.json')
--    fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2))
--    return packageJsonPath
--  }
--
--  it('removes plugin config and data when deleteData is true', () => {
--    const { configFile, dataDir } = setupPluginData('test-plugin')
--    setupPackageJson('test-package')
--
--    cleanupAfterRemove(tempDir, 'test-package', 'test-plugin', true)
--
--    chai.expect(fs.existsSync(configFile)).to.equal(false)
--    chai.expect(fs.existsSync(dataDir)).to.equal(false)
--  })
--
--  it('preserves plugin config and data when deleteData is false', () => {
--    const { configFile, dataDir } = setupPluginData('test-plugin')
--    setupPackageJson('test-package')
--
--    cleanupAfterRemove(tempDir, 'test-package', 'test-plugin', false)
--
--    chai.expect(fs.existsSync(configFile)).to.equal(true)
--    chai.expect(fs.existsSync(dataDir)).to.equal(true)
--  })
--
--  it('preserves plugin config and data when deleteData is not provided', () => {
--    const { configFile, dataDir } = setupPluginData('test-plugin')
--    setupPackageJson('test-package')
--
--    cleanupAfterRemove(tempDir, 'test-package', 'test-plugin')
--
--    chai.expect(fs.existsSync(configFile)).to.equal(true)
--    chai.expect(fs.existsSync(dataDir)).to.equal(true)
--  })
--
--  it('always removes node_modules directory and package.json entry', () => {
--    const { configFile, dataDir } = setupPluginData('test-plugin')
--    const packageJsonPath = setupPackageJson('test-package')
--
--    const nodeModulesDir = path.join(tempDir, 'node_modules', 'test-package')
--    fs.mkdirSync(nodeModulesDir, { recursive: true })
--    fs.writeFileSync(
--      path.join(nodeModulesDir, 'index.js'),
--      'module.exports = {}'
--    )
--
--    cleanupAfterRemove(tempDir, 'test-package', 'test-plugin', false)
--
--    chai.expect(fs.existsSync(nodeModulesDir)).to.equal(false)
--    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
--    chai.expect(packageJson.dependencies).to.not.have.property('test-package')
--    chai.expect(fs.existsSync(configFile)).to.equal(true)
--    chai.expect(fs.existsSync(dataDir)).to.equal(true)
--  })
--})
--
- describe('getPluginDataSize', () => {
-   let tempDir
- 
-@@ -416,7 +326,7 @@ describe('getPluginDataSize', () => {
-     fs.rmSync(tempDir, { recursive: true, force: true })
-   })
- 
--  it('returns correct size for plugin with config and data files', () => {
-+  it('returns correct size for plugin with config and data files', async () => {
-     const configDataDir = path.join(tempDir, 'plugin-config-data')
-     fs.mkdirSync(configDataDir, { recursive: true })
- 
-@@ -431,22 +341,22 @@ describe('getPluginDataSize', () => {
-     fs.writeFileSync(path.join(dataDir, 'data1.txt'), 'hello')
-     fs.writeFileSync(path.join(dataDir, 'data2.txt'), 'world')
- 
--    const result = getPluginDataSize(tempDir, 'test-plugin')
-+    const result = await getPluginDataSize(tempDir, 'test-plugin')
- 
-     chai.expect(result.hasData).to.equal(true)
-     chai.expect(result.fileCount).to.equal(3) // config + 2 data files
-     chai.expect(result.totalBytes).to.be.greaterThan(0)
-   })
- 
--  it('returns zero and hasData false for plugin with no data', () => {
--    const result = getPluginDataSize(tempDir, 'nonexistent-plugin')
-+  it('returns zero and hasData false for plugin with no data', async () => {
-+    const result = await getPluginDataSize(tempDir, 'nonexistent-plugin')
- 
-     chai.expect(result.hasData).to.equal(false)
-     chai.expect(result.fileCount).to.equal(0)
-     chai.expect(result.totalBytes).to.equal(0)
-   })
- 
--  it('handles config file only without data directory', () => {
-+  it('handles config file only without data directory', async () => {
-     const configDataDir = path.join(tempDir, 'plugin-config-data')
-     fs.mkdirSync(configDataDir, { recursive: true })
- 
-@@ -456,7 +366,7 @@ describe('getPluginDataSize', () => {
-       configContent
-     )
- 
--    const result = getPluginDataSize(tempDir, 'test-plugin')
-+    const result = await getPluginDataSize(tempDir, 'test-plugin')
- 
-     chai.expect(result.hasData).to.equal(true)
-     chai.expect(result.fileCount).to.equal(1)
