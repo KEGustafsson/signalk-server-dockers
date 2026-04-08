@@ -1,7 +1,7 @@
 From 319489424a3fb4cfdc5488337669f89c276e8b82 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Mon, 6 Apr 2026 22:56:13 +0000
-Subject: [PATCH 1/7] feat(appstore): add plugin removal confirmation with data
+Subject: [PATCH 1/8] feat(appstore): add plugin removal confirmation with data
  preservation option
 
 Replace browser confirm() dialog with a styled Bootstrap Modal that shows
@@ -590,7 +590,7 @@ index 1b352f9e8..193962578 100644
 From ba283f2a4f2d4e87e3992ff87e411d319d0a7560 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 7 Apr 2026 06:27:44 +0000
-Subject: [PATCH 2/7] fix(appstore): async filesystem ops, symlink safety, and
+Subject: [PATCH 2/8] fix(appstore): async filesystem ops, symlink safety, and
  cleanup
 
 - Convert getDirectorySize and getPluginDataSize to async using
@@ -921,7 +921,7 @@ index 193962578..1276a839c 100644
 From b497d41295b77bbd9050b7b57c94b0c460509f19 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Tue, 7 Apr 2026 07:42:31 +0000
-Subject: [PATCH 3/7] fix(admin-ui): change delete prompt slider to checkbox
+Subject: [PATCH 3/8] fix(admin-ui): change delete prompt slider to checkbox
  and update label
 
 https://claude.ai/code/session_015RBimNp4huM1jUWCHjGchN
@@ -955,7 +955,7 @@ index a3518ebb2..72e9c333b 100644
 From d608e188a86eefcea0ae89d1f3abba92a91d4e72 Mon Sep 17 00:00:00 2001
 From: KE Gustafsson <ke.gustafsson@gmail.com>
 Date: Tue, 7 Apr 2026 17:37:20 +0300
-Subject: [PATCH 4/7] fix: format
+Subject: [PATCH 4/8] fix: format
 
 ---
  .../views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx  | 3 ++-
@@ -979,7 +979,7 @@ index 72e9c333b..e2f486fdf 100644
 From 6620efbaaa940efb0af8ed5d90e65493725d5d51 Mon Sep 17 00:00:00 2001
 From: KE Gustafsson <ke.gustafsson@gmail.com>
 Date: Tue, 7 Apr 2026 17:49:05 +0300
-Subject: [PATCH 5/7] fix: issues raised by coderabbit
+Subject: [PATCH 5/8] fix: issues raised by coderabbit
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -1093,7 +1093,7 @@ index 976d23a96..6c2a76996 100644
 From 46589e9936e433a2d7eff8664f2172b7f34f1f56 Mon Sep 17 00:00:00 2001
 From: KE Gustafsson <ke.gustafsson@gmail.com>
 Date: Tue, 7 Apr 2026 17:52:16 +0300
-Subject: [PATCH 6/7] fix: remove comment raised by coerabbit
+Subject: [PATCH 6/8] fix: remove comment raised by coerabbit
 
 ---
  .../views/appstore/Grid/cell-renderers/ActionCellRenderer.tsx    | 1 -
@@ -1115,7 +1115,7 @@ index 81074a7ca..3941da87a 100644
 From fdffcbd21997e0ded6edd29475a0b36af0ba7351 Mon Sep 17 00:00:00 2001
 From: KE Gustafsson <ke.gustafsson@gmail.com>
 Date: Tue, 7 Apr 2026 17:57:35 +0300
-Subject: [PATCH 7/7] fix: issue raised by coderabbit
+Subject: [PATCH 7/8] fix: issue raised by coderabbit
 
 ---
  src/modules.ts | 2 +-
@@ -1134,3 +1134,112 @@ index 6c2a76996..4359152d5 100644
        const dirSize = await getDirectorySize(dataDir)
        totalBytes += dirSize.totalBytes
        fileCount += dirSize.fileCount
+
+From 8ab508d07305c990e74c841eb037374d7409c2d7 Mon Sep 17 00:00:00 2001
+From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
+Date: Wed, 8 Apr 2026 17:33:19 +0200
+Subject: [PATCH 8/8] refactor(modules): use get-folder-size for directory size
+ calculation (#65)
+
+Replace hand-rolled recursive directory walker in getPluginDataSize with
+the get-folder-size package, which correctly handles circular symlinks via
+inode tracking. Use readdir({ recursive: true }) for file counting.
+---
+ package.json   |  1 +
+ src/modules.ts | 64 +++++++++++++++++++++-----------------------------
+ 2 files changed, 28 insertions(+), 37 deletions(-)
+
+diff --git a/package.json b/package.json
+index c8112e023..5b684e99b 100644
+--- a/package.json
++++ b/package.json
+@@ -104,6 +104,7 @@
+     "express": "^4.21.2",
+     "express-rate-limit": "^8.2.1",
+     "file-timestamp-stream": "^2.1.2",
++    "get-folder-size": "^5.0.0",
+     "geolib": "^3.3.3",
+     "helmet": "^8.1.0",
+     "jose": "^6.1.0",
+diff --git a/src/modules.ts b/src/modules.ts
+index 4359152d5..162f7bc26 100644
+--- a/src/modules.ts
++++ b/src/modules.ts
+@@ -247,40 +247,6 @@ function cleanupAfterRemove(
+   }
+ }
+ 
+-async function getDirectorySize(dir: string): Promise<{
+-  totalBytes: number
+-  fileCount: number
+-}> {
+-  let totalBytes = 0
+-  let fileCount = 0
+-
+-  async function walk(d: string): Promise<void> {
+-    let entries
+-    try {
+-      entries = await fs.promises.readdir(d)
+-    } catch {
+-      return
+-    }
+-    for (const entry of entries) {
+-      try {
+-        const entryPath = path.join(d, entry)
+-        const stats = await fs.promises.lstat(entryPath)
+-        if (stats.isFile()) {
+-          totalBytes += stats.size
+-          fileCount++
+-        } else if (stats.isDirectory()) {
+-          await walk(entryPath)
+-        }
+-      } catch {
+-        // entry may have been removed between readdir and lstat
+-      }
+-    }
+-  }
+-
+-  await walk(dir)
+-  return { totalBytes, fileCount }
+-}
+-
+ async function getPluginDataSize(
+   configPath: string,
+   pluginId: string
+@@ -303,9 +269,33 @@ async function getPluginDataSize(
+   try {
+     const dirStats = await fs.promises.lstat(dataDir)
+     if (dirStats.isDirectory()) {
+-      const dirSize = await getDirectorySize(dataDir)
+-      totalBytes += dirSize.totalBytes
+-      fileCount += dirSize.fileCount
++      const { default: getFolderSize } = await import('get-folder-size')
++      totalBytes += await getFolderSize.loose(dataDir)
++
++      async function countFiles(d: string): Promise<number> {
++        let entries: string[]
++        try {
++          entries = await fs.promises.readdir(d)
++        } catch {
++          return 0
++        }
++        let count = 0
++        for (const entry of entries) {
++          try {
++            const stats = await fs.promises.lstat(path.join(d, entry))
++            if (stats.isFile()) {
++              count++
++            } else if (stats.isDirectory()) {
++              count += await countFiles(path.join(d, entry))
++            }
++          } catch {
++            // entry removed or inaccessible between readdir and lstat
++          }
++        }
++        return count
++      }
++
++      fileCount += await countFiles(dataDir)
+     }
+   } catch {
+     // directory does not exist or inaccessible
