@@ -1,8 +1,39 @@
+From 7f8e1b17905b826a27e15aa69ab5dfa142944f0c Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 18 Apr 2026 07:54:13 +0000
+Subject: [PATCH] refactor(mdns): replace dnssd2 and mdns-js with
+ @astronautlabs/mdns
+
+Consolidates advertising and discovery onto a single pure-TypeScript
+mDNS/DNS-SD implementation with no native dependencies. The previous
+optional native `mdns` fallback is no longer needed.
+---
+ package.json     |  3 +--
+ src/discovery.js | 26 ++++++++++++--------------
+ src/mdns.js      | 23 ++++++-----------------
+ 3 files changed, 19 insertions(+), 33 deletions(-)
+
 diff --git a/package.json b/package.json
-index 4181677..c7ce98c 100644
+index 48fe6a5e3..54a5bfa52 100644
 --- a/package.json
 +++ b/package.json
-@@ -112,7 +112,6 @@
+@@ -74,6 +74,7 @@
+   ],
+   "dependencies": {
+     "@assemblyscript/loader": "^0.28.9",
++    "@astronautlabs/mdns": "^1.0.10",
+     "@signalk/course-provider": "^1.0.0",
+     "@signalk/n2k-signalk": ">=4.1.0-beta",
+     "@signalk/nmea0183-signalk": "^3.0.0",
+@@ -98,7 +99,6 @@
+     "cookie-parser": "^1.4.7",
+     "cors": "^2.5.2",
+     "debug": "^4.3.3",
+-    "dnssd2": "1.0.0",
+     "errorhandler": "^1.3.0",
+     "esm-resolve": "^1.0.11",
+     "express": "^4.21.2",
+@@ -113,7 +113,6 @@
      "lodash": "^4.17.21",
      "marked": "^17.0.5",
      "mathjs": "^12.4.0",
@@ -11,7 +42,7 @@ index 4181677..c7ce98c 100644
      "moment": "^2.10.6",
      "morgan": "^1.5.0",
 diff --git a/src/discovery.js b/src/discovery.js
-index cd3631d..cdf0d33 100644
+index cd3631d45..f8ceb2acc 100644
 --- a/src/discovery.js
 +++ b/src/discovery.js
 @@ -18,7 +18,7 @@ import { createDebug } from './debug'
@@ -19,17 +50,17 @@ index cd3631d..cdf0d33 100644
  const canboatjs = require('@canboat/canboatjs')
  const dgram = require('dgram')
 -const mdns = require('mdns-js')
-+const dnssd = require('dnssd2')
++const { Browser } = require('@astronautlabs/mdns')
  const { networkInterfaces } = require('os')
  
  module.exports.runDiscovery = function (app) {
-@@ -196,28 +196,23 @@ module.exports.runDiscovery = function (app) {
+@@ -196,24 +196,16 @@ module.exports.runDiscovery = function (app) {
  
    function discoverSignalkWs(wsType) {
      try {
 -      mdns.excludeInterface('0.0.0.0')
 -      var browser = mdns.createBrowser(mdns.tcp('signalk-' + wsType))
-+      const browser = new dnssd.Browser(dnssd.tcp('signalk-' + wsType))
++      const browser = new Browser('_signalk-' + wsType + '._tcp')
  
 -      browser.on('ready', function onReady() {
 -        try {
@@ -39,64 +70,45 @@ index cd3631d..cdf0d33 100644
 -          debug('discoverSignalkWs:', err)
 -        }
 -      })
--
++      debug('looking for SignalK ' + wsType)
+ 
 -      browser.on('update', function onUpdate(data) {
-+      browser.on('serviceUp', (service) => {
++      browser.on('serviceUp', function onServiceUp(data) {
          try {
            if (
--            !isLocalIP(data.addresses[0]) &&
+             !isLocalIP(data.addresses[0]) &&
 -            Array.isArray(data.type) &&
 -            data.type[0].name === 'signalk-' + wsType &&
--            !findWSProvider(data.addresses[0], wsType, data.host, data.port)
-+            service.addresses &&
-+            service.addresses.length > 0 &&
-+            !isLocalIP(service.addresses[0]) &&
-+            !findWSProvider(
-+              service.addresses[0],
-+              wsType,
-+              service.host,
-+              service.port
-+            )
++            data.type &&
++            data.type.name === 'signalk-' + wsType &&
+             !findWSProvider(data.addresses[0], wsType, data.host, data.port)
            ) {
--            debug('discoverSignalkWs found data[' + wsType + ']:', data)
--            const providerId = `${wsType}-${data.host}:${data.port} (${data.addresses[0]})`
-+            debug('discoverSignalkWs found service[' + wsType + ']:', service)
-+            const providerId = `${wsType}-${service.host}:${service.port} (${service.addresses[0]})`
-             app.emit('discovered', {
-               id: providerId,
-               enabled: false,
-@@ -228,9 +223,9 @@ module.exports.runDiscovery = function (app) {
-                     type: 'SignalK',
-                     subOptions: {
-                       type: wsType,
--                      host: data.host,
--                      port: data.port,
--                      address: data.addresses[0],
-+                      host: service.host,
-+                      port: service.port,
-+                      address: service.addresses[0],
-                       providerId
-                     },
-                     providerId
-@@ -244,6 +239,13 @@ module.exports.runDiscovery = function (app) {
+             debug('discoverSignalkWs found data[' + wsType + ']:', data)
+@@ -244,6 +236,12 @@ module.exports.runDiscovery = function (app) {
          }
        })
  
 +      browser.on('error', (err) => {
-+        debug('discoverSignalkWs browser error:', err)
++        debug('discoverSignalkWs:', err)
 +      })
 +
-+      debug('looking for SignalK ' + wsType)
 +      browser.start()
 +
        setTimeout(() => {
          try {
            browser.stop()
 diff --git a/src/mdns.js b/src/mdns.js
-index 3d366b6..2c3ca80 100644
+index 679ad5395..130a4bf2c 100644
 --- a/src/mdns.js
 +++ b/src/mdns.js
-@@ -25,16 +25,6 @@ const ports = require('./ports')
+@@ -19,22 +19,12 @@
+ const _ = require('lodash')
+ import { createDebug } from './debug'
+ const debug = createDebug('signalk-server:mdns')
+-const dnssd = require('dnssd2')
++const { Advertisement } = require('@astronautlabs/mdns')
+ const ports = require('./ports')
+ 
  module.exports = function mdnsResponder(app) {
    const config = app.config
  
@@ -113,35 +125,43 @@ index 3d366b6..2c3ca80 100644
    if (typeof config.settings.mdns !== 'undefined' && !config.settings.mdns) {
      debug('Mdns disabled by configuration')
      return
-@@ -57,10 +47,10 @@ module.exports = function mdnsResponder(app) {
-
-   const types = []
+@@ -59,8 +49,8 @@ module.exports = function mdnsResponder(app) {
    types.push({
      type:
--      app.config.settings.ssl || app.config.isExternalSsl()
+       app.config.settings.ssl || app.config.isExternalSsl()
 -        ? mdns.tcp('https')
 -        : mdns.tcp('http'),
-+      app.config.settings.ssl || app.config.isExternalSsl()
-+        ? dnssd.tcp('https')
-+        : dnssd.tcp('http'),
++        ? '_https._tcp'
++        : '_http._tcp',
      port: ports.getExternalPort(app)
    })
  
-@@ -73,7 +63,7 @@ module.exports = function mdnsResponder(app) {
+@@ -76,7 +66,7 @@ module.exports = function mdnsResponder(app) {
          service.name.charAt(0) === '_'
        ) {
          types.push({
 -          type: mdns[service.type](service.name),
-+          type: dnssd[service.type](service.name),
++          type: `${service.name}._${service.type}`,
            port: service.port
          })
        } else {
-@@ -110,7 +100,7 @@ module.exports = function mdnsResponder(app) {
+@@ -89,7 +79,6 @@ module.exports = function mdnsResponder(app) {
+   }
+ 
+   const options = {
+-    txtRecord,
+     txt: txtRecord
+   }
+ 
+@@ -113,9 +102,9 @@ module.exports = function mdnsResponder(app) {
          ':' +
          type.port
      )
 -    const ad = new mdns.Advertisement(type.type, type.port, options)
-+    const ad = new dnssd.Advertisement(type.type, type.port, options)
++    const ad = new Advertisement(type.type, type.port, options)
      ad.on('error', (err) => {
-       console.log(type.type.name)
+-      console.log(type.type.name)
++      console.log(type.type)
        console.error(err)
+     })
+     ad.start()
