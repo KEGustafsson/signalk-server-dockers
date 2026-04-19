@@ -1,17 +1,28 @@
-From 7f8e1b17905b826a27e15aa69ab5dfa142944f0c Mon Sep 17 00:00:00 2001
-From: Claude <noreply@anthropic.com>
-Date: Sat, 18 Apr 2026 07:54:13 +0000
+From 7a00d86e7dcaa5d5b9060d1bb83bc47ecd2a3fe0 Mon Sep 17 00:00:00 2001
+From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
+Date: Sat, 18 Apr 2026 12:40:22 +0300
 Subject: [PATCH] refactor(mdns): replace dnssd2 and mdns-js with
- @astronautlabs/mdns
+ @astronautlabs/mdns (#67)
+
+* refactor(mdns): replace dnssd2 and mdns-js with @astronautlabs/mdns
 
 Consolidates advertising and discovery onto a single pure-TypeScript
 mDNS/DNS-SD implementation with no native dependencies. The previous
 optional native `mdns` fallback is no longer needed.
+
+* fix(mdns): strip trailing .local from configured hostname
+
+@astronautlabs/mdns appends the mDNS TLD (".local") to the hostname
+internally, so a configured external hostname already ending in ".local"
+(from EXTERNALHOST, proxy_host, or settings.hostname) would be
+advertised as "host.local.local" and make the SRV target unresolvable.
+Normalize by stripping a trailing dot and a trailing ".local" before
+passing the value to Advertisement.
 ---
  package.json     |  3 +--
  src/discovery.js | 26 ++++++++++++--------------
- src/mdns.js      | 23 ++++++-----------------
- 3 files changed, 19 insertions(+), 33 deletions(-)
+ src/mdns.js      | 28 ++++++++++------------------
+ 3 files changed, 23 insertions(+), 34 deletions(-)
 
 diff --git a/package.json b/package.json
 index 48fe6a5e3..54a5bfa52 100644
@@ -98,7 +109,7 @@ index cd3631d45..f8ceb2acc 100644
          try {
            browser.stop()
 diff --git a/src/mdns.js b/src/mdns.js
-index 679ad5395..130a4bf2c 100644
+index 679ad5395..f23922c77 100644
 --- a/src/mdns.js
 +++ b/src/mdns.js
 @@ -19,22 +19,12 @@
@@ -145,7 +156,7 @@ index 679ad5395..130a4bf2c 100644
            port: service.port
          })
        } else {
-@@ -89,7 +79,6 @@ module.exports = function mdnsResponder(app) {
+@@ -89,11 +79,13 @@ module.exports = function mdnsResponder(app) {
    }
  
    const options = {
@@ -153,7 +164,15 @@ index 679ad5395..130a4bf2c 100644
      txt: txtRecord
    }
  
-@@ -113,9 +102,9 @@ module.exports = function mdnsResponder(app) {
+-  const host = app.config.getExternalHostname()
++  const host = app.config
++    .getExternalHostname()
++    .replace(/\.$/, '')
++    .replace(/\.local$/i, '')
+ 
+   if (host !== require('os').hostname()) {
+     options.host = host
+@@ -113,9 +105,9 @@ module.exports = function mdnsResponder(app) {
          ':' +
          type.port
      )
