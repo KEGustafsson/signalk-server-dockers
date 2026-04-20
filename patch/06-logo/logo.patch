@@ -1,7 +1,8 @@
-From e46bf318cc626d1b024e6366d258f284bde66ad3 Mon Sep 17 00:00:00 2001
-From: Claude <noreply@anthropic.com>
-Date: Sun, 19 Apr 2026 21:25:41 +0000
-Subject: [PATCH] fix(admin-ui): restore logo loading broken by Vite 8 upgrade
+From 48e653ab0c2ead30da420b8a64981cf9154bde48 Mon Sep 17 00:00:00 2001
+From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
+Date: Mon, 20 Apr 2026 07:42:46 +0300
+Subject: [PATCH 1/2] fix(admin-ui): restore logo loading broken by Vite 8
+ upgrade (#73)
 
 Vite 8 (Rolldown) changed how CSS url() references to publicDir assets
 are rewritten. Previously (Vite 6) the SVG logos were moved to assets/
@@ -15,6 +16,8 @@ overrides are intercepted correctly, and add a static route at
 users regardless of custom logo configuration.
 
 https://claude.ai/code/session_01Kz91pM7tL72JhWDzRckbGz
+
+Co-authored-by: Claude <noreply@anthropic.com>
 ---
  src/serverroutes.ts | 22 ++++++++++++++++++++--
  1 file changed, 20 insertions(+), 2 deletions(-)
@@ -75,3 +78,26 @@ index 14c4f041b..243df7e25 100644
    // mount before the main /admin
    mountSwaggerUi(app, '/doc/openapi')
  
+
+From c6b05cd5a4d0a06822cbf381130e65644cb49156 Mon Sep 17 00:00:00 2001
+From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
+Date: Mon, 20 Apr 2026 08:35:33 +0300
+Subject: [PATCH 2/2] Update package.json
+
+---
+ packages/server-admin-ui/package.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/packages/server-admin-ui/package.json b/packages/server-admin-ui/package.json
+index 25d48dcdd..8ec4b2f69 100644
+--- a/packages/server-admin-ui/package.json
++++ b/packages/server-admin-ui/package.json
+@@ -78,7 +78,7 @@
+     "sass": "^1.81.0",
+     "simple-line-icons": "^2.5.5",
+     "typescript": "^5.7.2",
+-    "vite": "^8.0.3",
++    "vite": "8.0.8",
+     "vitest": "^4.1.2"
+   },
+   "scripts": {
