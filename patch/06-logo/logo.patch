@@ -78,26 +78,3 @@ index 14c4f041b..243df7e25 100644
    // mount before the main /admin
    mountSwaggerUi(app, '/doc/openapi')
  
-
-From c6b05cd5a4d0a06822cbf381130e65644cb49156 Mon Sep 17 00:00:00 2001
-From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
-Date: Mon, 20 Apr 2026 08:35:33 +0300
-Subject: [PATCH 2/2] Update package.json
-
----
- packages/server-admin-ui/package.json | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
-
-diff --git a/packages/server-admin-ui/package.json b/packages/server-admin-ui/package.json
-index 25d48dcdd..8ec4b2f69 100644
---- a/packages/server-admin-ui/package.json
-+++ b/packages/server-admin-ui/package.json
-@@ -78,7 +78,7 @@
-     "sass": "^1.81.0",
-     "simple-line-icons": "^2.5.5",
-     "typescript": "^5.7.2",
--    "vite": "^8.0.3",
-+    "vite": "8.0.8",
-     "vitest": "^4.1.2"
-   },
-   "scripts": {
