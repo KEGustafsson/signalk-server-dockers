@@ -1,0 +1,800 @@
+From 2ccdc738d7cf9524582f1babaa879b1efd19df80 Mon Sep 17 00:00:00 2001
+From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
+Date: Sun, 19 Apr 2026 23:22:42 +0300
+Subject: [PATCH 1/3] Claude/replace mdns libraries 7k tvp (#72)
+
+* refactor(mdns): replace dnssd2 and mdns-js with @astronautlabs/mdns
+
+Consolidates advertising and discovery onto a single pure-TypeScript
+mDNS/DNS-SD implementation with no native dependencies. The previous
+optional native `mdns` fallback is no longer needed.
+
+* fix(mdns): strip trailing .local from configured hostname
+
+@astronautlabs/mdns appends the mDNS TLD (".local") to the hostname
+internally, so a configured external hostname already ending in ".local"
+(from EXTERNALHOST, proxy_host, or settings.hostname) would be
+advertised as "host.local.local" and make the SRV target unresolvable.
+Normalize by stripping a trailing dot and a trailing ".local" before
+passing the value to Advertisement.
+---
+ package.json     |  3 +--
+ src/discovery.js | 26 ++++++++++++--------------
+ src/mdns.js      | 28 ++++++++++------------------
+ 3 files changed, 23 insertions(+), 34 deletions(-)
+
+diff --git a/package.json b/package.json
+index ace9256ab..324605bc1 100644
+--- a/package.json
++++ b/package.json
+@@ -74,6 +74,7 @@
+   ],
+   "dependencies": {
+     "@assemblyscript/loader": "^0.28.9",
++    "@astronautlabs/mdns": "^1.0.10",
+     "@signalk/course-provider": "^1.0.0",
+     "@signalk/n2k-signalk": ">=4.1.0-beta",
+     "@signalk/nmea0183-signalk": "^3.0.0",
+@@ -98,7 +99,6 @@
+     "cookie-parser": "^1.4.7",
+     "cors": "^2.5.2",
+     "debug": "^4.3.3",
+-    "dnssd2": "1.0.0",
+     "errorhandler": "^1.3.0",
+     "esm-resolve": "^1.0.11",
+     "express": "^4.21.2",
+@@ -113,7 +113,6 @@
+     "lodash": "^4.17.21",
+     "marked": "^17.0.5",
+     "mathjs": "^15.2.0",
+-    "mdns-js": "^1.0.3",
+     "minimist": "^1.2.8",
+     "moment": "^2.10.6",
+     "morgan": "^1.5.0",
+diff --git a/src/discovery.js b/src/discovery.js
+index cd3631d45..f8ceb2acc 100644
+--- a/src/discovery.js
++++ b/src/discovery.js
+@@ -18,7 +18,7 @@ import { createDebug } from './debug'
+ const debug = createDebug('signalk-server:discovery')
+ const canboatjs = require('@canboat/canboatjs')
+ const dgram = require('dgram')
+-const mdns = require('mdns-js')
++const { Browser } = require('@astronautlabs/mdns')
+ const { networkInterfaces } = require('os')
+ 
+ module.exports.runDiscovery = function (app) {
+@@ -196,24 +196,16 @@ module.exports.runDiscovery = function (app) {
+ 
+   function discoverSignalkWs(wsType) {
+     try {
+-      mdns.excludeInterface('0.0.0.0')
+-      var browser = mdns.createBrowser(mdns.tcp('signalk-' + wsType))
++      const browser = new Browser('_signalk-' + wsType + '._tcp')
+ 
+-      browser.on('ready', function onReady() {
+-        try {
+-          debug('looking for SignalK ' + wsType)
+-          browser.discover()
+-        } catch (err) {
+-          debug('discoverSignalkWs:', err)
+-        }
+-      })
++      debug('looking for SignalK ' + wsType)
+ 
+-      browser.on('update', function onUpdate(data) {
++      browser.on('serviceUp', function onServiceUp(data) {
+         try {
+           if (
+             !isLocalIP(data.addresses[0]) &&
+-            Array.isArray(data.type) &&
+-            data.type[0].name === 'signalk-' + wsType &&
++            data.type &&
++            data.type.name === 'signalk-' + wsType &&
+             !findWSProvider(data.addresses[0], wsType, data.host, data.port)
+           ) {
+             debug('discoverSignalkWs found data[' + wsType + ']:', data)
+@@ -244,6 +236,12 @@ module.exports.runDiscovery = function (app) {
+         }
+       })
+ 
++      browser.on('error', (err) => {
++        debug('discoverSignalkWs:', err)
++      })
++
++      browser.start()
++
+       setTimeout(() => {
+         try {
+           browser.stop()
+diff --git a/src/mdns.js b/src/mdns.js
+index 679ad5395..f23922c77 100644
+--- a/src/mdns.js
++++ b/src/mdns.js
+@@ -19,22 +19,12 @@
+ const _ = require('lodash')
+ import { createDebug } from './debug'
+ const debug = createDebug('signalk-server:mdns')
+-const dnssd = require('dnssd2')
++const { Advertisement } = require('@astronautlabs/mdns')
+ const ports = require('./ports')
+ 
+ module.exports = function mdnsResponder(app) {
+   const config = app.config
+ 
+-  let mdns = dnssd
+-
+-  try {
+-    mdns = require('mdns')
+-    debug('using  mdns')
+-  } catch (ex) {
+-    debug(ex)
+-    debug('mdns not found, using dnssd2')
+-  }
+-
+   if (typeof config.settings.mdns !== 'undefined' && !config.settings.mdns) {
+     debug('Mdns disabled by configuration')
+     return
+@@ -59,8 +49,8 @@ module.exports = function mdnsResponder(app) {
+   types.push({
+     type:
+       app.config.settings.ssl || app.config.isExternalSsl()
+-        ? mdns.tcp('https')
+-        : mdns.tcp('http'),
++        ? '_https._tcp'
++        : '_http._tcp',
+     port: ports.getExternalPort(app)
+   })
+ 
+@@ -76,7 +66,7 @@ module.exports = function mdnsResponder(app) {
+         service.name.charAt(0) === '_'
+       ) {
+         types.push({
+-          type: mdns[service.type](service.name),
++          type: `${service.name}._${service.type}`,
+           port: service.port
+         })
+       } else {
+@@ -89,11 +79,13 @@ module.exports = function mdnsResponder(app) {
+   }
+ 
+   const options = {
+-    txtRecord,
+     txt: txtRecord
+   }
+ 
+-  const host = app.config.getExternalHostname()
++  const host = app.config
++    .getExternalHostname()
++    .replace(/\.$/, '')
++    .replace(/\.local$/i, '')
+ 
+   if (host !== require('os').hostname()) {
+     options.host = host
+@@ -113,9 +105,9 @@ module.exports = function mdnsResponder(app) {
+         ':' +
+         type.port
+     )
+-    const ad = new mdns.Advertisement(type.type, type.port, options)
++    const ad = new Advertisement(type.type, type.port, options)
+     ad.on('error', (err) => {
+-      console.log(type.type.name)
++      console.log(type.type)
+       console.error(err)
+     })
+     ad.start()
+
+From 2ea380273afd09e60c812af3386df2159737bedc Mon Sep 17 00:00:00 2001
+From: KE Gustafsson <ke.gustafsson@gmail.com>
+Date: Tue, 21 Apr 2026 22:13:44 +0300
+Subject: [PATCH 2/3] fix(mdns): suppress non-fatal EADDRINUSE startup noise
+
+Patch @astronautlabs/mdns before Browser/Advertisement load so
+its bind-time addMembership EADDRINUSE log is suppressed.
+
+Keep other membership errors visible and add tests that reset the
+helper module cache so the patch test is isolated from prior loads.
+Per-file commit comments:
+
+src/mdnsPatch.ts (line 1): add a narrow patch for @astronautlabs/mdns that filters only bind-time EADDRINUSE membership noise and restores console.error afterward.
+src/mdns.js (line 20): apply the mDNS patch before loading Advertisement so startup advertising avoids the misleading upstream log.
+src/discovery.js (line 17): apply the same mDNS patch before loading Browser so discovery uses the patched bind path too.
+test/mdnsPatch.ts (line 1): add tests that suppress only EADDRINUSE, preserve other errors, and clear the helper module cache to avoid cross-test state leakage.
+---
+ src/discovery.js  |   2 +
+ src/mdns.js       |   2 +
+ src/mdnsPatch.ts  | 131 ++++++++++++++++++++++++++++++++++++++++++++++
+ test/mdnsPatch.ts | 123 +++++++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 258 insertions(+)
+ create mode 100644 src/mdnsPatch.ts
+ create mode 100644 test/mdnsPatch.ts
+
+diff --git a/src/discovery.js b/src/discovery.js
+index f8ceb2acc..d7e78857c 100644
+--- a/src/discovery.js
++++ b/src/discovery.js
+@@ -15,9 +15,11 @@
+  */
+ 
+ import { createDebug } from './debug'
++import { patchAstronautLabsMdns } from './mdnsPatch'
+ const debug = createDebug('signalk-server:discovery')
+ const canboatjs = require('@canboat/canboatjs')
+ const dgram = require('dgram')
++patchAstronautLabsMdns()
+ const { Browser } = require('@astronautlabs/mdns')
+ const { networkInterfaces } = require('os')
+ 
+diff --git a/src/mdns.js b/src/mdns.js
+index f23922c77..60bfdad88 100644
+--- a/src/mdns.js
++++ b/src/mdns.js
+@@ -18,7 +18,9 @@
+ 
+ const _ = require('lodash')
+ import { createDebug } from './debug'
++import { patchAstronautLabsMdns } from './mdnsPatch'
+ const debug = createDebug('signalk-server:mdns')
++patchAstronautLabsMdns()
+ const { Advertisement } = require('@astronautlabs/mdns')
+ const ports = require('./ports')
+ 
+diff --git a/src/mdnsPatch.ts b/src/mdnsPatch.ts
+new file mode 100644
+index 000000000..ceb493216
+--- /dev/null
++++ b/src/mdnsPatch.ts
+@@ -0,0 +1,131 @@
++import { createDebug } from './debug'
++
++const debug = createDebug('signalk-server:mdns-patch')
++const MEMBERSHIP_ERROR_PREFIX =
++  'Fatal error: Could not add membership to interface '
++
++type BindSocket = (this: unknown, ...args: unknown[]) => Promise<unknown>
++
++type PatchedBindSocket = BindSocket & {
++  __signalkPatched?: true
++}
++
++type NetworkInterfaceModule = {
++  NetworkInterface?: {
++    prototype?: {
++      _bindSocket?: PatchedBindSocket
++    }
++  }
++}
++
++let patchApplied = false
++let activeConsoleFilterCount = 0
++let restoreConsoleError: (() => void) | undefined
++
++function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
++  return error instanceof Error && 'code' in error
++}
++
++function isIgnorableMembershipError(args: unknown[]): boolean {
++  const [message, error] = args
++
++  return (
++    typeof message === 'string' &&
++    message.startsWith(MEMBERSHIP_ERROR_PREFIX) &&
++    isErrnoException(error) &&
++    error.code === 'EADDRINUSE'
++  )
++}
++
++function installConsoleFilter() {
++  activeConsoleFilterCount += 1
++
++  if (activeConsoleFilterCount > 1) {
++    return
++  }
++
++  const originalConsoleError = console.error
++
++  console.error = (...args: unknown[]) => {
++    if (isIgnorableMembershipError(args)) {
++      const address = (args[0] as string).slice(MEMBERSHIP_ERROR_PREFIX.length)
++      debug.enabled &&
++        debug(
++          `Ignoring @astronautlabs/mdns addMembership EADDRINUSE on ${address}`
++        )
++      return
++    }
++
++    originalConsoleError(...args)
++  }
++
++  restoreConsoleError = () => {
++    console.error = originalConsoleError
++    restoreConsoleError = undefined
++  }
++}
++
++function uninstallConsoleFilter() {
++  if (activeConsoleFilterCount === 0) {
++    return
++  }
++
++  activeConsoleFilterCount -= 1
++
++  if (activeConsoleFilterCount === 0) {
++    restoreConsoleError?.()
++  }
++}
++
++export function patchAstronautLabsMdns() {
++  if (patchApplied) {
++    return
++  }
++
++  let networkInterfaceModule: NetworkInterfaceModule
++
++  try {
++    // eslint-disable-next-line @typescript-eslint/no-require-imports
++    networkInterfaceModule = require('@astronautlabs/mdns/dist/NetworkInterface')
++  } catch (error) {
++    debug.enabled &&
++      debug(`Unable to patch @astronautlabs/mdns NetworkInterface: ${error}`)
++    return
++  }
++
++  const prototype = networkInterfaceModule.NetworkInterface?.prototype
++  const originalBindSocket = prototype?._bindSocket
++
++  if (typeof originalBindSocket !== 'function') {
++    debug.enabled &&
++      debug('Unable to patch @astronautlabs/mdns NetworkInterface._bindSocket')
++    return
++  }
++
++  if (originalBindSocket.__signalkPatched) {
++    patchApplied = true
++    return
++  }
++
++  const patchedBindSocket: PatchedBindSocket = function patchedBindSocket(
++    this: unknown,
++    ...args: unknown[]
++  ) {
++    installConsoleFilter()
++
++    try {
++      const result = originalBindSocket.apply(this, args)
++      return result.finally(() => {
++        uninstallConsoleFilter()
++      })
++    } catch (error) {
++      uninstallConsoleFilter()
++      throw error
++    }
++  }
++
++  patchedBindSocket.__signalkPatched = true
++  networkInterfaceModule.NetworkInterface!.prototype!._bindSocket =
++    patchedBindSocket
++  patchApplied = true
++}
+diff --git a/test/mdnsPatch.ts b/test/mdnsPatch.ts
+new file mode 100644
+index 000000000..7b2548d34
+--- /dev/null
++++ b/test/mdnsPatch.ts
+@@ -0,0 +1,123 @@
++import { expect } from 'chai'
++
++type LoadFn = (
++  request: string,
++  parent: NodeModule | null,
++  isMain: boolean
++) => unknown
++
++// eslint-disable-next-line @typescript-eslint/no-require-imports
++const Module = require('node:module') as typeof import('node:module') & {
++  _load: LoadFn
++}
++
++const helperModulePath = require.resolve('../dist/mdnsPatch.js')
++const networkInterfaceRequest = '@astronautlabs/mdns/dist/NetworkInterface'
++
++describe('patchAstronautLabsMdns', () => {
++  const originalLoad = Module._load
++
++  afterEach(() => {
++    Module._load = originalLoad
++    delete require.cache[helperModulePath]
++  })
++
++  function loadPatchedHelper(bindSocket: () => Promise<unknown>) {
++    class FakeNetworkInterface {}
++
++    ;(
++      FakeNetworkInterface.prototype as { _bindSocket: typeof bindSocket }
++    )._bindSocket = bindSocket
++
++    Module._load = ((request, parent, isMain) => {
++      if (request === networkInterfaceRequest) {
++        return { NetworkInterface: FakeNetworkInterface }
++      }
++
++      return originalLoad(request, parent, isMain)
++    }) as LoadFn
++
++    delete require.cache[helperModulePath]
++
++    // eslint-disable-next-line @typescript-eslint/no-require-imports
++    const { patchAstronautLabsMdns } = require('../dist/mdnsPatch.js') as {
++      patchAstronautLabsMdns: () => void
++    }
++
++    patchAstronautLabsMdns()
++
++    return FakeNetworkInterface
++  }
++
++  it('suppresses @astronautlabs/mdns EADDRINUSE membership noise', async () => {
++    const logged: unknown[][] = []
++    const originalConsoleError = console.error
++
++    console.error = (...args: unknown[]) => {
++      logged.push(args)
++    }
++
++    try {
++      const ignoredError = new Error(
++        'addMembership EADDRINUSE'
++      ) as NodeJS.ErrnoException
++      ignoredError.code = 'EADDRINUSE'
++
++      const FakeNetworkInterface = loadPatchedHelper(async () => {
++        console.error(
++          'Fatal error: Could not add membership to interface 192.168.0.148',
++          ignoredError
++        )
++        console.error('should still be logged')
++      })
++
++      await (
++        FakeNetworkInterface.prototype as {
++          _bindSocket: () => Promise<unknown>
++        }
++      )._bindSocket()
++
++      expect(logged).to.have.length(1)
++      expect(logged[0][0]).to.equal('should still be logged')
++    } finally {
++      console.error = originalConsoleError
++    }
++  })
++
++  it('leaves other membership errors visible', async () => {
++    const logged: unknown[][] = []
++    const originalConsoleError = console.error
++
++    console.error = (...args: unknown[]) => {
++      logged.push(args)
++    }
++
++    try {
++      const visibleError = new Error(
++        'addMembership EACCES'
++      ) as NodeJS.ErrnoException
++      visibleError.code = 'EACCES'
++
++      const FakeNetworkInterface = loadPatchedHelper(async () => {
++        console.error(
++          'Fatal error: Could not add membership to interface 192.168.0.148',
++          visibleError
++        )
++      })
++
++      await (
++        FakeNetworkInterface.prototype as {
++          _bindSocket: () => Promise<unknown>
++        }
++      )._bindSocket()
++
++      expect(logged).to.have.length(1)
++      expect(logged[0][0]).to.equal(
++        'Fatal error: Could not add membership to interface 192.168.0.148'
++      )
++      expect(logged[0][1]).to.equal(visibleError)
++    } finally {
++      console.error = originalConsoleError
++    }
++  })
++})
+
+From a883b9b14f27fae80dc97bb6b706fe135668d3ae Mon Sep 17 00:00:00 2001
+From: KE Gustafsson <ke.gustafsson@gmail.com>
+Date: Tue, 21 Apr 2026 23:30:24 +0300
+Subject: [PATCH 3/3] fix(mdns): avoid double-stop and wrapper clobbering
+
+Restore console.error only when the mdns patch wrapper is still installed,
+so later wrappers are not overwritten during cleanup.
+
+Skip the delayed Browser.stop() after Browser._onError() has already stopped
+the browser, avoiding redundant stopUsing() calls on the network interface.
+---
+ src/discovery.js  |   7 ++
+ src/mdnsPatch.ts  |   8 ++-
+ test/discovery.ts | 168 ++++++++++++++++++++++++++++++++++++++++++++++
+ test/mdnsPatch.ts |  32 +++++++++
+ 4 files changed, 213 insertions(+), 2 deletions(-)
+ create mode 100644 test/discovery.ts
+
+diff --git a/src/discovery.js b/src/discovery.js
+index d7e78857c..8ecf3f420 100644
+--- a/src/discovery.js
++++ b/src/discovery.js
+@@ -199,6 +199,7 @@ module.exports.runDiscovery = function (app) {
+   function discoverSignalkWs(wsType) {
+     try {
+       const browser = new Browser('_signalk-' + wsType + '._tcp')
++      let browserStopped = false
+ 
+       debug('looking for SignalK ' + wsType)
+ 
+@@ -239,6 +240,7 @@ module.exports.runDiscovery = function (app) {
+       })
+ 
+       browser.on('error', (err) => {
++        browserStopped = true
+         debug('discoverSignalkWs:', err)
+       })
+ 
+@@ -246,6 +248,11 @@ module.exports.runDiscovery = function (app) {
+ 
+       setTimeout(() => {
+         try {
++          if (browserStopped) {
++            return
++          }
++
++          browserStopped = true
+           browser.stop()
+           debug('discoverSignalkWs close')
+         } catch (err) {
+diff --git a/src/mdnsPatch.ts b/src/mdnsPatch.ts
+index ceb493216..de4480d4d 100644
+--- a/src/mdnsPatch.ts
++++ b/src/mdnsPatch.ts
+@@ -46,7 +46,7 @@ function installConsoleFilter() {
+ 
+   const originalConsoleError = console.error
+ 
+-  console.error = (...args: unknown[]) => {
++  const wrappedConsoleError: typeof console.error = (...args: unknown[]) => {
+     if (isIgnorableMembershipError(args)) {
+       const address = (args[0] as string).slice(MEMBERSHIP_ERROR_PREFIX.length)
+       debug.enabled &&
+@@ -59,8 +59,12 @@ function installConsoleFilter() {
+     originalConsoleError(...args)
+   }
+ 
++  console.error = wrappedConsoleError
++
+   restoreConsoleError = () => {
+-    console.error = originalConsoleError
++    if (console.error === wrappedConsoleError) {
++      console.error = originalConsoleError
++    }
+     restoreConsoleError = undefined
+   }
+ }
+diff --git a/test/discovery.ts b/test/discovery.ts
+new file mode 100644
+index 000000000..bde90f580
+--- /dev/null
++++ b/test/discovery.ts
+@@ -0,0 +1,168 @@
++import { expect } from 'chai'
++import { EventEmitter } from 'node:events'
++import { createRequire } from 'node:module'
++
++type LoadFn = (
++  request: string,
++  parent: NodeModule | null,
++  isMain: boolean
++) => unknown
++
++type App = {
++  config: {
++    settings: {
++      pipedProviders: unknown[]
++    }
++  }
++  emit: (event: string, payload: unknown) => void
++}
++
++type DiscoveryModule = {
++  runDiscovery: (app: App) => void
++}
++
++const require = createRequire(import.meta.url)
++const Module = require('node:module') as typeof import('node:module') & {
++  _load: LoadFn
++}
++
++const discoveryModulePath = require.resolve('../dist/discovery.js')
++
++class FakeBrowser extends EventEmitter {
++  static instances: FakeBrowser[] = []
++
++  readonly serviceType: string
++  stopCallCount = 0
++
++  constructor(serviceType: string) {
++    super()
++    this.serviceType = serviceType
++    FakeBrowser.instances.push(this)
++  }
++
++  start() {
++    return this
++  }
++
++  stop() {
++    this.stopCallCount += 1
++    return this
++  }
++
++  fail(error: Error) {
++    this.stop()
++    this.emit('error', error)
++  }
++}
++
++class FakeSocket {
++  on(_event: string, _handler: (...args: unknown[]) => void) {
++    return this
++  }
++
++  bind(...args: unknown[]) {
++    const callback = args.find(
++      (arg): arg is () => void => typeof arg === 'function'
++    )
++
++    callback?.()
++    return this
++  }
++
++  addMembership(_address: string) {}
++
++  close() {}
++}
++
++describe('runDiscovery', () => {
++  const originalLoad = Module._load
++  const originalSetTimeout = global.setTimeout
++
++  afterEach(() => {
++    Module._load = originalLoad
++    global.setTimeout = originalSetTimeout
++    FakeBrowser.instances = []
++    delete require.cache[discoveryModulePath]
++  })
++
++  it('does not stop a browser twice after an internal error stop', () => {
++    const scheduledCallbacks: Array<() => void> = []
++
++    global.setTimeout = ((...args: unknown[]) => {
++      const callback = args[0]
++
++      if (typeof callback === 'function') {
++        scheduledCallbacks.push(callback)
++      }
++
++      return 0 as ReturnType<typeof setTimeout>
++    }) as unknown as typeof setTimeout
++
++    Module._load = ((request, parent, isMain) => {
++      if (request === '@astronautlabs/mdns') {
++        return { Browser: FakeBrowser }
++      }
++
++      if (request === '@canboat/canboatjs') {
++        return {}
++      }
++
++      if (request === 'dgram') {
++        return {
++          createSocket: () => new FakeSocket()
++        }
++      }
++
++      if (request === 'os') {
++        return {
++          networkInterfaces: () => ({})
++        }
++      }
++
++      if (request === './mdnsPatch') {
++        return {
++          patchAstronautLabsMdns: () => {}
++        }
++      }
++
++      return originalLoad(request, parent, isMain)
++    }) as LoadFn
++
++    delete require.cache[discoveryModulePath]
++
++    // eslint-disable-next-line @typescript-eslint/no-require-imports
++    const { runDiscovery } = require('../dist/discovery.js') as DiscoveryModule
++
++    const app: App = {
++      config: {
++        settings: {
++          pipedProviders: []
++        }
++      },
++      emit: () => {}
++    }
++
++    runDiscovery(app)
++
++    expect(FakeBrowser.instances).to.have.length(2)
++
++    const wsBrowser = FakeBrowser.instances.find(
++      (browser) => browser.serviceType === '_signalk-ws._tcp'
++    )
++    const wssBrowser = FakeBrowser.instances.find(
++      (browser) => browser.serviceType === '_signalk-wss._tcp'
++    )
++
++    expect(wsBrowser).to.not.equal(undefined)
++    expect(wssBrowser).to.not.equal(undefined)
++
++    wsBrowser?.fail(new Error('synthetic browser failure'))
++
++    scheduledCallbacks.forEach((callback) => {
++      callback()
++    })
++
++    expect(wsBrowser?.stopCallCount).to.equal(1)
++    expect(wssBrowser?.stopCallCount).to.equal(1)
++  })
++})
+diff --git a/test/mdnsPatch.ts b/test/mdnsPatch.ts
+index 7b2548d34..2423e2a1f 100644
+--- a/test/mdnsPatch.ts
++++ b/test/mdnsPatch.ts
+@@ -120,4 +120,36 @@ describe('patchAstronautLabsMdns', () => {
+       console.error = originalConsoleError
+     }
+   })
++
++  it('does not clobber a later console.error wrapper on uninstall', async () => {
++    const originalConsoleError = console.error
++    const logged: unknown[][] = []
++    const laterConsoleError: typeof console.error = (...args: unknown[]) => {
++      logged.push(args)
++    }
++
++    console.error = (...args: unknown[]) => {
++      logged.push(['original', ...args])
++    }
++
++    try {
++      const FakeNetworkInterface = loadPatchedHelper(async () => {
++        console.error = laterConsoleError
++      })
++
++      await (
++        FakeNetworkInterface.prototype as {
++          _bindSocket: () => Promise<unknown>
++        }
++      )._bindSocket()
++
++      expect(console.error).to.equal(laterConsoleError)
++
++      console.error('still wrapped')
++
++      expect(logged).to.deep.equal([['still wrapped']])
++    } finally {
++      console.error = originalConsoleError
++    }
++  })
+ })
