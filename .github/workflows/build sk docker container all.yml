@@ -162,10 +162,10 @@ jobs:
             fi
             if [[ "${{ github.event.inputs.build_ubuntu_2604 }}" == "true" ]]; then
               if [[ "${{ github.event.inputs.build_node_22 }}" == "true" ]]; then
-                echo "ubuntu_26_22=$(generate_tags 'ubuntu26' '22.x')" >> $GITHUB_OUTPUT
+                echo "ubuntu_26_22=$(generate_tags 'ubuntu-26.04' '22.x')" >> $GITHUB_OUTPUT
               fi
               if [[ "${{ github.event.inputs.build_node_24 }}" == "true" ]]; then
-                echo "ubuntu_26_24=$(generate_tags 'ubuntu26' '24.x')" >> $GITHUB_OUTPUT
+                echo "ubuntu_26_24=$(generate_tags 'ubuntu-26.04' '24.x')" >> $GITHUB_OUTPUT
               fi
             fi
           fi
@@ -233,14 +233,14 @@ jobs:
           - vm: ubuntu-latest
             arch: amd64
             os: '26.04'
-            os_label: ubuntu26
+            os_label: ubuntu-26.04
             node: '22.x'
             platform: linux/amd64
             enabled: ${{ github.event.inputs.build_node_22 }}
           - vm: ubuntu-latest
             arch: amd64
             os: '26.04'
-            os_label: ubuntu26
+            os_label: ubuntu-26.04
             node: '24.x'
             platform: linux/amd64
             enabled: ${{ github.event.inputs.build_node_24 }}
@@ -248,14 +248,14 @@ jobs:
           - vm: ubuntu-24.04-arm
             arch: arm64
             os: '26.04'
-            os_label: ubuntu26
+            os_label: ubuntu-26.04
             node: '22.x'
             platform: linux/arm64,linux/arm/v7
             enabled: ${{ github.event.inputs.build_node_22 }}
           - vm: ubuntu-24.04-arm
             arch: arm64
             os: '26.04'
-            os_label: ubuntu26
+            os_label: ubuntu-26.04
             node: '24.x'
             platform: linux/arm64
             enabled: ${{ github.event.inputs.build_node_24 }}
@@ -266,7 +266,7 @@ jobs:
         run: |
           node_enabled="${{ matrix.enabled }}"
           ubuntu26_enabled="true"
-          if [[ "${{ matrix.os_label }}" == "ubuntu26" ]]; then
+          if [[ "${{ matrix.os_label }}" == "ubuntu-26.04" ]]; then
             ubuntu26_enabled="${{ github.event.inputs.build_ubuntu_2604 }}"
           fi
           if [[ "$node_enabled" != "true" || "$ubuntu26_enabled" != "true" ]]; then
@@ -478,14 +478,14 @@ jobs:
             short_tag2: latest-22.x
             enabled: ${{ github.event.inputs.build_node_22 }}
           - node: '24.x'
-            os_label: ubuntu26
-            short_tag: latest-ubuntu26
-            short_tag2: latest-ubuntu26-24.x
+            os_label: ubuntu-26.04
+            short_tag: latest-ubuntu-26.04
+            short_tag2: latest-ubuntu-26.04-24.x
             enabled: ${{ github.event.inputs.build_node_24 }}
           - node: '22.x'
-            os_label: ubuntu26
-            short_tag: latest-ubuntu26-22.x
-            short_tag2: latest-ubuntu26-22.x
+            os_label: ubuntu-26.04
+            short_tag: latest-ubuntu-26.04-22.x
+            short_tag2: latest-ubuntu-26.04-22.x
             enabled: ${{ github.event.inputs.build_node_22 }}
     steps:
       - name: Check if build is enabled
@@ -493,7 +493,7 @@ jobs:
         run: |
           node_enabled="${{ matrix.enabled }}"
           ubuntu26_enabled="true"
-          if [[ "${{ matrix.os_label }}" == "ubuntu26" ]]; then
+          if [[ "${{ matrix.os_label }}" == "ubuntu-26.04" ]]; then
             ubuntu26_enabled="${{ github.event.inputs.build_ubuntu_2604 }}"
           fi
           if [[ "$node_enabled" != "true" || "$ubuntu26_enabled" != "true" ]]; then
@@ -518,7 +518,7 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         id: ghcr_tags
         run: |
-          if [[ "${{ matrix.os_label }}" == "ubuntu26" ]]; then
+          if [[ "${{ matrix.os_label }}" == "ubuntu-26.04" ]]; then
             if [[ "${{ matrix.node }}" == "24.x" ]]; then
               TAGS="${{ needs.generate-tags.outputs.ubuntu_26_24 }}"
             else
@@ -773,14 +773,14 @@ jobs:
             short_tag: latest
             tags_output: ubuntu_24
             enabled: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' && github.event.inputs.build_node_24 == 'true' }}
-          - os: ubuntu26
+          - os: ubuntu-26.04
             node: '22.x'
-            short_tag: latest-ubuntu26-22.x
+            short_tag: latest-ubuntu-26.04-22.x
             tags_output: ubuntu_26_22
             enabled: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' && github.event.inputs.build_ubuntu_2604 == 'true' && github.event.inputs.build_node_22 == 'true' }}
-          - os: ubuntu26
+          - os: ubuntu-26.04
             node: '24.x'
-            short_tag: latest-ubuntu26
+            short_tag: latest-ubuntu-26.04
             tags_output: ubuntu_26_24
             enabled: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' && github.event.inputs.build_ubuntu_2604 == 'true' && github.event.inputs.build_node_24 == 'true' }}
           - os: alpine
