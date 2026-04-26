@@ -32,7 +32,7 @@ jobs:
     if: ${{ github.event.inputs.ubuntu == 'true' }}
     strategy:
       matrix:
-        os: [24.04]
+        os: [24.04, 26.04]
         node: [22.x, 24.x]
 #        exclude:
 #          - node: 22.x
@@ -216,7 +216,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [24.04]
+        os: [24.04, 26.04]
         node: [22.x, 24.x]
 #        exclude:
 #          - node: 22.x
@@ -245,7 +245,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        os: [24.04]
+        os: [24.04, 26.04]
         node: [22.x, 24.x]
 #        exclude:
 #          - node: 22.x
