@@ -15,6 +15,10 @@ on:
         description: 'Build Debian docker image'
         type: boolean
         default: false
+      build_ubuntu_2604:
+        description: 'Build Ubuntu 26.04 docker image'
+        type: boolean
+        default: false
       build_node_22:
         description: 'Build Node.js 22 images'
         type: boolean
@@ -107,6 +111,8 @@ jobs:
     outputs:
       ubuntu_22: ${{ steps.tags.outputs.ubuntu_22 }}
       ubuntu_24: ${{ steps.tags.outputs.ubuntu_24 }}
+      ubuntu_26_22: ${{ steps.tags.outputs.ubuntu_26_22 }}
+      ubuntu_26_24: ${{ steps.tags.outputs.ubuntu_26_24 }}
       alpine_22: ${{ steps.tags.outputs.alpine_22 }}
       alpine_24: ${{ steps.tags.outputs.alpine_24 }}
       debian_22: ${{ steps.tags.outputs.debian_22 }}
@@ -154,8 +160,16 @@ jobs:
             if [[ "${{ github.event.inputs.build_node_24 }}" == "true" ]]; then
               echo "ubuntu_24=$(generate_tags 'ubuntu' '24.x')" >> $GITHUB_OUTPUT
             fi
+            if [[ "${{ github.event.inputs.build_ubuntu_2604 }}" == "true" ]]; then
+              if [[ "${{ github.event.inputs.build_node_22 }}" == "true" ]]; then
+                echo "ubuntu_26_22=$(generate_tags 'ubuntu-26.04' '22.x')" >> $GITHUB_OUTPUT
+              fi
+              if [[ "${{ github.event.inputs.build_node_24 }}" == "true" ]]; then
+                echo "ubuntu_26_24=$(generate_tags 'ubuntu-26.04' '24.x')" >> $GITHUB_OUTPUT
+              fi
+            fi
           fi
-          
+
           if [[ "${{ github.event.inputs.build_docker_tags_alpine }}" == "true" ]]; then
             if [[ "${{ github.event.inputs.build_node_22 }}" == "true" ]]; then
               echo "alpine_22=$(generate_tags 'alpine' '22')" >> $GITHUB_OUTPUT
@@ -185,25 +199,63 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # AMD64 builds for both node versions
+          # Ubuntu 24.04 AMD64 builds
           - vm: ubuntu-latest
             arch: amd64
+            os: '24.04'
+            os_label: ubuntu
             node: '22.x'
             platform: linux/amd64
             enabled: ${{ github.event.inputs.build_node_22 }}
           - vm: ubuntu-latest
             arch: amd64
+            os: '24.04'
+            os_label: ubuntu
             node: '24.x'
             platform: linux/amd64
             enabled: ${{ github.event.inputs.build_node_24 }}
-          # ARM builds (22.x supports armv7, 24.x only arm64)
+          # Ubuntu 24.04 ARM builds (22.x supports armv7, 24.x only arm64)
           - vm: ubuntu-24.04-arm
             arch: arm64
+            os: '24.04'
+            os_label: ubuntu
             node: '22.x'
             platform: linux/arm64,linux/arm/v7
             enabled: ${{ github.event.inputs.build_node_22 }}
           - vm: ubuntu-24.04-arm
             arch: arm64
+            os: '24.04'
+            os_label: ubuntu
+            node: '24.x'
+            platform: linux/arm64
+            enabled: ${{ github.event.inputs.build_node_24 }}
+          # Ubuntu 26.04 AMD64 builds
+          - vm: ubuntu-latest
+            arch: amd64
+            os: '26.04'
+            os_label: ubuntu-26.04
+            node: '22.x'
+            platform: linux/amd64
+            enabled: ${{ github.event.inputs.build_node_22 }}
+          - vm: ubuntu-latest
+            arch: amd64
+            os: '26.04'
+            os_label: ubuntu-26.04
+            node: '24.x'
+            platform: linux/amd64
+            enabled: ${{ github.event.inputs.build_node_24 }}
+          # Ubuntu 26.04 ARM builds (22.x supports armv7, 24.x only arm64)
+          - vm: ubuntu-24.04-arm
+            arch: arm64
+            os: '26.04'
+            os_label: ubuntu-26.04
+            node: '22.x'
+            platform: linux/arm64,linux/arm/v7
+            enabled: ${{ github.event.inputs.build_node_22 }}
+          - vm: ubuntu-24.04-arm
+            arch: arm64
+            os: '26.04'
+            os_label: ubuntu-26.04
             node: '24.x'
             platform: linux/arm64
             enabled: ${{ github.event.inputs.build_node_24 }}
@@ -212,7 +264,12 @@ jobs:
       - name: Check if build is enabled
         id: check
         run: |
-          if [[ "${{ matrix.enabled }}" != "true" ]]; then
+          node_enabled="${{ matrix.enabled }}"
+          ubuntu26_enabled="true"
+          if [[ "${{ matrix.os_label }}" == "ubuntu-26.04" ]]; then
+            ubuntu26_enabled="${{ github.event.inputs.build_ubuntu_2604 }}"
+          fi
+          if [[ "$node_enabled" != "true" || "$ubuntu26_enabled" != "true" ]]; then
             echo "skip=true" >> $GITHUB_OUTPUT
           else
             echo "skip=false" >> $GITHUB_OUTPUT
@@ -245,9 +302,9 @@ jobs:
           provenance: true
           sbom: true
           tags: |
-            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.arch }}-ubuntu-${{ matrix.node }}-${{ github.sha }}
+            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.arch }}-${{ matrix.os_label }}-${{ matrix.node }}-${{ github.sha }}
           build-args: |
-            BASE_IMAGE=24.04-${{ matrix.node }}
+            BASE_IMAGE=${{ matrix.os }}-${{ matrix.node }}
 
   build-alpine-images:
     name: Build Alpine image
@@ -409,21 +466,37 @@ jobs:
       packages: write  # Required for GITHUB_TOKEN to push to GHCR
     strategy:
       matrix:
-        node: ['22.x', '24.x']
         include:
           - node: '24.x'
+            os_label: ubuntu
             short_tag: latest
             short_tag2: latest-24.x
             enabled: ${{ github.event.inputs.build_node_24 }}
           - node: '22.x'
+            os_label: ubuntu
             short_tag: latest-22.x
             short_tag2: latest-22.x
+            enabled: ${{ github.event.inputs.build_node_22 }}
+          - node: '24.x'
+            os_label: ubuntu-26.04
+            short_tag: latest-ubuntu-26.04
+            short_tag2: latest-ubuntu-26.04-24.x
+            enabled: ${{ github.event.inputs.build_node_24 }}
+          - node: '22.x'
+            os_label: ubuntu-26.04
+            short_tag: latest-ubuntu-26.04-22.x
+            short_tag2: latest-ubuntu-26.04-22.x
             enabled: ${{ github.event.inputs.build_node_22 }}
     steps:
       - name: Check if build is enabled
         id: check
         run: |
-          if [[ "${{ matrix.enabled }}" != "true" ]]; then
+          node_enabled="${{ matrix.enabled }}"
+          ubuntu26_enabled="true"
+          if [[ "${{ matrix.os_label }}" == "ubuntu-26.04" ]]; then
+            ubuntu26_enabled="${{ github.event.inputs.build_ubuntu_2604 }}"
+          fi
+          if [[ "$node_enabled" != "true" || "$ubuntu26_enabled" != "true" ]]; then
             echo "skip=true" >> $GITHUB_OUTPUT
           else
             echo "skip=false" >> $GITHUB_OUTPUT
@@ -445,7 +518,15 @@ jobs:
         if: steps.check.outputs.skip != 'true'
         id: ghcr_tags
         run: |
-          TAGS="${{ matrix.node == '24.x' && needs.generate-tags.outputs.ubuntu_24 || needs.generate-tags.outputs.ubuntu_22 }}"
+          if [[ "${{ matrix.os_label }}" == "ubuntu-26.04" ]]; then
+            if [[ "${{ matrix.node }}" == "24.x" ]]; then
+              TAGS="${{ needs.generate-tags.outputs.ubuntu_26_24 }}"
+            else
+              TAGS="${{ needs.generate-tags.outputs.ubuntu_26_22 }}"
+            fi
+          else
+            TAGS="${{ matrix.node == '24.x' && needs.generate-tags.outputs.ubuntu_24 || needs.generate-tags.outputs.ubuntu_22 }}"
+          fi
           {
             echo 'IMAGES<<EOF'
             echo "$TAGS" | tr ',' '\n' | grep "^${{ env.GHCR_REGISTRY }}/"
@@ -456,11 +537,11 @@ jobs:
         run: |
           set -euo pipefail
           echo "Waiting for build jobs to complete and images to be available..."
-          
+
           for arch in amd64 arm64; do
-            image="${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${arch}-ubuntu-${{ matrix.node }}-${{ github.sha }}"
+            image="${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${arch}-${{ matrix.os_label }}-${{ matrix.node }}-${{ github.sha }}"
             echo "Checking: $image"
-            
+
             for i in {1..60}; do
               if docker manifest inspect "$image" > /dev/null 2>&1; then
                 echo "✓ Image available: $image"
@@ -488,8 +569,8 @@ jobs:
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.short_tag }}
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.short_tag2 }}
           sources: |
-            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:amd64-ubuntu-${{ matrix.node }}-${{ github.sha }}
-            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:arm64-ubuntu-${{ matrix.node }}-${{ github.sha }}
+            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:amd64-${{ matrix.os_label }}-${{ matrix.node }}-${{ github.sha }}
+            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:arm64-${{ matrix.os_label }}-${{ matrix.node }}-${{ github.sha }}
 
   create-alpine-manifest:
     name: Alpine manifest
@@ -692,6 +773,16 @@ jobs:
             short_tag: latest
             tags_output: ubuntu_24
             enabled: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' && github.event.inputs.build_node_24 == 'true' }}
+          - os: ubuntu-26.04
+            node: '22.x'
+            short_tag: latest-ubuntu-26.04-22.x
+            tags_output: ubuntu_26_22
+            enabled: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' && github.event.inputs.build_ubuntu_2604 == 'true' && github.event.inputs.build_node_22 == 'true' }}
+          - os: ubuntu-26.04
+            node: '24.x'
+            short_tag: latest-ubuntu-26.04
+            tags_output: ubuntu_26_24
+            enabled: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' && github.event.inputs.build_ubuntu_2604 == 'true' && github.event.inputs.build_node_24 == 'true' }}
           - os: alpine
             node: '22'
             short_tag: latest-alpine-22
