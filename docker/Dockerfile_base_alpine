@@ -10,7 +10,7 @@ RUN apk add --no-cache \
     sudo git bash \
     python3 py3-virtualenv py3-pip build-base \
     avahi avahi-compat-libdns_sd \
-    procps-ng nano curl libcap-setcap dbus bluez \
+    procps-ng nano curl libcap-setcap dbus bluez tini \
  && addgroup -g 991 -S docker \
  && addgroup -g 990 -S i2c \
  && addgroup -g 989 -S spi \
