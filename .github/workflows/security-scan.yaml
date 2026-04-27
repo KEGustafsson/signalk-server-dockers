@@ -17,7 +17,7 @@ jobs:
         node-version: ['22.x', '24.x']
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Run Trivy vulnerability scanner for Node ${{ matrix.node-version }}
         uses: aquasecurity/trivy-action@0.33.1
         with:
