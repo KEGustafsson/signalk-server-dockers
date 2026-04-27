@@ -293,7 +293,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}  # ✅ Replaced GHCR_USERNAME + GHCR_TOKEN
       - name: Build and push
         if: steps.check.outputs.skip != 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile_user
@@ -368,7 +368,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}  # ✅ Replaced GHCR_USERNAME + GHCR_TOKEN
       - name: Build and push
         if: steps.check.outputs.skip != 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile_user
@@ -443,7 +443,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}  # ✅ Replaced GHCR_USERNAME + GHCR_TOKEN
       - name: Build and push
         if: steps.check.outputs.skip != 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile_user
