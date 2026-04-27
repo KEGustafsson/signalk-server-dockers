@@ -121,67 +121,10 @@ jobs:
               echo "proceed=false" >> $GITHUB_OUTPUT
           fi
 
-  specification:
-    name: Specification
-    needs: [check-new-v-tags]
-    if: ${{ needs.check-new-v-tags.outputs.proceed == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Node setup
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24.x'
-      - name: specification
-        run: |
-          git clone https://github.com/SignalK/specification.git
-          cd specification
-          npm i
-          npm pack
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v6
-        with:
-          retention-days: 1
-          name: specification
-          path: |
-            ./specification/*.tgz
-
-  nmea0183-signalk:
-    name: nmea0183 Signal K
-    needs: [specification]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Node setup
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24.x'
-      - uses: actions/download-artifact@v7
-        with:
-          name: specification
-      - name: nmea0183-signalk
-        run: |
-          git clone https://github.com/SignalK/nmea0183-signalk.git
-          cd nmea0183-signalk
-          mv ../*.tgz .
-          npm i --save *.tgz
-          rm -rf node_modules
-          rm -f package-lock.json
-          rm -f *.tgz
-          npm pack
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v6
-        with:
-          retention-days: 1
-          name: nmea0183-signalk
-          path: |
-            ./nmea0183-signalk/*.tgz
-
   signalk-server:
     name: SignalK Server build
-    needs: [nmea0183-signalk]
+    needs: [check-new-v-tags]
+    if: ${{ needs.check-new-v-tags.outputs.proceed == 'true' }}
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tags.outputs.tag }}
