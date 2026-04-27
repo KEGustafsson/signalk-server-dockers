@@ -3,10 +3,6 @@ name: SignalK Docker Build - Ubuntu + Alpine + Debian
 on:
   workflow_dispatch:
     inputs:
-      build_docker_tags_ubuntu:
-        description: 'Build Ubuntu docker image'
-        type: boolean
-        default: true
       build_docker_tags_alpine:
         description: 'Build Alpine docker image'
         type: boolean
@@ -157,7 +153,7 @@ jobs:
           }
           
           # Generate tags for each variant (using consistent format)
-          if [[ "${{ github.event.inputs.build_docker_tags_ubuntu }}" == "true" ]]; then
+          if [[ "${{ github.event.inputs.build_ubuntu_2404 }}" == "true" || "${{ github.event.inputs.build_ubuntu_2604 }}" == "true" ]]; then
             if [[ "${{ github.event.inputs.build_ubuntu_2404 }}" == "true" ]]; then
               if [[ "${{ github.event.inputs.build_node_22 }}" == "true" ]]; then
                 echo "ubuntu_22=$(generate_tags 'ubuntu' '22.x')" >> $GITHUB_OUTPUT
@@ -196,7 +192,7 @@ jobs:
 
   build-ubuntu-images:
     name: Build Ubuntu image
-    if: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' }}
+    if: ${{ github.event.inputs.build_ubuntu_2404 == 'true' || github.event.inputs.build_ubuntu_2604 == 'true' }}
     needs: [generate-tags]
     permissions:
       contents: read
@@ -466,7 +462,7 @@ jobs:
 
   create-ubuntu-manifest:
     name: Ubuntu manifest
-    if: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' }}
+    if: ${{ github.event.inputs.build_ubuntu_2404 == 'true' || github.event.inputs.build_ubuntu_2604 == 'true' }}
     needs: [build-ubuntu-images, generate-tags]
     runs-on: ubuntu-latest
     permissions:
@@ -777,22 +773,22 @@ jobs:
             node: '22.x'
             short_tag: latest-22.x
             tags_output: ubuntu_22
-            enabled: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' && github.event.inputs.build_ubuntu_2404 == 'true' && github.event.inputs.build_node_22 == 'true' }}
+            enabled: ${{ github.event.inputs.build_ubuntu_2404 == 'true' && github.event.inputs.build_node_22 == 'true' }}
           - os: ubuntu
             node: '24.x'
             short_tag: latest
             tags_output: ubuntu_24
-            enabled: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' && github.event.inputs.build_ubuntu_2404 == 'true' && github.event.inputs.build_node_24 == 'true' }}
+            enabled: ${{ github.event.inputs.build_ubuntu_2404 == 'true' && github.event.inputs.build_node_24 == 'true' }}
           - os: ubuntu-26.04
             node: '22.x'
             short_tag: latest-ubuntu-26.04-22.x
             tags_output: ubuntu_26_22
-            enabled: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' && github.event.inputs.build_ubuntu_2604 == 'true' && github.event.inputs.build_node_22 == 'true' }}
+            enabled: ${{ github.event.inputs.build_ubuntu_2604 == 'true' && github.event.inputs.build_node_22 == 'true' }}
           - os: ubuntu-26.04
             node: '24.x'
             short_tag: latest-ubuntu-26.04
             tags_output: ubuntu_26_24
-            enabled: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' && github.event.inputs.build_ubuntu_2604 == 'true' && github.event.inputs.build_node_24 == 'true' }}
+            enabled: ${{ github.event.inputs.build_ubuntu_2604 == 'true' && github.event.inputs.build_node_24 == 'true' }}
           - os: alpine
             node: '22'
             short_tag: latest-alpine-22
