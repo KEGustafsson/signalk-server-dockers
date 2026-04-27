@@ -5,8 +5,8 @@ on:
     - cron: "0 1 * * *"
   workflow_dispatch:
     inputs:
-      build_docker_tags_ubuntu:
-        description: 'Build Ubuntu docker image'
+      build_ubuntu_2404:
+        description: 'Build Ubuntu 24.04 docker image'
         type: boolean
         default: true
       build_docker_tags_alpine:
@@ -169,16 +169,9 @@ jobs:
             fi
           done
           if [ "$applied" = false ]; then echo "No patches to apply"; fi
-      - uses: actions/download-artifact@v7
-        with:
-          name: nmea0183-signalk
-      - uses: actions/download-artifact@v7
-        with:
-          name: specification
       - name: signalk-server build
         run: |
           cd signalk-server
-          mv ./../*.tgz .
           rm -f package-lock.json
           rm -rf node_modules
           npm cache clean -f
@@ -245,12 +238,14 @@ jobs:
           }
 
           # Generate tags for each variant (using consistent format)
-          if [[ "${{ github.event.inputs.build_docker_tags_ubuntu }}" == "true" ]]; then
-            if [[ "${{ github.event.inputs.build_node_22 }}" == "true" ]]; then
-              echo "ubuntu_22=$(generate_tags 'ubuntu' '22.x')" >> $GITHUB_OUTPUT
-            fi
-            if [[ "${{ github.event.inputs.build_node_24 }}" == "true" ]]; then
-              echo "ubuntu_24=$(generate_tags 'ubuntu' '24.x')" >> $GITHUB_OUTPUT
+          if [[ "${{ github.event.inputs.build_ubuntu_2404 }}" == "true" || "${{ github.event.inputs.build_ubuntu_2604 }}" == "true" ]]; then
+            if [[ "${{ github.event.inputs.build_ubuntu_2404 }}" == "true" ]]; then
+              if [[ "${{ github.event.inputs.build_node_22 }}" == "true" ]]; then
+                echo "ubuntu_22=$(generate_tags 'ubuntu' '22.x')" >> $GITHUB_OUTPUT
+              fi
+              if [[ "${{ github.event.inputs.build_node_24 }}" == "true" ]]; then
+                echo "ubuntu_24=$(generate_tags 'ubuntu' '24.x')" >> $GITHUB_OUTPUT
+              fi
             fi
             if [[ "${{ github.event.inputs.build_ubuntu_2604 }}" == "true" ]]; then
               if [[ "${{ github.event.inputs.build_node_22 }}" == "true" ]]; then
@@ -282,7 +277,7 @@ jobs:
 
   build-ubuntu-images:
     name: Build Ubuntu image
-    if: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' }}
+    if: ${{ github.event.inputs.build_ubuntu_2404 == 'true' || github.event.inputs.build_ubuntu_2604 == 'true' }}
     needs: [generate-tags]
     permissions:
       contents: read
@@ -357,11 +352,13 @@ jobs:
         id: check
         run: |
           node_enabled="${{ matrix.enabled }}"
-          ubuntu26_enabled="true"
+          ubuntu_os_enabled="true"
           if [[ "${{ matrix.os_label }}" == "ubuntu-26.04" ]]; then
-            ubuntu26_enabled="${{ github.event.inputs.build_ubuntu_2604 }}"
+            ubuntu_os_enabled="${{ github.event.inputs.build_ubuntu_2604 }}"
+          elif [[ "${{ matrix.os_label }}" == "ubuntu" ]]; then
+            ubuntu_os_enabled="${{ github.event.inputs.build_ubuntu_2404 }}"
           fi
-          if [[ "$node_enabled" != "true" || "$ubuntu26_enabled" != "true" ]]; then
+          if [[ "$node_enabled" != "true" || "$ubuntu_os_enabled" != "true" ]]; then
             echo "skip=true" >> $GITHUB_OUTPUT
           else
             echo "skip=false" >> $GITHUB_OUTPUT
@@ -550,7 +547,7 @@ jobs:
 
   create-ubuntu-manifest:
     name: Ubuntu manifest
-    if: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' }}
+    if: ${{ github.event.inputs.build_ubuntu_2404 == 'true' || github.event.inputs.build_ubuntu_2604 == 'true' }}
     needs: [build-ubuntu-images, generate-tags]
     runs-on: ubuntu-latest
     permissions:
@@ -584,11 +581,13 @@ jobs:
         id: check
         run: |
           node_enabled="${{ matrix.enabled }}"
-          ubuntu26_enabled="true"
+          ubuntu_os_enabled="true"
           if [[ "${{ matrix.os_label }}" == "ubuntu-26.04" ]]; then
-            ubuntu26_enabled="${{ github.event.inputs.build_ubuntu_2604 }}"
+            ubuntu_os_enabled="${{ github.event.inputs.build_ubuntu_2604 }}"
+          elif [[ "${{ matrix.os_label }}" == "ubuntu" ]]; then
+            ubuntu_os_enabled="${{ github.event.inputs.build_ubuntu_2404 }}"
           fi
-          if [[ "$node_enabled" != "true" || "$ubuntu26_enabled" != "true" ]]; then
+          if [[ "$node_enabled" != "true" || "$ubuntu_os_enabled" != "true" ]]; then
             echo "skip=true" >> $GITHUB_OUTPUT
           else
             echo "skip=false" >> $GITHUB_OUTPUT
@@ -859,22 +858,22 @@ jobs:
             node: '22.x'
             short_tag: latest-22.x
             tags_output: ubuntu_22
-            enabled: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' && github.event.inputs.build_node_22 == 'true' }}
+            enabled: ${{ github.event.inputs.build_ubuntu_2404 == 'true' && github.event.inputs.build_node_22 == 'true' }}
           - os: ubuntu
             node: '24.x'
             short_tag: latest
             tags_output: ubuntu_24
-            enabled: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' && github.event.inputs.build_node_24 == 'true' }}
+            enabled: ${{ github.event.inputs.build_ubuntu_2404 == 'true' && github.event.inputs.build_node_24 == 'true' }}
           - os: ubuntu-26.04
             node: '22.x'
             short_tag: latest-ubuntu-26.04-22.x
             tags_output: ubuntu_26_22
-            enabled: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' && github.event.inputs.build_ubuntu_2604 == 'true' && github.event.inputs.build_node_22 == 'true' }}
+            enabled: ${{ github.event.inputs.build_ubuntu_2604 == 'true' && github.event.inputs.build_node_22 == 'true' }}
           - os: ubuntu-26.04
             node: '24.x'
             short_tag: latest-ubuntu-26.04
             tags_output: ubuntu_26_24
-            enabled: ${{ github.event.inputs.build_docker_tags_ubuntu == 'true' && github.event.inputs.build_ubuntu_2604 == 'true' && github.event.inputs.build_node_24 == 'true' }}
+            enabled: ${{ github.event.inputs.build_ubuntu_2604 == 'true' && github.event.inputs.build_node_24 == 'true' }}
           - os: alpine
             node: '22'
             short_tag: latest-alpine-22
