@@ -92,7 +92,7 @@ jobs:
 
       - name: Build baseimages
         if: ${{ (startsWith(matrix.node, '22') && github.event.inputs.build_node_22 == 'true') || (startsWith(matrix.node, '24') && github.event.inputs.build_node_24 == 'true') }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile_base_${{ matrix.os }}_user
@@ -112,7 +112,7 @@ jobs:
 
       - name: Build Signal K test docker
         if: ${{ (startsWith(matrix.node, '22') && github.event.inputs.build_node_22 == 'true') || (startsWith(matrix.node, '24') && github.event.inputs.build_node_24 == 'true') }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile_rel_user
@@ -168,7 +168,7 @@ jobs:
 
       - name: Build Alpine baseimages
         if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile_base_alpine
@@ -220,7 +220,7 @@ jobs:
 
       - name: Build Debian baseimages
         if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile_base_debian
