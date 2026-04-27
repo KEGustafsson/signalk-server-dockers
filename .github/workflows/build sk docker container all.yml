@@ -22,7 +22,7 @@ on:
       build_ubuntu_2604:
         description: 'Build Ubuntu 26.04 docker image'
         type: boolean
-        default: false
+        default: true
       build_node_22:
         description: 'Build Node.js 22 images'
         type: boolean
