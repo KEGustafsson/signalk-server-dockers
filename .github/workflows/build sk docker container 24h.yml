@@ -5,10 +5,6 @@ on:
     - cron: "0 1 * * *"
   workflow_dispatch:
     inputs:
-      build_ubuntu_2404:
-        description: 'Build Ubuntu 24.04 docker image'
-        type: boolean
-        default: true
       build_docker_tags_alpine:
         description: 'Build Alpine docker image'
         type: boolean
@@ -17,10 +13,14 @@ on:
         description: 'Build Debian docker image'
         type: boolean
         default: false
+      build_ubuntu_2404:
+        description: 'Build Ubuntu 24.04 docker image'
+        type: boolean
+        default: true
       build_ubuntu_2604:
         description: 'Build Ubuntu 26.04 docker image'
         type: boolean
-        default: false
+        default: true
       build_node_22:
         description: 'Build Node.js 22 images'
         type: boolean
