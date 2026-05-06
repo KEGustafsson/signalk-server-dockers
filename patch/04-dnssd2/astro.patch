@@ -32,7 +32,7 @@ index ace9256ab..324605bc1 100644
    "dependencies": {
      "@assemblyscript/loader": "^0.28.9",
 +    "@astronautlabs/mdns": "^1.0.10",
-     "@signalk/course-provider": "^1.0.0",
+     "@signalk/course-provider": "^1.2.7",
      "@signalk/n2k-signalk": ">=4.1.0-beta",
      "@signalk/nmea0183-signalk": "^3.0.0",
 @@ -98,7 +99,6 @@
