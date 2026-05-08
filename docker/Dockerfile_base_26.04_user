@@ -11,7 +11,7 @@ COPY docker/avahi/avahi-dbus.conf docker/bluez/bluezuser.conf /etc/dbus-1/system
 RUN apt-get update \
   && apt-get -y install --no-install-recommends apt-utils sudo git \
   python3 python3-venv python3-pip build-essential avahi-daemon libnss-mdns \
-  sysstat procps nano curl libcap2-bin dbus bluez \
+  sysstat procps nano curl libcap2-bin dbus bluez tini \
   && groupadd -r docker \
   && groupadd -r i2c \
   && groupadd -r spi \
@@ -30,8 +30,6 @@ RUN curl -fsSL https://deb.nodesource.com/setup_$NODE | bash - \
   && npm config set fetch-retry-mintimeout 60000 \
   && npm config set fetch-retry-maxtimeout 120000 \
   && npm config set registry "https://registry.npmjs.org/" \
-  && npm config set @backup:registry "https://registry.yarnpkg.com/" \
   && npm cache clean -f \
   && npm install npm@latest -g \
-  && npm install pm2 -g \
   && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
