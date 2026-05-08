@@ -24,9 +24,7 @@ RUN npm config rm proxy \
  && npm config set fetch-retry-mintimeout 60000 \
  && npm config set fetch-retry-maxtimeout 120000 \
  && npm config set registry "https://registry.npmjs.org/" \
- && npm config set @backup:registry "https://registry.yarnpkg.com/" \
  && npm cache clean -f \
- && npm install -g pm2 \
  && rm -rf /tmp/* /var/tmp/*
 
 RUN addgroup -g 1000 node \
