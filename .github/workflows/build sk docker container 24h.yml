@@ -242,9 +242,9 @@ jobs:
                 (($o.id | gsub("[-.]"; "_")) + "_node_" + $n.id) as $key |
                 {
                   enabled: ($en[$key] // (if ($o.default_enabled and $n.default_enabled) then "true" else "false" end)),
-                  os_label: $o.user_os_label,
-                  os_arg:   $o.user_os_arg,
-                  node:     (if $o.family == "ubuntu" then $n.ubuntu_format else $n.id end),
+                  os_label: ($o.user_os_label // $o.id),
+                  os_arg:   $o.os_arg,
+                  node:     (if $o.family == "ubuntu" then "\($n.id).x" else $n.id end),
                   node_id:  $n.id,
                   manifest_short_tags: ($o.manifest_short_tags[$n.id] // [])
                 }

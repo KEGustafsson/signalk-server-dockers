@@ -79,8 +79,8 @@ jobs:
                 {
                   enabled: ($en[$key] // (if ($o.default_enabled and $n.default_enabled) then "true" else "false" end)),
                   family:     $o.family,
-                  os_label:   $o.base_os_label,
-                  node:       (if $o.family == "ubuntu" then $n.ubuntu_format else $n.id end),
+                  os_label:   $o.os_arg,
+                  node:       (if $o.family == "ubuntu" then "\($n.id).x" else $n.id end),
                   node_id:    $n.id,
                   dockerfile: $o.dockerfile,
                   build_test: $o.build_test,
