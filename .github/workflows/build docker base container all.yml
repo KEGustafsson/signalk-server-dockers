@@ -26,133 +26,92 @@ on:
         type: boolean
         default: true
 
+env:
+  GHCR_REGISTRY: ghcr.io
+  GHCR_REPO: kegustafsson/signalk-server-base
+  DOCKER_HUB_REPO: kgustafs/signalk-server-base
+
 jobs:
-  build-ubuntu-images:
-    name: Ubuntu base image
-    if: ${{ github.event.inputs.ubuntu == 'true' }}
-    strategy:
-      matrix:
-        os: [24.04, 26.04]
-        node: [22.x, 24.x]
-#        exclude:
-#          - node: 22.x
-        vm: [ubuntu-latest, ubuntu-24.04-arm]
-        include:
-          - vm: ubuntu-latest
-            os: 24.04
-            node: 24.x
-            arch: amd
-            platform: linux/amd64
-          - vm: ubuntu-latest
-            os: 24.04
-            node: 22.x
-            arch: amd
-            platform: linux/amd64
-          - vm: ubuntu-24.04-arm
-            os: 24.04
-            arch: arm
-            node: 22.x
-            platform: linux/arm64,linux/arm/v7
-          - vm: ubuntu-24.04-arm
-            os: 24.04
-            arch: arm
-            node: 24.x
-            platform: linux/arm64
-          - vm: ubuntu-latest
-            os: 26.04
-            node: 24.x
-            arch: amd
-            platform: linux/amd64
-          - vm: ubuntu-latest
-            os: 26.04
-            node: 22.x
-            arch: amd
-            platform: linux/amd64
-          - vm: ubuntu-24.04-arm
-            os: 26.04
-            arch: arm
-            node: 22.x
-            platform: linux/arm64,linux/arm/v7
-          - vm: ubuntu-24.04-arm
-            os: 26.04
-            arch: arm
-            node: 24.x
-            platform: linux/arm64
-    runs-on: ${{ matrix.vm }}
+  prepare:
+    name: Prepare matrices
+    runs-on: ubuntu-latest
+    outputs:
+      build_matrix: ${{ steps.matrix.outputs.build_matrix }}
+      variant_matrix: ${{ steps.matrix.outputs.variant_matrix }}
+      any_enabled: ${{ steps.matrix.outputs.any_enabled }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Login to ghcr.io
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.GHCR_USERNAME }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Build baseimages
-        if: ${{ (startsWith(matrix.node, '22') && github.event.inputs.build_node_22 == 'true') || (startsWith(matrix.node, '24') && github.event.inputs.build_node_24 == 'true') }}
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./docker/Dockerfile_base_${{ matrix.os }}_user
-          platforms: ${{ matrix.platform }}
-          push: true
-          tags: |
-            ghcr.io/kegustafsson/signalk-server-base:${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}
-          build-args: |
-            NODE=${{ matrix.node }}
-
-      - name: Modify Dockerfile_rel for testing
-        if: ${{ (startsWith(matrix.node, '22') && github.event.inputs.build_node_22 == 'true') || (startsWith(matrix.node, '24') && github.event.inputs.build_node_24 == 'true') }}
+      - name: Compute matrices
+        id: matrix
+        env:
+          # Schedule runs leave inputs empty -> fall back to the dispatch defaults.
+          UBUNTU: ${{ github.event.inputs.ubuntu }}
+          ALPINE: ${{ github.event.inputs.alpine }}
+          DEBIAN: ${{ github.event.inputs.debian }}
+          NODE_22: ${{ github.event.inputs.build_node_22 }}
+          NODE_24: ${{ github.event.inputs.build_node_24 }}
         run: |
-          sed -i \
-            "s|:latest|:${{ matrix.arch }}-${{ matrix.os }}-${{ matrix.node }}|g" \
-            ./docker/Dockerfile_rel_user
+          set -euo pipefail
 
-      - name: Build Signal K test docker
-        if: ${{ (startsWith(matrix.node, '22') && github.event.inputs.build_node_22 == 'true') || (startsWith(matrix.node, '24') && github.event.inputs.build_node_24 == 'true') }}
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./docker/Dockerfile_rel_user
-          platforms: ${{ matrix.platform }}
-          build-args: |
-            TAG=latest
+          # Variant catalogue. To add a new OS / Node combo, add a row here.
+          variants=$(jq -nc \
+            --arg ubuntu "${UBUNTU:-true}" \
+            --arg alpine "${ALPINE:-true}" \
+            --arg debian "${DEBIAN:-false}" \
+            --arg n22 "${NODE_22:-false}" \
+            --arg n24 "${NODE_24:-true}" '
+            [
+              {family:"ubuntu", os_label:"24.04",  node:"22.x", dockerfile:"./docker/Dockerfile_base_24.04_user", build_test:true,  login_dhi:false, os_en:$ubuntu, node_en:$n22},
+              {family:"ubuntu", os_label:"24.04",  node:"24.x", dockerfile:"./docker/Dockerfile_base_24.04_user", build_test:true,  login_dhi:false, os_en:$ubuntu, node_en:$n24},
+              {family:"ubuntu", os_label:"26.04",  node:"22.x", dockerfile:"./docker/Dockerfile_base_26.04_user", build_test:true,  login_dhi:false, os_en:$ubuntu, node_en:$n22},
+              {family:"ubuntu", os_label:"26.04",  node:"24.x", dockerfile:"./docker/Dockerfile_base_26.04_user", build_test:true,  login_dhi:false, os_en:$ubuntu, node_en:$n24},
+              {family:"alpine", os_label:"alpine", node:"22",   dockerfile:"./docker/Dockerfile_base_alpine",     build_test:false, login_dhi:true,  os_en:$alpine, node_en:$n22},
+              {family:"alpine", os_label:"alpine", node:"24",   dockerfile:"./docker/Dockerfile_base_alpine",     build_test:false, login_dhi:true,  os_en:$alpine, node_en:$n24},
+              {family:"debian", os_label:"debian", node:"22",   dockerfile:"./docker/Dockerfile_base_debian",     build_test:false, login_dhi:false, os_en:$debian, node_en:$n22},
+              {family:"debian", os_label:"debian", node:"24",   dockerfile:"./docker/Dockerfile_base_debian",     build_test:false, login_dhi:false, os_en:$debian, node_en:$n24}
+            ]
+            | map(select(.os_en == "true" and .node_en == "true"))
+            | map(del(.os_en, .node_en))
+          ')
 
-  build-alpine-images:
-    name: Alpine base image
-    if: ${{ github.event.inputs.alpine == 'true' }}
-    strategy:
-      matrix:
-        node: [22, 24]
-#        exclude:
-#          - node: 22
-        vm: [ubuntu-latest, ubuntu-24.04-arm]
-        include:
-          - vm: ubuntu-latest
-            node: 24
-            arch: amd
-            platform: linux/amd64
-          - vm: ubuntu-latest
-            os: 24.04
-            node: 22
-            arch: amd
-            platform: linux/amd64
-          - vm: ubuntu-24.04-arm
-            arch: arm
-            node: 22
-            platform: linux/arm64,linux/arm/v7
-          - vm: ubuntu-24.04-arm
-            arch: arm
-            node: 24
-            platform: linux/arm64
+          # Build matrix: one row per (variant, arch). Node 22 builds also produce arm/v7.
+          # NB: arch suffix is amd/arm (not amd64/arm64) to match existing base image tags.
+          build_matrix=$(echo "$variants" | jq -c '
+            [ .[] |
+              . + {arch: "amd", vm: "ubuntu-latest",   platform: "linux/amd64"},
+              . + {arch: "arm", vm: "ubuntu-24.04-arm",
+                   platform: (if (.node | startswith("22")) then "linux/arm64,linux/arm/v7" else "linux/arm64" end)}
+            ]')
+
+          # Variant matrix: one row per variant (used by manifest + copy jobs).
+          variant_matrix=$(echo "$variants" | jq -c '[ .[] | {os_label, node} ]')
+
+          count=$(echo "$variants" | jq 'length')
+          if [[ "$count" -gt 0 ]]; then
+            echo "any_enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "any_enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "build_matrix=$build_matrix" >> "$GITHUB_OUTPUT"
+          echo "variant_matrix=$variant_matrix" >> "$GITHUB_OUTPUT"
+
+          echo "Enabled variants:"
+          echo "$variants" | jq
+
+  build:
+    name: Build ${{ matrix.os_label }} node-${{ matrix.node }} ${{ matrix.arch }}
+    needs: [prepare]
+    if: needs.prepare.outputs.any_enabled == 'true'
     runs-on: ${{ matrix.vm }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.prepare.outputs.build_matrix) }}
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v3
 
       - name: Login to dhi.io
+        if: matrix.login_dhi
         uses: docker/login-action@v3
         with:
           registry: dhi.io
@@ -162,121 +121,79 @@ jobs:
       - name: Login to ghcr.io
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Build Alpine baseimages
-        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
+      - name: Build base image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./docker/Dockerfile_base_alpine
+          file: ${{ matrix.dockerfile }}
           platforms: ${{ matrix.platform }}
           push: true
           tags: |
-            ghcr.io/kegustafsson/signalk-server-base:${{ matrix.arch }}-alpine-${{ matrix.node }}
+            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.arch }}-${{ matrix.os_label }}-${{ matrix.node }}
           build-args: |
             NODE=${{ matrix.node }}
 
-  build-debian-images:
-    name: Debian base imag
-    if: ${{ github.event.inputs.debian == 'true' }}
-    strategy:
-      matrix:
-        node: [22, 24]
-#        exclude:
-#          - node: 22
-        vm: [ubuntu-latest, ubuntu-24.04-arm]
-        include:
-          - vm: ubuntu-latest
-            node: 24
-            arch: amd
-            platform: linux/amd64
-          - vm: ubuntu-latest
-            os: 24.04
-            node: 22
-            arch: amd
-            platform: linux/amd64
-          - vm: ubuntu-24.04-arm
-            arch: arm
-            node: 22
-            platform: linux/arm64,linux/arm/v7
-          - vm: ubuntu-24.04-arm
-            arch: arm
-            node: 24
-            platform: linux/arm64
-    runs-on: ${{ matrix.vm }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Login to ghcr.io
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.GHCR_USERNAME }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Build Debian baseimages
-        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
+      # Ubuntu-only smoke test: rebuild the user image against the base we just pushed.
+      - name: Modify Dockerfile_rel for testing
+        if: matrix.build_test
+        run: |
+          sed -i \
+            "s|:latest|:${{ matrix.arch }}-${{ matrix.os_label }}-${{ matrix.node }}|g" \
+            ./docker/Dockerfile_rel_user
+      - name: Build Signal K test docker
+        if: matrix.build_test
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./docker/Dockerfile_base_debian
+          file: ./docker/Dockerfile_rel_user
           platforms: ${{ matrix.platform }}
-          push: true
-          tags: |
-            ghcr.io/kegustafsson/signalk-server-base:${{ matrix.arch }}-debian-${{ matrix.node }}
           build-args: |
-            NODE=${{ matrix.node }}
+            TAG=latest
 
-  create-and-push-ubuntu-manifest:
-    needs: [build-ubuntu-images]
+  manifest:
+    name: Manifest ${{ matrix.os_label }} node-${{ matrix.node }}
+    needs: [prepare, build]
+    if: ${{ !cancelled() && needs.prepare.outputs.any_enabled == 'true' }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        os: [24.04, 26.04]
-        node: [22.x, 24.x]
-#        exclude:
-#          - node: 22.x
-
+        include: ${{ fromJSON(needs.prepare.outputs.variant_matrix) }}
     steps:
       - name: Login to ghcr.io
-        if: ${{ (startsWith(matrix.node, '22') && github.event.inputs.build_node_22 == 'true') || (startsWith(matrix.node, '24') && github.event.inputs.build_node_24 == 'true') }}
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ secrets.GHCR_USERNAME }}
           password: ${{ secrets.GHCR_TOKEN }}
-
       - name: Create and push multi-arch manifest to GHCR
-        if: ${{ (startsWith(matrix.node, '22') && github.event.inputs.build_node_22 == 'true') || (startsWith(matrix.node, '24') && github.event.inputs.build_node_24 == 'true') }}
         uses: int128/docker-manifest-create-action@v2
         with:
           tags: |
-            ghcr.io/kegustafsson/signalk-server-base:latest-${{ matrix.os }}-${{ matrix.node }}
+            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:latest-${{ matrix.os_label }}-${{ matrix.node }}
           sources: |
-            ghcr.io/kegustafsson/signalk-server-base:amd-${{ matrix.os }}-${{ matrix.node }}
-            ghcr.io/kegustafsson/signalk-server-base:arm-${{ matrix.os }}-${{ matrix.node }}
+            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:amd-${{ matrix.os_label }}-${{ matrix.node }}
+            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:arm-${{ matrix.os_label }}-${{ matrix.node }}
 
-  copy-ubuntu-to-dockerhub:
-    needs: create-and-push-ubuntu-manifest
+  copy-to-dockerhub:
+    name: Copy ${{ matrix.os_label }} node-${{ matrix.node }} to Docker Hub
+    needs: [prepare, manifest]
+    if: ${{ !cancelled() && needs.prepare.outputs.any_enabled == 'true' }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        os: [24.04, 26.04]
-        node: [22.x, 24.x]
-#        exclude:
-#          - node: 22.x
+        include: ${{ fromJSON(needs.prepare.outputs.variant_matrix) }}
     steps:
       - name: Install skopeo
-        if: ${{ (startsWith(matrix.node, '22') && github.event.inputs.build_node_22 == 'true') || (startsWith(matrix.node, '24') && github.event.inputs.build_node_24 == 'true') }}
         run: |
           sudo apt-get update
           sudo apt-get install -y skopeo
-      - name: Copy images from GHCR to Docker Hub
-        if: ${{ (startsWith(matrix.node, '22') && github.event.inputs.build_node_22 == 'true') || (startsWith(matrix.node, '24') && github.event.inputs.build_node_24 == 'true') }}
+      - name: Copy GHCR -> Docker Hub
         shell: bash
         env:
           GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
@@ -288,139 +205,18 @@ jobs:
           skopeo copy --all \
             --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
             --dest-creds "${DOCKER_HUB_USERNAME}:${DOCKER_HUB_ACCESS_TOKEN}" \
-            "docker://ghcr.io/kegustafsson/signalk-server-base:latest-${{ matrix.os }}-${{ matrix.node }}" \
-            "docker://docker.io/kgustafs/signalk-server-base:latest-${{ matrix.os }}-${{ matrix.node }}"
-
-  create-and-push-alpine-manifest:
-    needs: [build-alpine-images]
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node: [22, 24]
-#        exclude:
-#          - node: 22
-    steps:
-      - name: Login to ghcr.io
-        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.GHCR_USERNAME }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Create and push multi-arch manifest to GHCR
-        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
-        uses: int128/docker-manifest-create-action@v2
-        with:
-          tags: |
-            ghcr.io/kegustafsson/signalk-server-base:latest-alpine-${{ matrix.node }}
-          sources: |
-            ghcr.io/kegustafsson/signalk-server-base:amd-alpine-${{ matrix.node }}
-            ghcr.io/kegustafsson/signalk-server-base:arm-alpine-${{ matrix.node }}
-
-  copy-alpine-to-dockerhub:
-    needs: create-and-push-alpine-manifest
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node: [22, 24]
-#        exclude:
-#          - node: 22
-    steps:
-      - name: Install skopeo
-        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y skopeo
-      - name: Copy images from GHCR to Docker Hub
-        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
-        shell: bash
-        env:
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
-          DOCKER_HUB_ACCESS_TOKEN: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-        run: |
-          set -euo pipefail
-          skopeo copy --all \
-            --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
-            --dest-creds "${DOCKER_HUB_USERNAME}:${DOCKER_HUB_ACCESS_TOKEN}" \
-            "docker://ghcr.io/kegustafsson/signalk-server-base:latest-alpine-${{ matrix.node }}" \
-            "docker://docker.io/kgustafs/signalk-server-base:latest-alpine-${{ matrix.node }}"
-
-  create-and-push-debian-manifest:
-    needs: [build-debian-images]
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node: [22, 24]
-#        exclude:
-#          - node: 22
-    steps:
-      - name: Login to ghcr.io
-        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ secrets.GHCR_USERNAME }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Create and push multi-arch manifest to GHCR
-        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
-        uses: int128/docker-manifest-create-action@v2
-        with:
-          tags: |
-            ghcr.io/kegustafsson/signalk-server-base:latest-debian-${{ matrix.node }}
-          sources: |
-            ghcr.io/kegustafsson/signalk-server-base:amd-debian-${{ matrix.node }}
-            ghcr.io/kegustafsson/signalk-server-base:arm-debian-${{ matrix.node }}
-
-  copy-debian-to-dockerhub:
-    needs: create-and-push-debian-manifest
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node: [22, 24]
-#        exclude:
-#          - node: 22
-    steps:
-      - name: Install skopeo
-        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y skopeo
-      - name: Copy images from GHCR to Docker Hub
-        if: ${{ (matrix.node == 22 && github.event.inputs.build_node_22 == 'true') || (matrix.node == 24 && github.event.inputs.build_node_24 == 'true') }}
-        shell: bash
-        env:
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
-          DOCKER_HUB_ACCESS_TOKEN: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-        run: |
-          set -euo pipefail
-          skopeo copy --all \
-            --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
-            --dest-creds "${DOCKER_HUB_USERNAME}:${DOCKER_HUB_ACCESS_TOKEN}" \
-            "docker://ghcr.io/kegustafsson/signalk-server-base:latest-debian-${{ matrix.node }}" \
-            "docker://docker.io/kgustafs/signalk-server-base:latest-debian-${{ matrix.node }}"
+            "docker://${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:latest-${{ matrix.os_label }}-${{ matrix.node }}" \
+            "docker://docker.io/${{ env.DOCKER_HUB_REPO }}:latest-${{ matrix.os_label }}-${{ matrix.node }}"
 
   housekeeping:
     name: Housekeeping
-    if: |
-      always() &&
-      (needs.copy-ubuntu-to-dockerhub.result == 'success' || needs.copy-ubuntu-to-dockerhub.result == 'skipped') &&
-      (needs.copy-alpine-to-dockerhub.result == 'success' || needs.copy-alpine-to-dockerhub.result == 'skipped') &&
-      (needs.copy-debian-to-dockerhub.result == 'success' || needs.copy-debian-to-dockerhub.result == 'skipped') &&
-      (needs.copy-ubuntu-to-dockerhub.result == 'success' || 
-       needs.copy-alpine-to-dockerhub.result == 'success' || 
-       needs.copy-debian-to-dockerhub.result == 'success')
-    needs: [copy-ubuntu-to-dockerhub, copy-alpine-to-dockerhub, copy-debian-to-dockerhub]
+    if: ${{ always() && needs.copy-to-dockerhub.result == 'success' }}
+    needs: [copy-to-dockerhub]
     runs-on: ubuntu-latest
     permissions:
       packages: write
     steps:
-      - name: Remove Docker Image from GHCR
+      - name: Remove intermediate per-arch images from GHCR
         uses: dataaxiom/ghcr-cleanup-action@v1
         with:
           packages: signalk-server-base
@@ -432,19 +228,19 @@ jobs:
     name: Slack update
     if: always()
     runs-on: ubuntu-latest
-    needs: [housekeeping, copy-ubuntu-to-dockerhub, copy-alpine-to-dockerhub, copy-debian-to-dockerhub]
+    needs: [housekeeping, copy-to-dockerhub]
     steps:
       - name: Determine status
         id: status
         run: |
-          if [[ "${{ needs.copy-ubuntu-to-dockerhub.result }}" == "failure" || "${{ needs.copy-alpine-to-dockerhub.result }}" == "failure" || "${{ needs.copy-debian-to-dockerhub.result }}" == "failure" || "${{ needs.housekeeping.result }}" == "failure" ]]; then
-            echo "message=❌ Base image build failed" >> $GITHUB_OUTPUT
-          elif [[ "${{ needs.copy-ubuntu-to-dockerhub.result }}" == "cancelled" || "${{ needs.copy-alpine-to-dockerhub.result }}" == "cancelled" || "${{ needs.copy-debian-to-dockerhub.result }}" == "cancelled" ]]; then
-            echo "message=⚠️ Base image build was cancelled" >> $GITHUB_OUTPUT
+          if [[ "${{ needs.copy-to-dockerhub.result }}" == "failure" || "${{ needs.housekeeping.result }}" == "failure" ]]; then
+            echo "message=❌ Base image build failed" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ needs.copy-to-dockerhub.result }}" == "cancelled" || "${{ needs.housekeeping.result }}" == "cancelled" ]]; then
+            echo "message=⚠️ Base image build was cancelled" >> "$GITHUB_OUTPUT"
           elif [[ "${{ needs.housekeeping.result }}" == "success" ]]; then
-            echo "message=✅ Ubuntu 24.04 + Alpine base images ready" >> $GITHUB_OUTPUT
+            echo "message=✅ Ubuntu 24.04 + Alpine base images ready" >> "$GITHUB_OUTPUT"
           else
-            echo "message=⚠️ Base image build completed with issues" >> $GITHUB_OUTPUT
+            echo "message=⚠️ Base image build completed with issues" >> "$GITHUB_OUTPUT"
           fi
       - name: Slack notification
         run: |
