@@ -162,6 +162,7 @@ jobs:
                   os_label: $o.user_os_label,
                   os_arg:   $o.user_os_arg,
                   node:     (if $o.family == "ubuntu" then $n.ubuntu_format else $n.id end),
+                  node_id:  $n.id,
                   manifest_short_tags: ($o.manifest_short_tags[$n.id] // [])
                 }
               ]
@@ -181,13 +182,30 @@ jobs:
             | map(del(.enabled))
           ' .github/build-matrix.json)
 
-          # Build matrix: one row per (variant, arch). Node 22 builds also produce arm/v7.
-          build_matrix=$(echo "$variants" | jq -c '
-            [ .[] |
-              {os_label, os_arg, node, arch: "amd64", vm: "ubuntu-latest",   platform: "linux/amd64"},
-              {os_label, os_arg, node, arch: "arm64", vm: "ubuntu-24.04-arm",
-               platform: (if (.node | startswith("22")) then "linux/arm64,linux/arm/v7" else "linux/arm64" end)}
-            ]')
+          # Build matrix: cross-product variants x architectures.
+          # Per-node extra_platforms append to the arch's base platform
+          # (e.g. Node 22 adds linux/arm/v7 to arm64). exclude_archs drops
+          # archs entirely for a given node. Both lists are defined in
+          # .github/build-matrix.json on the node_versions row.
+          build_matrix=$(jq -c \
+            --argjson variants "$variants" '
+            (.node_versions | map({(.id): .}) | add) as $node_index
+            | .architectures as $archs
+            | [ $variants[] as $v |
+                $node_index[$v.node_id] as $n |
+                $archs[] as $a |
+                select(((($n.exclude_archs // []) | index($a.id_user)) | not)) |
+                (($n.extra_platforms // {})[$a.id_user] // "") as $extra |
+                {
+                  os_label: $v.os_label,
+                  os_arg:   $v.os_arg,
+                  node:     $v.node,
+                  arch:     $a.id_user,
+                  vm:       $a.vm,
+                  platform: (if $extra == "" then $a.platform else "\($a.platform),\($extra)" end)
+                }
+              ]
+          ' .github/build-matrix.json)
 
           # Variant matrix: one row per variant (used by manifest + copy jobs).
           variant_matrix=$(echo "$variants" | jq -c '
