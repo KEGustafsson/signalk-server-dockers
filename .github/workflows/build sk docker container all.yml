@@ -60,16 +60,14 @@ jobs:
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "Extracted tag: $tag"
 
-          # Fix version parsing
           IFS='.' read -r MAJOR MINOR PATCH <<< "${tag//v/}"
           echo "major=$MAJOR" >> $GITHUB_OUTPUT
           echo "minor=$MINOR" >> $GITHUB_OUTPUT
           echo "major_minor=$MAJOR.$MINOR" >> $GITHUB_OUTPUT
-          
+
           cd ..
           rm -rf signalk-server
       - name: signalk-server download and patch
-        id: git
         run: |
           git clone https://github.com/SignalK/signalk-server.git
           cd signalk-server
@@ -104,199 +102,128 @@ jobs:
           name: packed-modules
           path: ./signalk-server/*.tgz
 
-  generate-tags:
-    name: Generate Docker tags
+  # Computes which variants are enabled and emits matrices used by the
+  # build / manifest / copy jobs. Centralising this here removes the
+  # per-job "is this enabled?" boilerplate and the long shell tag-builder.
+  prepare:
+    name: Prepare matrices and tags
     needs: [signalk-server]
     runs-on: ubuntu-latest
     outputs:
-      ubuntu_22: ${{ steps.tags.outputs.ubuntu_22 }}
-      ubuntu_24: ${{ steps.tags.outputs.ubuntu_24 }}
-      ubuntu_26_22: ${{ steps.tags.outputs.ubuntu_26_22 }}
-      ubuntu_26_24: ${{ steps.tags.outputs.ubuntu_26_24 }}
-      alpine_22: ${{ steps.tags.outputs.alpine_22 }}
-      alpine_24: ${{ steps.tags.outputs.alpine_24 }}
-      debian_22: ${{ steps.tags.outputs.debian_22 }}
-      debian_24: ${{ steps.tags.outputs.debian_24 }}
+      build_matrix: ${{ steps.matrix.outputs.build_matrix }}
+      variant_matrix: ${{ steps.matrix.outputs.variant_matrix }}
+      any_enabled: ${{ steps.matrix.outputs.any_enabled }}
     steps:
-      - name: Generate all tags
-        id: tags
+      - name: Compute matrices
+        id: matrix
+        env:
+          ALPINE: ${{ github.event.inputs.build_docker_tags_alpine }}
+          DEBIAN: ${{ github.event.inputs.build_docker_tags_debian }}
+          UBUNTU_2404: ${{ github.event.inputs.build_ubuntu_2404 }}
+          UBUNTU_2604: ${{ github.event.inputs.build_ubuntu_2604 }}
+          NODE_22: ${{ github.event.inputs.build_node_22 }}
+          NODE_24: ${{ github.event.inputs.build_node_24 }}
+          TAG: ${{ needs.signalk-server.outputs.tag }}
+          MAJOR_V: v${{ needs.signalk-server.outputs.major }}
+          MINOR_V: v${{ needs.signalk-server.outputs.major }}.${{ needs.signalk-server.outputs.minor }}
+          GHCR_PREFIX: ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}
+          HUB_PREFIX: ${{ env.DOCKER_HUB_REPO }}
         run: |
-          TAG="${{ needs.signalk-server.outputs.tag }}"
-          MAJOR="v${{ needs.signalk-server.outputs.major }}"
-          MINOR="v${{ needs.signalk-server.outputs.major }}.${{ needs.signalk-server.outputs.minor }}"
-          GHCR="${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}"
-          HUB="${{ env.DOCKER_HUB_REPO }}"
-          
-          # Function to generate tags
-          generate_tags() {
-            local variant=$1
-            local node=$2
-            local tags=""
-            
-            if [[ "$TAG" == *beta* ]]; then
-              tags="$GHCR:$TAG-$variant-$node"
-              tags="$tags,$GHCR:latest-$variant-$node"
-              tags="$tags,$HUB:$TAG-$variant-$node"
-              tags="$tags,$HUB:latest-$variant-$node"
-            else
-              tags="$GHCR:$TAG-$variant-$node"
-              tags="$tags,$GHCR:$MAJOR-$variant-$node"
-              tags="$tags,$GHCR:$MINOR-$variant-$node"
-              tags="$tags,$GHCR:latest-$variant-$node"
-              tags="$tags,$HUB:$TAG-$variant-$node"
-              tags="$tags,$HUB:$MAJOR-$variant-$node"
-              tags="$tags,$HUB:$MINOR-$variant-$node"
-              tags="$tags,$HUB:latest-$variant-$node"
-            fi
-            
-            echo "$tags"
-          }
-          
-          # Generate tags for each variant (using consistent format)
-          if [[ "${{ github.event.inputs.build_ubuntu_2404 }}" == "true" || "${{ github.event.inputs.build_ubuntu_2604 }}" == "true" ]]; then
-            if [[ "${{ github.event.inputs.build_ubuntu_2404 }}" == "true" ]]; then
-              if [[ "${{ github.event.inputs.build_node_22 }}" == "true" ]]; then
-                echo "ubuntu_22=$(generate_tags 'ubuntu' '22.x')" >> $GITHUB_OUTPUT
-              fi
-              if [[ "${{ github.event.inputs.build_node_24 }}" == "true" ]]; then
-                echo "ubuntu_24=$(generate_tags 'ubuntu' '24.x')" >> $GITHUB_OUTPUT
-              fi
-            fi
-            if [[ "${{ github.event.inputs.build_ubuntu_2604 }}" == "true" ]]; then
-              if [[ "${{ github.event.inputs.build_node_22 }}" == "true" ]]; then
-                echo "ubuntu_26_22=$(generate_tags 'ubuntu-26.04' '22.x')" >> $GITHUB_OUTPUT
-              fi
-              if [[ "${{ github.event.inputs.build_node_24 }}" == "true" ]]; then
-                echo "ubuntu_26_24=$(generate_tags 'ubuntu-26.04' '24.x')" >> $GITHUB_OUTPUT
-              fi
-            fi
-          fi
+          set -euo pipefail
+          IS_BETA=$([[ "$TAG" == *beta* ]] && echo "true" || echo "false")
 
-          if [[ "${{ github.event.inputs.build_docker_tags_alpine }}" == "true" ]]; then
-            if [[ "${{ github.event.inputs.build_node_22 }}" == "true" ]]; then
-              echo "alpine_22=$(generate_tags 'alpine' '22')" >> $GITHUB_OUTPUT
-            fi
-            if [[ "${{ github.event.inputs.build_node_24 }}" == "true" ]]; then
-              echo "alpine_24=$(generate_tags 'alpine' '24')" >> $GITHUB_OUTPUT
-            fi
-          fi
-          
-          if [[ "${{ github.event.inputs.build_docker_tags_debian }}" == "true" ]]; then
-            if [[ "${{ github.event.inputs.build_node_22 }}" == "true" ]]; then
-              echo "debian_22=$(generate_tags 'debian' '22')" >> $GITHUB_OUTPUT
-            fi
-            if [[ "${{ github.event.inputs.build_node_24 }}" == "true" ]]; then
-              echo "debian_24=$(generate_tags 'debian' '24')" >> $GITHUB_OUTPUT
-            fi
-          fi
+          # Variant catalogue. To add a new OS / node combo, add a row here.
+          # manifest_short_tags[0] is the "primary" short tag also mirrored to Docker Hub.
+          variants=$(jq -nc \
+            --arg alpine "$ALPINE" \
+            --arg debian "$DEBIAN" \
+            --arg u2404 "$UBUNTU_2404" \
+            --arg u2604 "$UBUNTU_2604" \
+            --arg n22 "$NODE_22" \
+            --arg n24 "$NODE_24" \
+            --arg tag "$TAG" \
+            --arg major "$MAJOR_V" \
+            --arg minor "$MINOR_V" \
+            --arg ghcr "$GHCR_PREFIX" \
+            --arg hub "$HUB_PREFIX" \
+            --arg isbeta "$IS_BETA" '
+            [
+              {os_label:"ubuntu",       os_arg:"24.04",  node:"22.x", manifest_short_tags:["latest-22.x"],                                   os_en:$u2404,  node_en:$n22},
+              {os_label:"ubuntu",       os_arg:"24.04",  node:"24.x", manifest_short_tags:["latest","latest-24.x"],                          os_en:$u2404,  node_en:$n24},
+              {os_label:"ubuntu-26.04", os_arg:"26.04",  node:"22.x", manifest_short_tags:["latest-ubuntu-26.04-22.x"],                      os_en:$u2604,  node_en:$n22},
+              {os_label:"ubuntu-26.04", os_arg:"26.04",  node:"24.x", manifest_short_tags:["latest-ubuntu-26.04","latest-ubuntu-26.04-24.x"], os_en:$u2604,  node_en:$n24},
+              {os_label:"alpine",       os_arg:"alpine", node:"22",   manifest_short_tags:["latest-alpine-22"],                              os_en:$alpine, node_en:$n22},
+              {os_label:"alpine",       os_arg:"alpine", node:"24",   manifest_short_tags:["latest-alpine"],                                 os_en:$alpine, node_en:$n24},
+              {os_label:"debian",       os_arg:"debian", node:"22",   manifest_short_tags:["latest-debian-22"],                              os_en:$debian, node_en:$n22},
+              {os_label:"debian",       os_arg:"debian", node:"24",   manifest_short_tags:["latest-debian"],                                 os_en:$debian, node_en:$n24}
+            ]
+            | map(select(.os_en == "true" and .node_en == "true"))
+            | map(
+                .os_label as $ol | .node as $n |
+                . + {
+                  primary_short_tag: .manifest_short_tags[0],
+                  full_tags: (
+                    (if $isbeta == "true" then [$tag, "latest"]
+                     else [$tag, $major, $minor, "latest"] end)
+                    | map(["\($ghcr):\(.)-\($ol)-\($n)", "\($hub):\(.)-\($ol)-\($n)"])
+                    | flatten
+                  )
+                }
+              )
+            | map(del(.os_en, .node_en))
+          ')
 
-  build-ubuntu-images:
-    name: Build Ubuntu image
-    if: ${{ github.event.inputs.build_ubuntu_2404 == 'true' || github.event.inputs.build_ubuntu_2604 == 'true' }}
-    needs: [generate-tags]
+          # Build matrix: one row per (variant, arch). Node 22 builds also produce arm/v7.
+          build_matrix=$(echo "$variants" | jq -c '
+            [ .[] |
+              {os_label, os_arg, node, arch: "amd64", vm: "ubuntu-latest",   platform: "linux/amd64"},
+              {os_label, os_arg, node, arch: "arm64", vm: "ubuntu-24.04-arm",
+               platform: (if (.node | startswith("22")) then "linux/arm64,linux/arm/v7" else "linux/arm64" end)}
+            ]')
+
+          # Variant matrix: one row per variant (used by manifest + copy jobs).
+          variant_matrix=$(echo "$variants" | jq -c '
+            [ .[] | {os_label, node, manifest_short_tags, primary_short_tag, full_tags} ]')
+
+          count=$(echo "$variants" | jq 'length')
+          if [[ "$count" -gt 0 ]]; then
+            echo "any_enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "any_enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "build_matrix=$build_matrix" >> "$GITHUB_OUTPUT"
+          echo "variant_matrix=$variant_matrix" >> "$GITHUB_OUTPUT"
+
+          echo "Enabled variants:"
+          echo "$variants" | jq
+
+  build:
+    name: Build ${{ matrix.os_label }} node-${{ matrix.node }} ${{ matrix.arch }}
+    needs: [signalk-server, prepare]
+    if: needs.prepare.outputs.any_enabled == 'true'
     permissions:
       contents: read
-      packages: write  # Required for GITHUB_TOKEN to push to GHCR
+      packages: write
+    runs-on: ${{ matrix.vm }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # Ubuntu 24.04 AMD64 builds
-          - vm: ubuntu-latest
-            arch: amd64
-            os: '24.04'
-            os_label: ubuntu
-            node: '22.x'
-            platform: linux/amd64
-            enabled: ${{ github.event.inputs.build_node_22 }}
-          - vm: ubuntu-latest
-            arch: amd64
-            os: '24.04'
-            os_label: ubuntu
-            node: '24.x'
-            platform: linux/amd64
-            enabled: ${{ github.event.inputs.build_node_24 }}
-          # Ubuntu 24.04 ARM builds (22.x supports armv7, 24.x only arm64)
-          - vm: ubuntu-24.04-arm
-            arch: arm64
-            os: '24.04'
-            os_label: ubuntu
-            node: '22.x'
-            platform: linux/arm64,linux/arm/v7
-            enabled: ${{ github.event.inputs.build_node_22 }}
-          - vm: ubuntu-24.04-arm
-            arch: arm64
-            os: '24.04'
-            os_label: ubuntu
-            node: '24.x'
-            platform: linux/arm64
-            enabled: ${{ github.event.inputs.build_node_24 }}
-          # Ubuntu 26.04 AMD64 builds
-          - vm: ubuntu-latest
-            arch: amd64
-            os: '26.04'
-            os_label: ubuntu-26.04
-            node: '22.x'
-            platform: linux/amd64
-            enabled: ${{ github.event.inputs.build_node_22 }}
-          - vm: ubuntu-latest
-            arch: amd64
-            os: '26.04'
-            os_label: ubuntu-26.04
-            node: '24.x'
-            platform: linux/amd64
-            enabled: ${{ github.event.inputs.build_node_24 }}
-          # Ubuntu 26.04 ARM builds (22.x supports armv7, 24.x only arm64)
-          - vm: ubuntu-24.04-arm
-            arch: arm64
-            os: '26.04'
-            os_label: ubuntu-26.04
-            node: '22.x'
-            platform: linux/arm64,linux/arm/v7
-            enabled: ${{ github.event.inputs.build_node_22 }}
-          - vm: ubuntu-24.04-arm
-            arch: arm64
-            os: '26.04'
-            os_label: ubuntu-26.04
-            node: '24.x'
-            platform: linux/arm64
-            enabled: ${{ github.event.inputs.build_node_24 }}
-    runs-on: ${{ matrix.vm }}
+        include: ${{ fromJSON(needs.prepare.outputs.build_matrix) }}
     steps:
-      - name: Check if build is enabled
-        id: check
-        run: |
-          node_enabled="${{ matrix.enabled }}"
-          ubuntu_os_enabled="true"
-          if [[ "${{ matrix.os_label }}" == "ubuntu-26.04" ]]; then
-            ubuntu_os_enabled="${{ github.event.inputs.build_ubuntu_2604 }}"
-          elif [[ "${{ matrix.os_label }}" == "ubuntu" ]]; then
-            ubuntu_os_enabled="${{ github.event.inputs.build_ubuntu_2404 }}"
-          fi
-          if [[ "$node_enabled" != "true" || "$ubuntu_os_enabled" != "true" ]]; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-          else
-            echo "skip=false" >> $GITHUB_OUTPUT
-          fi
       - name: Checkout
-        if: steps.check.outputs.skip != 'true'
         uses: actions/checkout@v6
       - uses: actions/download-artifact@v7
-        if: steps.check.outputs.skip != 'true'
         with:
           name: packed-modules
       - name: Set up Docker Buildx
-        if: steps.check.outputs.skip != 'true'
         uses: docker/setup-buildx-action@v3
       - name: Login to ghcr.io
-        if: steps.check.outputs.skip != 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}  # ✅ Replaced GHCR_USERNAME + GHCR_TOKEN
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push
-        if: steps.check.outputs.skip != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -308,246 +235,36 @@ jobs:
           tags: |
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.arch }}-${{ matrix.os_label }}-${{ matrix.node }}-${{ github.sha }}
           build-args: |
-            BASE_IMAGE=${{ matrix.os }}-${{ matrix.node }}
+            BASE_IMAGE=${{ matrix.os_arg }}-${{ matrix.node }}
 
-  build-alpine-images:
-    name: Build Alpine image
-    if: ${{ github.event.inputs.build_docker_tags_alpine == 'true' }}
-    needs: [generate-tags]
+  manifest:
+    name: Manifest ${{ matrix.os_label }} node-${{ matrix.node }}
+    needs: [prepare, build]
+    # Run per-variant best-effort: don't block on a sibling variant's build failure.
+    if: ${{ !cancelled() && needs.prepare.outputs.any_enabled == 'true' }}
     permissions:
       contents: read
-      packages: write  # Required for GITHUB_TOKEN to push to GHCR
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # AMD64 builds for both node versions
-          - vm: ubuntu-latest
-            arch: amd64
-            node: '22'
-            platform: linux/amd64
-            enabled: ${{ github.event.inputs.build_node_22 }}
-          - vm: ubuntu-latest
-            arch: amd64
-            node: '24'
-            platform: linux/amd64
-            enabled: ${{ github.event.inputs.build_node_24 }}
-          # ARM builds (22 supports armv7, 24 only arm64)
-          - vm: ubuntu-24.04-arm
-            arch: arm64
-            node: '22'
-            platform: linux/arm64,linux/arm/v7
-            enabled: ${{ github.event.inputs.build_node_22 }}
-          - vm: ubuntu-24.04-arm
-            arch: arm64
-            node: '24'
-            platform: linux/arm64
-            enabled: ${{ github.event.inputs.build_node_24 }}
-    runs-on: ${{ matrix.vm }}
-    steps:
-      - name: Check if build is enabled
-        id: check
-        run: |
-          if [[ "${{ matrix.enabled }}" != "true" ]]; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-          else
-            echo "skip=false" >> $GITHUB_OUTPUT
-          fi
-      - name: Checkout
-        if: steps.check.outputs.skip != 'true'
-        uses: actions/checkout@v6
-      - uses: actions/download-artifact@v7
-        if: steps.check.outputs.skip != 'true'
-        with:
-          name: packed-modules
-      - name: Set up Docker Buildx
-        if: steps.check.outputs.skip != 'true'
-        uses: docker/setup-buildx-action@v3
-      - name: Login to ghcr.io
-        if: steps.check.outputs.skip != 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.GHCR_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}  # ✅ Replaced GHCR_USERNAME + GHCR_TOKEN
-      - name: Build and push
-        if: steps.check.outputs.skip != 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./docker/Dockerfile_user
-          platforms: ${{ matrix.platform }}
-          push: true
-          provenance: true
-          sbom: true
-          tags: |
-            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.arch }}-alpine-${{ matrix.node }}-${{ github.sha }}
-          build-args: |
-            BASE_IMAGE=alpine-${{ matrix.node }}
-
-  build-debian-images:
-    name: Build Debian image
-    if: ${{ github.event.inputs.build_docker_tags_debian == 'true' }}
-    needs: [generate-tags]
-    permissions:
-      contents: read
-      packages: write  # Required for GITHUB_TOKEN to push to GHCR
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # AMD64 builds for both node versions
-          - vm: ubuntu-latest
-            arch: amd64
-            node: '22'
-            platform: linux/amd64
-            enabled: ${{ github.event.inputs.build_node_22 }}
-          - vm: ubuntu-latest
-            arch: amd64
-            node: '24'
-            platform: linux/amd64
-            enabled: ${{ github.event.inputs.build_node_24 }}
-          # ARM builds (22 supports armv7, 24 only arm64)
-          - vm: ubuntu-24.04-arm
-            arch: arm64
-            node: '22'
-            platform: linux/arm64,linux/arm/v7
-            enabled: ${{ github.event.inputs.build_node_22 }}
-          - vm: ubuntu-24.04-arm
-            arch: arm64
-            node: '24'
-            platform: linux/arm64
-            enabled: ${{ github.event.inputs.build_node_24 }}
-    runs-on: ${{ matrix.vm }}
-    steps:
-      - name: Check if build is enabled
-        id: check
-        run: |
-          if [[ "${{ matrix.enabled }}" != "true" ]]; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-          else
-            echo "skip=false" >> $GITHUB_OUTPUT
-          fi
-      - name: Checkout
-        if: steps.check.outputs.skip != 'true'
-        uses: actions/checkout@v6
-      - uses: actions/download-artifact@v7
-        if: steps.check.outputs.skip != 'true'
-        with:
-          name: packed-modules
-      - name: Set up Docker Buildx
-        if: steps.check.outputs.skip != 'true'
-        uses: docker/setup-buildx-action@v3
-      - name: Login to ghcr.io
-        if: steps.check.outputs.skip != 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.GHCR_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}  # ✅ Replaced GHCR_USERNAME + GHCR_TOKEN
-      - name: Build and push
-        if: steps.check.outputs.skip != 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./docker/Dockerfile_user
-          platforms: ${{ matrix.platform }}
-          push: true
-          provenance: true
-          sbom: true
-          tags: |
-            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.arch }}-debian-${{ matrix.node }}-${{ github.sha }}
-          build-args: |
-            BASE_IMAGE=debian-${{ matrix.node }}
-
-  create-ubuntu-manifest:
-    name: Ubuntu manifest
-    if: ${{ github.event.inputs.build_ubuntu_2404 == 'true' || github.event.inputs.build_ubuntu_2604 == 'true' }}
-    needs: [build-ubuntu-images, generate-tags]
+      packages: write
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write  # Required for GITHUB_TOKEN to push to GHCR
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - node: '24.x'
-            os_label: ubuntu
-            short_tag: latest
-            short_tag2: latest-24.x
-            enabled: ${{ github.event.inputs.build_node_24 }}
-          - node: '22.x'
-            os_label: ubuntu
-            short_tag: latest-22.x
-            short_tag2: latest-22.x
-            enabled: ${{ github.event.inputs.build_node_22 }}
-          - node: '24.x'
-            os_label: ubuntu-26.04
-            short_tag: latest-ubuntu-26.04
-            short_tag2: latest-ubuntu-26.04-24.x
-            enabled: ${{ github.event.inputs.build_node_24 }}
-          - node: '22.x'
-            os_label: ubuntu-26.04
-            short_tag: latest-ubuntu-26.04-22.x
-            short_tag2: latest-ubuntu-26.04-22.x
-            enabled: ${{ github.event.inputs.build_node_22 }}
+        include: ${{ fromJSON(needs.prepare.outputs.variant_matrix) }}
     steps:
-      - name: Check if build is enabled
-        id: check
-        run: |
-          node_enabled="${{ matrix.enabled }}"
-          ubuntu_os_enabled="true"
-          if [[ "${{ matrix.os_label }}" == "ubuntu-26.04" ]]; then
-            ubuntu_os_enabled="${{ github.event.inputs.build_ubuntu_2604 }}"
-          elif [[ "${{ matrix.os_label }}" == "ubuntu" ]]; then
-            ubuntu_os_enabled="${{ github.event.inputs.build_ubuntu_2404 }}"
-          fi
-          if [[ "$node_enabled" != "true" || "$ubuntu_os_enabled" != "true" ]]; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-          else
-            echo "skip=false" >> $GITHUB_OUTPUT
-          fi
-      - name: Checkout
-        if: steps.check.outputs.skip != 'true'
-        uses: actions/checkout@v6
       - name: Set up Docker Buildx
-        if: steps.check.outputs.skip != 'true'
         uses: docker/setup-buildx-action@v3
       - name: Login to ghcr.io
-        if: steps.check.outputs.skip != 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}  # ✅ Replaced GHCR_USERNAME + GHCR_TOKEN
-      - name: Extract GHCR tags
-        if: steps.check.outputs.skip != 'true'
-        id: ghcr_tags
-        run: |
-          if [[ "${{ matrix.os_label }}" == "ubuntu-26.04" ]]; then
-            if [[ "${{ matrix.node }}" == "24.x" ]]; then
-              TAGS="${{ needs.generate-tags.outputs.ubuntu_26_24 }}"
-            else
-              TAGS="${{ needs.generate-tags.outputs.ubuntu_26_22 }}"
-            fi
-          else
-            TAGS="${{ matrix.node == '24.x' && needs.generate-tags.outputs.ubuntu_24 || needs.generate-tags.outputs.ubuntu_22 }}"
-          fi
-          {
-            echo 'IMAGES<<EOF'
-            echo "$TAGS" | tr ',' '\n' | grep "^${{ env.GHCR_REGISTRY }}/"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
-      - name: Wait for images to be available
-        if: steps.check.outputs.skip != 'true'
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Wait for arch images
         run: |
           set -euo pipefail
-          echo "Waiting for build jobs to complete and images to be available..."
-
           for arch in amd64 arm64; do
             image="${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${arch}-${{ matrix.os_label }}-${{ matrix.node }}-${{ github.sha }}"
             echo "Checking: $image"
-
             for i in {1..60}; do
               if docker manifest inspect "$image" > /dev/null 2>&1; then
                 echo "✓ Image available: $image"
@@ -556,7 +273,6 @@ jobs:
               if [ $i -eq 60 ]; then
                 echo "✗ TIMEOUT: Image not available after 10 minutes: $image"
                 echo "This usually means the build job failed or is still running."
-                echo "Check the build-ubuntu-images job status."
                 exit 1
               fi
               if [ $((i % 6)) -eq 0 ]; then
@@ -565,304 +281,74 @@ jobs:
               sleep 10
             done
           done
-          echo "✓ All images available for manifest creation"
+      - name: Collect manifest tags
+        id: tags
+        env:
+          GHCR_PREFIX: ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}
+          FULL_TAGS_JSON: ${{ toJSON(matrix.full_tags) }}
+          SHORT_TAGS_JSON: ${{ toJSON(matrix.manifest_short_tags) }}
+        run: |
+          set -euo pipefail
+          {
+            echo 'TAGS<<EOF'
+            jq -r '.[]' <<<"$FULL_TAGS_JSON" | grep "^${GHCR_PREFIX}:" || true
+            jq -r --arg p "$GHCR_PREFIX" '.[] | "\($p):\(.)"' <<<"$SHORT_TAGS_JSON"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
       - name: Create and push multi-arch manifest to GHCR
-        if: steps.check.outputs.skip != 'true'
         uses: int128/docker-manifest-create-action@v2
         with:
-          tags: |
-            ${{ steps.ghcr_tags.outputs.IMAGES }}
-            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.short_tag }}
-            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.short_tag2 }}
+          tags: ${{ steps.tags.outputs.TAGS }}
           sources: |
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:amd64-${{ matrix.os_label }}-${{ matrix.node }}-${{ github.sha }}
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:arm64-${{ matrix.os_label }}-${{ matrix.node }}-${{ github.sha }}
 
-  create-alpine-manifest:
-    name: Alpine manifest
-    if: ${{ github.event.inputs.build_docker_tags_alpine == 'true' }}
-    needs: [build-alpine-images, generate-tags]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write  # Required for GITHUB_TOKEN to push to GHCR
-    strategy:
-      matrix:
-        node: ['22', '24']
-        include:
-          - node: '24'
-            short_tag: latest-alpine
-            enabled: ${{ github.event.inputs.build_node_24 }}
-          - node: '22'
-            short_tag: latest-alpine-22
-            enabled: ${{ github.event.inputs.build_node_22 }}
-    steps:
-      - name: Check if build is enabled
-        id: check
-        run: |
-          if [[ "${{ matrix.enabled }}" != "true" ]]; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-          else
-            echo "skip=false" >> $GITHUB_OUTPUT
-          fi
-      - name: Checkout
-        if: steps.check.outputs.skip != 'true'
-        uses: actions/checkout@v6
-      - name: Set up Docker Buildx
-        if: steps.check.outputs.skip != 'true'
-        uses: docker/setup-buildx-action@v3
-      - name: Login to ghcr.io
-        if: steps.check.outputs.skip != 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.GHCR_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}  # ✅ Replaced GHCR_USERNAME + GHCR_TOKEN
-      - name: Extract GHCR tags
-        if: steps.check.outputs.skip != 'true'
-        id: ghcr_tags
-        run: |
-          TAGS="${{ matrix.node == '24' && needs.generate-tags.outputs.alpine_24 || needs.generate-tags.outputs.alpine_22 }}"
-          {
-            echo 'IMAGES<<EOF'
-            echo "$TAGS" | tr ',' '\n' | grep "^${{ env.GHCR_REGISTRY }}/"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
-      - name: Wait for images to be available
-        if: steps.check.outputs.skip != 'true'
-        run: |
-          set -euo pipefail
-          echo "Waiting for build jobs to complete and images to be available..."
-          
-          for arch in amd64 arm64; do
-            image="${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${arch}-alpine-${{ matrix.node }}-${{ github.sha }}"
-            echo "Checking: $image"
-            
-            for i in {1..60}; do
-              if docker manifest inspect "$image" > /dev/null 2>&1; then
-                echo "✓ Image available: $image"
-                break
-              fi
-              if [ $i -eq 60 ]; then
-                echo "✗ TIMEOUT: Image not available after 10 minutes: $image"
-                echo "This usually means the build job failed or is still running."
-                echo "Check the build-alpine-images job status."
-                exit 1
-              fi
-              if [ $((i % 6)) -eq 0 ]; then
-                echo "Still waiting... ($i/60) - $(date)"
-              fi
-              sleep 10
-            done
-          done
-          echo "✓ All images available for manifest creation"
-      - name: Create and push multi-arch manifest to GHCR
-        if: steps.check.outputs.skip != 'true'
-        uses: int128/docker-manifest-create-action@v2
-        with:
-          tags: |
-            ${{ steps.ghcr_tags.outputs.IMAGES }}
-            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.short_tag }}
-          sources: |
-            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:amd64-alpine-${{ matrix.node }}-${{ github.sha }}
-            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:arm64-alpine-${{ matrix.node }}-${{ github.sha }}
-
-  create-debian-manifest:
-    name: Debian manifest
-    if: ${{ github.event.inputs.build_docker_tags_debian == 'true' }}
-    needs: [build-debian-images, generate-tags]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write  # Required for GITHUB_TOKEN to push to GHCR
-    strategy:
-      matrix:
-        node: ['22', '24']
-        include:
-          - node: '24'
-            short_tag: latest-debian
-            enabled: ${{ github.event.inputs.build_node_24 }}
-          - node: '22'
-            short_tag: latest-debian-22
-            enabled: ${{ github.event.inputs.build_node_22 }}
-    steps:
-      - name: Check if build is enabled
-        id: check
-        run: |
-          if [[ "${{ matrix.enabled }}" != "true" ]]; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-          else
-            echo "skip=false" >> $GITHUB_OUTPUT
-          fi
-      - name: Checkout
-        if: steps.check.outputs.skip != 'true'
-        uses: actions/checkout@v6
-      - name: Set up Docker Buildx
-        if: steps.check.outputs.skip != 'true'
-        uses: docker/setup-buildx-action@v3
-      - name: Login to ghcr.io
-        if: steps.check.outputs.skip != 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.GHCR_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}  # ✅ Replaced GHCR_USERNAME + GHCR_TOKEN
-      - name: Extract GHCR tags
-        if: steps.check.outputs.skip != 'true'
-        id: ghcr_tags
-        run: |
-          TAGS="${{ matrix.node == '24' && needs.generate-tags.outputs.debian_24 || needs.generate-tags.outputs.debian_22 }}"
-          {
-            echo 'IMAGES<<EOF'
-            echo "$TAGS" | tr ',' '\n' | grep "^${{ env.GHCR_REGISTRY }}/"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
-      - name: Wait for images to be available
-        if: steps.check.outputs.skip != 'true'
-        run: |
-          set -euo pipefail
-          echo "Waiting for build jobs to complete and images to be available..."
-          
-          for arch in amd64 arm64; do
-            image="${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${arch}-debian-${{ matrix.node }}-${{ github.sha }}"
-            echo "Checking: $image"
-            
-            for i in {1..60}; do
-              if docker manifest inspect "$image" > /dev/null 2>&1; then
-                echo "✓ Image available: $image"
-                break
-              fi
-              if [ $i -eq 60 ]; then
-                echo "✗ TIMEOUT: Image not available after 10 minutes: $image"
-                echo "This usually means the build job failed or is still running."
-                echo "Check the build-debian-images job status."
-                exit 1
-              fi
-              if [ $((i % 6)) -eq 0 ]; then
-                echo "Still waiting... ($i/60) - $(date)"
-              fi
-              sleep 10
-            done
-          done
-          echo "✓ All images available for manifest creation"
-      - name: Create and push multi-arch manifest to GHCR
-        if: steps.check.outputs.skip != 'true'
-        uses: int128/docker-manifest-create-action@v2
-        with:
-          tags: |
-            ${{ steps.ghcr_tags.outputs.IMAGES }}
-            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:${{ matrix.short_tag }}
-          sources: |
-            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:amd64-debian-${{ matrix.node }}-${{ github.sha }}
-            ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}:arm64-debian-${{ matrix.node }}-${{ github.sha }}
-
   copy-to-dockerhub:
-    name: Copy to Docker Hub
-    if: |
-      always() &&
-      (needs.create-ubuntu-manifest.result == 'success' || 
-       needs.create-alpine-manifest.result == 'success' || 
-       needs.create-debian-manifest.result == 'success')
-    needs: [create-ubuntu-manifest, create-alpine-manifest, create-debian-manifest, generate-tags]
+    name: Copy ${{ matrix.os_label }} node-${{ matrix.node }} to Docker Hub
+    needs: [prepare, manifest]
+    if: ${{ !cancelled() && needs.prepare.outputs.any_enabled == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        variant:
-          - os: ubuntu
-            node: '22.x'
-            short_tag: latest-22.x
-            tags_output: ubuntu_22
-            enabled: ${{ github.event.inputs.build_ubuntu_2404 == 'true' && github.event.inputs.build_node_22 == 'true' }}
-          - os: ubuntu
-            node: '24.x'
-            short_tag: latest
-            tags_output: ubuntu_24
-            enabled: ${{ github.event.inputs.build_ubuntu_2404 == 'true' && github.event.inputs.build_node_24 == 'true' }}
-          - os: ubuntu-26.04
-            node: '22.x'
-            short_tag: latest-ubuntu-26.04-22.x
-            tags_output: ubuntu_26_22
-            enabled: ${{ github.event.inputs.build_ubuntu_2604 == 'true' && github.event.inputs.build_node_22 == 'true' }}
-          - os: ubuntu-26.04
-            node: '24.x'
-            short_tag: latest-ubuntu-26.04
-            tags_output: ubuntu_26_24
-            enabled: ${{ github.event.inputs.build_ubuntu_2604 == 'true' && github.event.inputs.build_node_24 == 'true' }}
-          - os: alpine
-            node: '22'
-            short_tag: latest-alpine-22
-            tags_output: alpine_22
-            enabled: ${{ github.event.inputs.build_docker_tags_alpine == 'true' && github.event.inputs.build_node_22 == 'true' }}
-          - os: alpine
-            node: '24'
-            short_tag: latest-alpine
-            tags_output: alpine_24
-            enabled: ${{ github.event.inputs.build_docker_tags_alpine == 'true' && github.event.inputs.build_node_24 == 'true' }}
-          - os: debian
-            node: '22'
-            short_tag: latest-debian-22
-            tags_output: debian_22
-            enabled: ${{ github.event.inputs.build_docker_tags_debian == 'true' && github.event.inputs.build_node_22 == 'true' }}
-          - os: debian
-            node: '24'
-            short_tag: latest-debian
-            tags_output: debian_24
-            enabled: ${{ github.event.inputs.build_docker_tags_debian == 'true' && github.event.inputs.build_node_24 == 'true' }}
+        include: ${{ fromJSON(needs.prepare.outputs.variant_matrix) }}
     steps:
-      - name: Check if variant is enabled
-        id: check
-        run: |
-          if [[ "${{ matrix.variant.enabled }}" != "true" ]]; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-          else
-            echo "skip=false" >> $GITHUB_OUTPUT
-          fi
       - name: Install skopeo
-        if: steps.check.outputs.skip != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y skopeo
-      - name: Copy images from GHCR to Docker Hub
-        if: steps.check.outputs.skip != 'true'
+      - name: Copy GHCR -> Docker Hub
         env:
-          # GHCR source: use GITHUB_TOKEN (read access is sufficient for skopeo copy source)
-          # NOTE: GITHUB_TOKEN cannot be passed as an env var to skopeo directly due to masking.
-          # We use a dedicated read-scoped PAT here, or fall back to GHCR_TOKEN if you have one.
-          # If your GHCR packages are public, you can omit --src-creds entirely.
+          # GHCR source: GITHUB_TOKEN has read access. If GHCR packages are public,
+          # --src-creds can be omitted entirely.
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_USERNAME: ${{ github.actor }}
           DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
           DOCKER_HUB_ACCESS_TOKEN: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+          GHCR_PREFIX: ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}
+          HUB_PREFIX: docker.io/${{ env.DOCKER_HUB_REPO }}
+          FULL_TAGS_JSON: ${{ toJSON(matrix.full_tags) }}
+          PRIMARY_SHORT_TAG: ${{ matrix.primary_short_tag }}
         run: |
           set -euo pipefail
-          GHCR_PREFIX="${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}"
-          HUB_PREFIX="docker.io/${{ env.DOCKER_HUB_REPO }}"
-          TAGS="${{ needs.generate-tags.outputs[matrix.variant.tags_output] }}"
-          if [[ -z "$TAGS" ]]; then
-            echo "ERROR: No generated tags found for ${{ matrix.variant.tags_output }}"
-            exit 1
-          fi
           {
-            echo "$TAGS"
-            echo "${GHCR_PREFIX}:${{ matrix.variant.short_tag }}"
-          } | tr ',' '\n' | grep "^${GHCR_PREFIX}:" | awk '!seen[$0]++' > ghcr_tags.txt
+            jq -r '.[]' <<<"$FULL_TAGS_JSON" | grep "^${GHCR_PREFIX}:" || true
+            echo "${GHCR_PREFIX}:${PRIMARY_SHORT_TAG}"
+          } | awk '!seen[$0]++' > ghcr_tags.txt
+
           if [[ ! -s ghcr_tags.txt ]]; then
-            echo "ERROR: No GHCR tags to copy for ${{ matrix.variant.os }} ${{ matrix.variant.node }}"
+            echo "ERROR: No GHCR tags to copy"
             exit 1
           fi
+
           echo "Tags to copy:"
           cat ghcr_tags.txt
-          # Copy versioned and short tags in one loop.
+
           while IFS= read -r ghcr_image; do
             [ -z "$ghcr_image" ] && continue
-            
-            # Extract just the tag part after the last colon
             tag="${ghcr_image##*:}"
             hub_image="${HUB_PREFIX}:${tag}"
-            
             echo "Copying: $ghcr_image -> $hub_image"
-            
             if ! skopeo copy --all \
               --retry-times 3 \
               --src-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
@@ -874,7 +360,6 @@ jobs:
             fi
             echo "✓ Successfully copied: $tag"
           done < ghcr_tags.txt
-          echo "✓ Successfully copied all images for ${{ matrix.variant.os }} ${{ matrix.variant.node }}"
 
   housekeeping:
     name: Housekeeping
@@ -882,15 +367,15 @@ jobs:
     needs: [copy-to-dockerhub]
     runs-on: ubuntu-latest
     permissions:
-      packages: write  # Required for GITHUB_TOKEN to delete GHCR packages
+      packages: write
     steps:
       - name: Check if any copy succeeded
         id: check
         run: |
           if [[ "${{ needs.copy-to-dockerhub.result }}" == "success" ]]; then
-            echo "cleanup=true" >> $GITHUB_OUTPUT
+            echo "cleanup=true" >> "$GITHUB_OUTPUT"
           else
-            echo "cleanup=false" >> $GITHUB_OUTPUT
+            echo "cleanup=false" >> "$GITHUB_OUTPUT"
             echo "Skipping cleanup - no successful copies"
           fi
       - name: Delete all workflow artifacts
@@ -907,7 +392,7 @@ jobs:
           delete-untagged: true
           delete-tags: |
             *-${{ github.sha }}
-          token: ${{ secrets.GITHUB_TOKEN }}  # ✅ Replaced GHCR_TOKEN_NEW
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   slack:
     name: Slack notification
@@ -920,13 +405,13 @@ jobs:
         run: |
           TAG="${{ needs.signalk-server.outputs.tag }}"
           if [[ "${{ needs.signalk-server.result }}" == "failure" || "${{ needs.copy-to-dockerhub.result }}" == "failure" || "${{ needs.housekeeping.result }}" == "failure" ]]; then
-            echo "message=❌ Docker build workflow failed for $TAG" >> $GITHUB_OUTPUT
+            echo "message=❌ Docker build workflow failed for $TAG" >> "$GITHUB_OUTPUT"
           elif [[ "${{ needs.signalk-server.result }}" == "cancelled" || "${{ needs.copy-to-dockerhub.result }}" == "cancelled" || "${{ needs.housekeeping.result }}" == "cancelled" ]]; then
-            echo "message=⚠️ Docker build workflow was cancelled for $TAG" >> $GITHUB_OUTPUT
+            echo "message=⚠️ Docker build workflow was cancelled for $TAG" >> "$GITHUB_OUTPUT"
           elif [[ "${{ needs.housekeeping.result }}" == "success" ]]; then
-            echo "message=✅ Docker images successfully built and published: $TAG" >> $GITHUB_OUTPUT
+            echo "message=✅ Docker images successfully built and published: $TAG" >> "$GITHUB_OUTPUT"
           else
-            echo "message=⚠️ Docker build workflow completed with issues for $TAG" >> $GITHUB_OUTPUT
+            echo "message=⚠️ Docker build workflow completed with issues for $TAG" >> "$GITHUB_OUTPUT"
           fi
       - name: Send Slack notification
         run: |
