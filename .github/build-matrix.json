@@ -1,0 +1,77 @@
+{
+  "_comment": "Single source of truth for OS x Node combinations the workflows can build. To add a new OS, append an entry to os_variants and a matching workflow_dispatch input (one per node version) to .github/workflows/build sk docker container all.yml and build docker base container all.yml. To add a new Node major, append to node_versions and add manifest_short_tags entries on every os_variants row, plus matching workflow_dispatch inputs.",
+  "os_variants": [
+    {
+      "id": "ubuntu-24.04",
+      "family": "ubuntu",
+      "base_os_label": "24.04",
+      "user_os_label": "ubuntu",
+      "user_os_arg": "24.04",
+      "dockerfile": "./docker/Dockerfile_base_24.04_user",
+      "build_test": true,
+      "login_dhi": false,
+      "default_enabled": true,
+      "manifest_short_tags": {
+        "22": ["latest-22.x"],
+        "24": ["latest", "latest-24.x"]
+      }
+    },
+    {
+      "id": "ubuntu-26.04",
+      "family": "ubuntu",
+      "base_os_label": "26.04",
+      "user_os_label": "ubuntu-26.04",
+      "user_os_arg": "26.04",
+      "dockerfile": "./docker/Dockerfile_base_26.04_user",
+      "build_test": true,
+      "login_dhi": false,
+      "default_enabled": true,
+      "manifest_short_tags": {
+        "22": ["latest-ubuntu-26.04-22.x"],
+        "24": ["latest-ubuntu-26.04", "latest-ubuntu-26.04-24.x"]
+      }
+    },
+    {
+      "id": "alpine",
+      "family": "alpine",
+      "base_os_label": "alpine",
+      "user_os_label": "alpine",
+      "user_os_arg": "alpine",
+      "dockerfile": "./docker/Dockerfile_base_alpine",
+      "build_test": false,
+      "login_dhi": true,
+      "default_enabled": true,
+      "manifest_short_tags": {
+        "22": ["latest-alpine-22"],
+        "24": ["latest-alpine"]
+      }
+    },
+    {
+      "id": "debian",
+      "family": "debian",
+      "base_os_label": "debian",
+      "user_os_label": "debian",
+      "user_os_arg": "debian",
+      "dockerfile": "./docker/Dockerfile_base_debian",
+      "build_test": false,
+      "login_dhi": false,
+      "default_enabled": false,
+      "manifest_short_tags": {
+        "22": ["latest-debian-22"],
+        "24": ["latest-debian"]
+      }
+    }
+  ],
+  "node_versions": [
+    {
+      "id": "22",
+      "ubuntu_format": "22.x",
+      "default_enabled": false
+    },
+    {
+      "id": "24",
+      "ubuntu_format": "24.x",
+      "default_enabled": true
+    }
+  ]
+}

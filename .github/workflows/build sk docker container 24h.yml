@@ -3,32 +3,44 @@ name: SignalK Docker Build 24h
 on:
   schedule:
     - cron: "0 1 * * *"
+  # Per-(OS x Node) checkboxes. The catalogue of available combinations
+  # lives in .github/build-matrix.json - add a row there, then add a
+  # matching input below. Input names must be: <os_id_with_-_and_._mapped_to__>_node_<node_id>.
+  # Scheduled runs ignore inputs and use default_enabled from the JSON.
   workflow_dispatch:
     inputs:
-      build_docker_tags_alpine:
-        description: 'Build Alpine docker image'
-        type: boolean
-        default: true
-      build_docker_tags_debian:
-        description: 'Build Debian docker image'
+      ubuntu_24_04_node_22:
+        description: 'Ubuntu 24.04 + Node 22.x'
         type: boolean
         default: false
-      build_ubuntu_2404:
-        description: 'Build Ubuntu 24.04 docker image'
+      ubuntu_24_04_node_24:
+        description: 'Ubuntu 24.04 + Node 24.x'
         type: boolean
         default: true
-      build_ubuntu_2604:
-        description: 'Build Ubuntu 26.04 docker image'
-        type: boolean
-        default: true
-      build_node_22:
-        description: 'Build Node.js 22 images'
+      ubuntu_26_04_node_22:
+        description: 'Ubuntu 26.04 + Node 22.x'
         type: boolean
         default: false
-      build_node_24:
-        description: 'Build Node.js 24 images'
+      ubuntu_26_04_node_24:
+        description: 'Ubuntu 26.04 + Node 24.x'
         type: boolean
         default: true
+      alpine_node_22:
+        description: 'Alpine + Node 22'
+        type: boolean
+        default: false
+      alpine_node_24:
+        description: 'Alpine + Node 24'
+        type: boolean
+        default: true
+      debian_node_22:
+        description: 'Debian + Node 22'
+        type: boolean
+        default: false
+      debian_node_24:
+        description: 'Debian + Node 24'
+        type: boolean
+        default: false
 
 env:
   GHCR_REGISTRY: ghcr.io
@@ -184,8 +196,10 @@ jobs:
           path: ./signalk-server/*.tgz
 
   # Computes which variants are enabled and emits matrices used by the
-  # build / manifest / copy jobs. Centralising this here removes the
-  # per-job "is this enabled?" boilerplate and the long shell tag-builder.
+  # build / manifest / copy jobs. The OS x Node catalogue lives in
+  # .github/build-matrix.json - this step just cross-products it and
+  # filters by the per-row workflow_dispatch checkboxes (or by
+  # default_enabled for scheduled runs).
   prepare:
     name: Prepare matrices and tags
     needs: [signalk-server]
@@ -195,65 +209,60 @@ jobs:
       variant_matrix: ${{ steps.matrix.outputs.variant_matrix }}
       any_enabled: ${{ steps.matrix.outputs.any_enabled }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
       - name: Compute matrices
         id: matrix
         env:
-          ALPINE: ${{ github.event.inputs.build_docker_tags_alpine }}
-          DEBIAN: ${{ github.event.inputs.build_docker_tags_debian }}
-          UBUNTU_2404: ${{ github.event.inputs.build_ubuntu_2404 }}
-          UBUNTU_2604: ${{ github.event.inputs.build_ubuntu_2604 }}
-          NODE_22: ${{ github.event.inputs.build_node_22 }}
-          NODE_24: ${{ github.event.inputs.build_node_24 }}
           TAG: ${{ needs.signalk-server.outputs.tag }}
           MAJOR_V: v${{ needs.signalk-server.outputs.major }}
           MINOR_V: v${{ needs.signalk-server.outputs.major }}.${{ needs.signalk-server.outputs.minor }}
           GHCR_PREFIX: ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_REPO }}
           HUB_PREFIX: ${{ env.DOCKER_HUB_REPO }}
+          ENABLED_JSON: ${{ toJSON(github.event.inputs) }}
         run: |
           set -euo pipefail
           IS_BETA=$([[ "$TAG" == *beta* ]] && echo "true" || echo "false")
 
-          # Variant catalogue. To add a new OS / Node combo, add a row here.
-          # manifest_short_tags[0] is the "primary" short tag also mirrored to Docker Hub.
-          # When triggered by schedule, all event.inputs.* are empty strings -> defaults below.
-          variants=$(jq -nc \
-            --arg alpine "${ALPINE:-true}" \
-            --arg debian "${DEBIAN:-false}" \
-            --arg u2404 "${UBUNTU_2404:-true}" \
-            --arg u2604 "${UBUNTU_2604:-true}" \
-            --arg n22 "${NODE_22:-false}" \
-            --arg n24 "${NODE_24:-true}" \
+          # Cross-product os_variants x node_versions, filter by the
+          # per-row dispatch checkbox (or by default_enabled for scheduled runs),
+          # then attach full + short tags. manifest_short_tags[0] is mirrored
+          # to Docker Hub as the primary alias.
+          variants=$(jq -c \
             --arg tag "$TAG" \
             --arg major "$MAJOR_V" \
             --arg minor "$MINOR_V" \
             --arg ghcr "$GHCR_PREFIX" \
             --arg hub "$HUB_PREFIX" \
-            --arg isbeta "$IS_BETA" '
-            [
-              {os_label:"ubuntu",       os_arg:"24.04",  node:"22.x", manifest_short_tags:["latest-22.x"],                                   os_en:$u2404,  node_en:$n22},
-              {os_label:"ubuntu",       os_arg:"24.04",  node:"24.x", manifest_short_tags:["latest","latest-24.x"],                          os_en:$u2404,  node_en:$n24},
-              {os_label:"ubuntu-26.04", os_arg:"26.04",  node:"22.x", manifest_short_tags:["latest-ubuntu-26.04-22.x"],                      os_en:$u2604,  node_en:$n22},
-              {os_label:"ubuntu-26.04", os_arg:"26.04",  node:"24.x", manifest_short_tags:["latest-ubuntu-26.04","latest-ubuntu-26.04-24.x"], os_en:$u2604,  node_en:$n24},
-              {os_label:"alpine",       os_arg:"alpine", node:"22",   manifest_short_tags:["latest-alpine-22"],                              os_en:$alpine, node_en:$n22},
-              {os_label:"alpine",       os_arg:"alpine", node:"24",   manifest_short_tags:["latest-alpine"],                                 os_en:$alpine, node_en:$n24},
-              {os_label:"debian",       os_arg:"debian", node:"22",   manifest_short_tags:["latest-debian-22"],                              os_en:$debian, node_en:$n22},
-              {os_label:"debian",       os_arg:"debian", node:"24",   manifest_short_tags:["latest-debian"],                                 os_en:$debian, node_en:$n24}
-            ]
-            | map(select(.os_en == "true" and .node_en == "true"))
+            --arg isbeta "$IS_BETA" \
+            --argjson enabled "${ENABLED_JSON:-null}" '
+            (if ($enabled | type) == "object" then $enabled else {} end) as $en
+            | .os_variants as $os | .node_versions as $nodes
+            | [ $os[] as $o | $nodes[] as $n |
+                (($o.id | gsub("[-.]"; "_")) + "_node_" + $n.id) as $key |
+                {
+                  enabled: ($en[$key] // (if ($o.default_enabled and $n.default_enabled) then "true" else "false" end)),
+                  os_label: $o.user_os_label,
+                  os_arg:   $o.user_os_arg,
+                  node:     (if $o.family == "ubuntu" then $n.ubuntu_format else $n.id end),
+                  manifest_short_tags: ($o.manifest_short_tags[$n.id] // [])
+                }
+              ]
+            | map(select(.enabled == "true"))
             | map(
-                .os_label as $ol | .node as $n |
+                .os_label as $ol | .node as $nv |
                 . + {
                   primary_short_tag: .manifest_short_tags[0],
                   full_tags: (
                     (if $isbeta == "true" then [$tag, "latest"]
                      else [$tag, $major, $minor, "latest"] end)
-                    | map(["\($ghcr):\(.)-\($ol)-\($n)", "\($hub):\(.)-\($ol)-\($n)"])
+                    | map(["\($ghcr):\(.)-\($ol)-\($nv)", "\($hub):\(.)-\($ol)-\($nv)"])
                     | flatten
                   )
                 }
               )
-            | map(del(.os_en, .node_en))
-          ')
+            | map(del(.enabled))
+          ' .github/build-matrix.json)
 
           # Build matrix: one row per (variant, arch). Node 22 builds also produce arm/v7.
           build_matrix=$(echo "$variants" | jq -c '

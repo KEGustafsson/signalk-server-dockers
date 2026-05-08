@@ -3,28 +3,44 @@ name: Build Docker base images user (Ubuntu + Alpine + Debian-Slim)
 on:
   schedule:
     - cron: "0 0 * * 1"
+  # Per-(OS x Node) checkboxes. The catalogue of available combinations
+  # lives in .github/build-matrix.json - add a row there, then add a
+  # matching input below. Input names must be: <os_id_with_-_and_._mapped_to__>_node_<node_id>.
+  # Scheduled runs ignore inputs and use default_enabled from the JSON.
   workflow_dispatch:
     inputs:
-      ubuntu:
-        description: 'Build Ubuntu base image'
-        type: boolean
-        default: true
-      alpine:
-        description: 'Build Alpine base image'
-        type: boolean
-        default: true
-      debian:
-        description: 'Build Debian base image'
+      ubuntu_24_04_node_22:
+        description: 'Ubuntu 24.04 + Node 22.x'
         type: boolean
         default: false
-      build_node_22:
-        description: 'Build Node.js 22 images'
-        type: boolean
-        default: false
-      build_node_24:
-        description: 'Build Node.js 24 images'
+      ubuntu_24_04_node_24:
+        description: 'Ubuntu 24.04 + Node 24.x'
         type: boolean
         default: true
+      ubuntu_26_04_node_22:
+        description: 'Ubuntu 26.04 + Node 22.x'
+        type: boolean
+        default: false
+      ubuntu_26_04_node_24:
+        description: 'Ubuntu 26.04 + Node 24.x'
+        type: boolean
+        default: true
+      alpine_node_22:
+        description: 'Alpine + Node 22'
+        type: boolean
+        default: false
+      alpine_node_24:
+        description: 'Alpine + Node 24'
+        type: boolean
+        default: true
+      debian_node_22:
+        description: 'Debian + Node 22'
+        type: boolean
+        default: false
+      debian_node_24:
+        description: 'Debian + Node 24'
+        type: boolean
+        default: false
 
 env:
   GHCR_REGISTRY: ghcr.io
@@ -41,38 +57,38 @@ jobs:
       variant_matrix: ${{ steps.matrix.outputs.variant_matrix }}
       any_enabled: ${{ steps.matrix.outputs.any_enabled }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
       - name: Compute matrices
         id: matrix
         env:
-          # Schedule runs leave inputs empty -> fall back to the dispatch defaults.
-          UBUNTU: ${{ github.event.inputs.ubuntu }}
-          ALPINE: ${{ github.event.inputs.alpine }}
-          DEBIAN: ${{ github.event.inputs.debian }}
-          NODE_22: ${{ github.event.inputs.build_node_22 }}
-          NODE_24: ${{ github.event.inputs.build_node_24 }}
+          # Schedule runs leave inputs empty -> fall back to default_enabled in build-matrix.json.
+          ENABLED_JSON: ${{ toJSON(github.event.inputs) }}
         run: |
           set -euo pipefail
 
-          # Variant catalogue. To add a new OS / Node combo, add a row here.
-          variants=$(jq -nc \
-            --arg ubuntu "${UBUNTU:-true}" \
-            --arg alpine "${ALPINE:-true}" \
-            --arg debian "${DEBIAN:-false}" \
-            --arg n22 "${NODE_22:-false}" \
-            --arg n24 "${NODE_24:-true}" '
-            [
-              {family:"ubuntu", os_label:"24.04",  node:"22.x", dockerfile:"./docker/Dockerfile_base_24.04_user", build_test:true,  login_dhi:false, os_en:$ubuntu, node_en:$n22},
-              {family:"ubuntu", os_label:"24.04",  node:"24.x", dockerfile:"./docker/Dockerfile_base_24.04_user", build_test:true,  login_dhi:false, os_en:$ubuntu, node_en:$n24},
-              {family:"ubuntu", os_label:"26.04",  node:"22.x", dockerfile:"./docker/Dockerfile_base_26.04_user", build_test:true,  login_dhi:false, os_en:$ubuntu, node_en:$n22},
-              {family:"ubuntu", os_label:"26.04",  node:"24.x", dockerfile:"./docker/Dockerfile_base_26.04_user", build_test:true,  login_dhi:false, os_en:$ubuntu, node_en:$n24},
-              {family:"alpine", os_label:"alpine", node:"22",   dockerfile:"./docker/Dockerfile_base_alpine",     build_test:false, login_dhi:true,  os_en:$alpine, node_en:$n22},
-              {family:"alpine", os_label:"alpine", node:"24",   dockerfile:"./docker/Dockerfile_base_alpine",     build_test:false, login_dhi:true,  os_en:$alpine, node_en:$n24},
-              {family:"debian", os_label:"debian", node:"22",   dockerfile:"./docker/Dockerfile_base_debian",     build_test:false, login_dhi:false, os_en:$debian, node_en:$n22},
-              {family:"debian", os_label:"debian", node:"24",   dockerfile:"./docker/Dockerfile_base_debian",     build_test:false, login_dhi:false, os_en:$debian, node_en:$n24}
-            ]
-            | map(select(.os_en == "true" and .node_en == "true"))
-            | map(del(.os_en, .node_en))
-          ')
+          # Cross-product os_variants x node_versions from .github/build-matrix.json,
+          # then filter by the per-row dispatch checkbox (or by default_enabled
+          # for scheduled runs).
+          variants=$(jq -c \
+            --argjson enabled "${ENABLED_JSON:-null}" '
+            (if ($enabled | type) == "object" then $enabled else {} end) as $en
+            | .os_variants as $os | .node_versions as $nodes
+            | [ $os[] as $o | $nodes[] as $n |
+                (($o.id | gsub("[-.]"; "_")) + "_node_" + $n.id) as $key |
+                {
+                  enabled: ($en[$key] // (if ($o.default_enabled and $n.default_enabled) then "true" else "false" end)),
+                  family:     $o.family,
+                  os_label:   $o.base_os_label,
+                  node:       (if $o.family == "ubuntu" then $n.ubuntu_format else $n.id end),
+                  dockerfile: $o.dockerfile,
+                  build_test: $o.build_test,
+                  login_dhi:  $o.login_dhi
+                }
+              ]
+            | map(select(.enabled == "true"))
+            | map(del(.enabled))
+          ' .github/build-matrix.json)
 
           # Build matrix: one row per (variant, arch). Node 22 builds also produce arm/v7.
           # NB: arch suffix is amd/arm (not amd64/arm64) to match existing base image tags.
