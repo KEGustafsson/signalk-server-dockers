@@ -28,6 +28,7 @@ env:
   GHCR_REGISTRY: ghcr.io
   GHCR_REPO: kegustafsson/signalk-server
   DOCKER_HUB_REPO: kgustafs/signalk-server
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   specification:

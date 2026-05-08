@@ -1,4 +1,4 @@
-ARG NODE
+ARG NODE=24
 FROM node:${NODE}-alpine
 
 COPY docker/avahi/avahi-dbus.conf docker/bluez/bluezuser.conf /etc/dbus-1/system.d/
