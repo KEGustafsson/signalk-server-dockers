@@ -137,27 +137,27 @@ index 0000000..3aeb4b0
 +  return sources
 +}
 diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx b/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
-index 84a25cb..f1ca060 100644
+index ce130f0..f7f1a09 100644
 --- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
 +++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
 @@ -7,6 +7,8 @@ import Col from 'react-bootstrap/Col'
  import Table from 'react-bootstrap/Table'
  import { useServerStats, useWsStatus, useStore } from '../../store'
- import type { ProviderStatistics } from '../../store/types'
+ import type { ProviderStatistics, ProviderStatus } from '../../store/types'
 +import { useSources } from '../../hooks/useSources'
 +import { getSourceDisplayLabel } from '../../hooks/sourceLabelUtils'
  import '../../fa-pulse.css'
- 
- interface ProviderStatusItem {
-@@ -24,6 +26,7 @@ export default function Dashboard() {
-   const providerStatus =
-     (useStore((state) => state.providerStatus) as ProviderStatusItem[]) || []
+
+ export default function Dashboard() {
+@@ -14,6 +16,7 @@ export default function Dashboard() {
+   const websocketStatus = useWsStatus()
+   const providerStatus = useStore((state) => state.providerStatus) ?? []
    const navigate = useNavigate()
 +  const sources = useSources()
- 
+
    const deltaRate = serverStatistics?.deltaRate ?? 0
    const numberOfAvailablePaths = serverStatistics?.numberOfAvailablePaths ?? 0
-@@ -71,6 +74,7 @@ export default function Dashboard() {
+@@ -61,6 +64,7 @@ export default function Dashboard() {
      providerStats: ProviderStatistics,
      linkType: string
    ): ReactNode => {
@@ -165,7 +165,7 @@ index 84a25cb..f1ca060 100644
      return (
        <li key={providerId} onClick={() => navigate(`/dashboard`)}>
          <i
-@@ -89,7 +93,7 @@ export default function Dashboard() {
+@@ -79,7 +83,7 @@ export default function Dashboard() {
          <span className="title">
            {linkType === 'plugin'
              ? pluginNameLink(providerId)
@@ -174,7 +174,7 @@ index 84a25cb..f1ca060 100644
          </span>
          {(providerStats.writeRate || 0) > 0 && (
            <span className="value" style={{ fontWeight: 'normal' }}>
-@@ -149,7 +153,10 @@ export default function Dashboard() {
+@@ -139,7 +143,10 @@ export default function Dashboard() {
          <td>
            {status.statusType === 'plugin'
              ? pluginNameLink(status.id)
@@ -186,7 +186,7 @@ index 84a25cb..f1ca060 100644
          </td>
          <td>
            <p className="text-danger">{lastError}</p>
-@@ -302,11 +309,11 @@ function pluginNameLink(id: string): ReactNode {
+@@ -292,11 +299,11 @@ function pluginNameLink(id: string): ReactNode {
    return <a href={'#/serverConfiguration/plugins/' + id}>{id}</a>
  }
  
