@@ -6,6 +6,7 @@ on:
   # matching input below. Input names must be: <os_id_with_-_and_._mapped_to__>_node_<node_id>.
   workflow_dispatch:
     inputs:
+      # >>> BEGIN auto-generated dispatch inputs (from build-matrix.json — run .github/scripts/sync-dispatch-inputs.mjs to update)
       ubuntu_24_04_node_22:
         description: 'Ubuntu 24.04 + Node 22.x'
         type: boolean
@@ -38,6 +39,7 @@ on:
         description: 'Debian + Node 24'
         type: boolean
         default: false
+      # <<< END auto-generated dispatch inputs
 
 env:
   GHCR_REGISTRY: ghcr.io
