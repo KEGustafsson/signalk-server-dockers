@@ -150,9 +150,8 @@ jobs:
       - name: signalk-server tags
         id: tags
         run: |
-          tag=$(git ls-remote --tags --refs --sort='-v:refname' \
-                  https://github.com/SignalK/signalk-server.git \
-                | head -n1 | sed 's|.*/||')
+          tag=$(curl -fsSL https://api.github.com/repos/SignalK/signalk-server/releases/latest \
+                | jq -r .tag_name)
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "Extracted tag: $tag"
 
