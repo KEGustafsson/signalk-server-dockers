@@ -150,10 +150,9 @@ jobs:
       - name: signalk-server tags
         id: tags
         run: |
-          git clone https://github.com/SignalK/signalk-server.git
-          cd signalk-server
-          git fetch --tags
-          tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+          tag=$(git ls-remote --tags --refs --sort='-v:refname' \
+                  https://github.com/SignalK/signalk-server.git \
+                | head -n1 | sed 's|.*/||')
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "Extracted tag: $tag"
 
@@ -161,9 +160,6 @@ jobs:
           echo "major=$MAJOR" >> $GITHUB_OUTPUT
           echo "minor=$MINOR" >> $GITHUB_OUTPUT
           echo "major_minor=$MAJOR.$MINOR" >> $GITHUB_OUTPUT
-
-          cd ..
-          rm -rf signalk-server
       - name: signalk-server download and patch
         run: |
           git clone https://github.com/SignalK/signalk-server.git
