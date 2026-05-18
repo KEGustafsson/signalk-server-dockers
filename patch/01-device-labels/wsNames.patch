@@ -1,346 +1,125 @@
-diff --git a/packages/server-admin-ui/src/hooks/sourceLabelUtils.test.ts b/packages/server-admin-ui/src/hooks/sourceLabelUtils.test.ts
-new file mode 100644
-index 0000000..599545a
---- /dev/null
-+++ b/packages/server-admin-ui/src/hooks/sourceLabelUtils.test.ts
-@@ -0,0 +1,46 @@
-+import { describe, it, expect } from 'vitest'
-+import { getSourceDisplayLabel } from './sourceLabelUtils'
-+
-+describe('sourceLabelUtils', () => {
-+  it('uses n2k description for nested ws source refs', () => {
-+    const sources = {
-+      ws: {
-+        myDevice: {
-+          n2k: {
-+            description: 'Cabin Tablet'
-+          }
-+        }
-+      }
-+    }
-+
-+    expect(getSourceDisplayLabel('ws.myDevice.n2k.204', sources)).toBe(
-+      'Cabin Tablet'
-+    )
-+  })
-+
-+  it('falls back to sourceRef when ws n2k description is missing', () => {
-+    const sources = {
-+      ws: {
-+        myDevice: {
-+          description: 'Top-level only'
-+        }
-+      }
-+    }
-+
-+    expect(getSourceDisplayLabel('ws.myDevice.n2k.204', sources)).toBe(
-+      'ws.myDevice.n2k.204'
-+    )
-+  })
-+
-+  it('falls back to sourceRef for non-ws source refs', () => {
-+    const sources = {
-+      nmea0183: {
-+        tcp: {
-+          description: 'NMEA tcp'
-+        }
-+      }
-+    }
-+
-+    expect(getSourceDisplayLabel('nmea0183.tcp', sources)).toBe('nmea0183.tcp')
-+  })
-+})
-diff --git a/packages/server-admin-ui/src/hooks/sourceLabelUtils.ts b/packages/server-admin-ui/src/hooks/sourceLabelUtils.ts
-new file mode 100644
-index 0000000..18830ff
---- /dev/null
-+++ b/packages/server-admin-ui/src/hooks/sourceLabelUtils.ts
-@@ -0,0 +1,38 @@
-+interface SourceMetadata {
-+  n2k?: {
-+    description?: string
-+  }
-+  [key: string]: unknown
-+}
-+
-+function getWsSourceMetadata(
+diff --git a/packages/server-admin-ui/src/utils/sourceLabels.ts b/packages/server-admin-ui/src/utils/sourceLabels.ts
+index 89ae104..b77467f 100644
+--- a/packages/server-admin-ui/src/utils/sourceLabels.ts
++++ b/packages/server-admin-ui/src/utils/sourceLabels.ts
+@@ -95,6 +95,33 @@ export function getDeviceInfo(
+   return null
+ }
+ 
++/**
++ * Resolve the registered description for a ws.<clientId>[.<...>] source.
++ * The server publishes a stub source delta (see src/interfaces/ws.ts)
++ * that exposes `sources.ws.<clientId>.n2k.description` when a device
++ * registered via /access/requests connects. Returns undefined for any
++ * non-ws ref or when no description is configured.
++ */
++function getWsDeviceDescription(
 +  sourceRef: string,
-+  sources: Record<string, unknown>
-+): SourceMetadata | null {
-+  if (!sourceRef?.startsWith('ws.') || !sources || typeof sources !== 'object') {
-+    return null
-+  }
-+
++  sourcesData: SourcesData | null
++): string | undefined {
++  if (!sourcesData || !sourceRef.startsWith('ws.')) return undefined
 +  const parts = sourceRef.split('.')
-+  const wsDeviceId = parts[1]
-+  if (!wsDeviceId) {
-+    return null
++  const clientId = parts[1]
++  if (!clientId) return undefined
++  const ws = (sourcesData as Record<string, unknown>).ws
++  if (!ws || typeof ws !== 'object') return undefined
++  const node = (ws as Record<string, unknown>)[clientId]
++  if (!node || typeof node !== 'object') return undefined
++  const n2k = (node as Record<string, unknown>).n2k
++  if (!n2k || typeof n2k !== 'object') return undefined
++  const description = (n2k as Record<string, unknown>).description
++  return typeof description === 'string' && description.length > 0
++    ? description
++    : undefined
++}
++
+ /**
+  * Build a human-readable label for a source reference.
+  *
+@@ -122,6 +149,11 @@ export function buildSourceLabelParts(
+ ): { primary: string; secondary: string | null } {
+   if (!sourcesData) return { primary: sourceRef, secondary: null }
+ 
++  const wsDescription = getWsDeviceDescription(sourceRef, sourcesData)
++  if (wsDescription) {
++    return { primary: wsDescription, secondary: sourceRef }
 +  }
 +
-+  const wsSources = sources.ws
-+  if (!wsSources || typeof wsSources !== 'object') {
-+    return null
-+  }
-+
-+  const node = (wsSources as Record<string, unknown>)[wsDeviceId]
-+  return node && typeof node === 'object' ? (node as SourceMetadata) : null
-+}
-+
-+export function getSourceDisplayLabel(
-+  sourceRef: string,
-+  sources: Record<string, unknown> = {}
-+): string {
-+  const metadata = getWsSourceMetadata(sourceRef, sources)
-+  const description = metadata?.n2k?.description
-+  return description || sourceRef
-+}
-diff --git a/packages/server-admin-ui/src/hooks/useSources.ts b/packages/server-admin-ui/src/hooks/useSources.ts
-new file mode 100644
-index 0000000..3aeb4b0
---- /dev/null
-+++ b/packages/server-admin-ui/src/hooks/useSources.ts
-@@ -0,0 +1,36 @@
-+import { useState, useEffect } from 'react'
-+
-+export function fetchSourcesData(): Promise<Record<string, unknown>> {
-+  return fetch('/signalk/v1/api/sources', {
-+    credentials: 'include'
-+  }).then((response) => response.json())
-+}
-+
-+export function useSources(pollInterval = 30000): Record<string, unknown> {
-+  const [sources, setSources] = useState<Record<string, unknown>>({})
-+
-+  useEffect(() => {
-+    let canceled = false
-+
-+    const doFetch = () => {
-+      fetchSourcesData()
-+        .then((data) => {
-+          if (!canceled) {
-+            setSources(data)
-+          }
-+        })
-+        .catch(() => undefined)
-+    }
-+
-+    doFetch()
-+    const interval =
-+      pollInterval > 0 ? setInterval(doFetch, pollInterval) : null
-+
-+    return () => {
-+      canceled = true
-+      if (interval) clearInterval(interval)
-+    }
-+  }, [pollInterval])
-+
-+  return sources
-+}
+   const n2k = getDeviceInfo(sourceRef, sourcesData)
+   if (!n2k) return { primary: sourceRef, secondary: null }
+ 
 diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx b/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
-index ce130f0..f7f1a09 100644
+index ce130f0..248b1b3 100644
 --- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
 +++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
-@@ -7,6 +7,8 @@ import Col from 'react-bootstrap/Col'
+@@ -5,8 +5,17 @@ import ProgressBar from 'react-bootstrap/ProgressBar'
+ import Row from 'react-bootstrap/Row'
+ import Col from 'react-bootstrap/Col'
  import Table from 'react-bootstrap/Table'
- import { useServerStats, useWsStatus, useStore } from '../../store'
+-import { useServerStats, useWsStatus, useStore } from '../../store'
++import {
++  useServerStats,
++  useWsStatus,
++  useStore,
++  useSourcesData
++} from '../../store'
  import type { ProviderStatistics, ProviderStatus } from '../../store/types'
-+import { useSources } from '../../hooks/useSources'
-+import { getSourceDisplayLabel } from '../../hooks/sourceLabelUtils'
++import {
++  buildSourceLabel,
++  type SourcesData
++} from '../../utils/sourceLabels'
  import '../../fa-pulse.css'
-
+ 
  export default function Dashboard() {
-@@ -14,6 +16,7 @@ export default function Dashboard() {
+@@ -14,6 +23,7 @@ export default function Dashboard() {
    const websocketStatus = useWsStatus()
    const providerStatus = useStore((state) => state.providerStatus) ?? []
    const navigate = useNavigate()
-+  const sources = useSources()
-
++  const sourcesData = useSourcesData()
+ 
    const deltaRate = serverStatistics?.deltaRate ?? 0
    const numberOfAvailablePaths = serverStatistics?.numberOfAvailablePaths ?? 0
-@@ -61,6 +64,7 @@ export default function Dashboard() {
-     providerStats: ProviderStatistics,
-     linkType: string
-   ): ReactNode => {
-+    const label = getSourceDisplayLabel(providerId, sources)
-     return (
-       <li key={providerId} onClick={() => navigate(`/dashboard`)}>
-         <i
-@@ -79,7 +83,7 @@ export default function Dashboard() {
+@@ -79,7 +89,7 @@ export default function Dashboard() {
          <span className="title">
            {linkType === 'plugin'
              ? pluginNameLink(providerId)
 -            : providerIdLink(providerId)}
-+            : providerIdLink(providerId, label)}
++            : providerIdLink(providerId, sourcesData)}
          </span>
          {(providerStats.writeRate || 0) > 0 && (
            <span className="value" style={{ fontWeight: 'normal' }}>
-@@ -139,7 +143,10 @@ export default function Dashboard() {
+@@ -139,7 +149,7 @@ export default function Dashboard() {
          <td>
            {status.statusType === 'plugin'
              ? pluginNameLink(status.id)
 -            : providerIdLink(status.id)}
-+            : providerIdLink(
-+                status.id,
-+                getSourceDisplayLabel(status.id, sources)
-+              )}
++            : providerIdLink(status.id, sourcesData)}
          </td>
          <td>
            <p className="text-danger">{lastError}</p>
-@@ -292,11 +299,11 @@ function pluginNameLink(id: string): ReactNode {
+@@ -292,11 +302,15 @@ function pluginNameLink(id: string): ReactNode {
    return <a href={'#/serverConfiguration/plugins/' + id}>{id}</a>
  }
  
 -function providerIdLink(id: string): ReactNode {
-+function providerIdLink(id: string, label?: string): ReactNode {
++function providerIdLink(
++  id: string,
++  sourcesData: SourcesData | null
++): ReactNode {
    if (id === 'defaults') {
      return <a href={'#/serverConfiguration/settings'}>{id}</a>
    } else if (id.startsWith('ws.')) {
 -    return <a href={'#/security/devices'}>{id}</a>
++    const label = buildSourceLabel(id, sourcesData)
 +    return <a href={'#/security/devices'}>{label || id}</a>
    } else {
      return <a href={'#/serverConfiguration/connections/' + id}>{id}</a>
    }
-diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataRow.tsx b/packages/server-admin-ui/src/views/DataBrowser/DataRow.tsx
-index 7085a97..158ffe6 100644
---- a/packages/server-admin-ui/src/views/DataBrowser/DataRow.tsx
-+++ b/packages/server-admin-ui/src/views/DataBrowser/DataRow.tsx
-@@ -3,6 +3,7 @@ import { usePathData, useMetaData } from './usePathData'
- import TimestampCell from './TimestampCell'
- import CopyToClipboardWithFade from './CopyToClipboardWithFade'
- import { getValueRenderer, DefaultValueRenderer } from './ValueRenderers'
-+import { getSourceDisplayLabel } from '../../hooks/sourceLabelUtils'
- import {
-   usePresetDetails,
-   useUnitDefinitions,
-@@ -21,6 +22,7 @@ interface DataRowProps {
-   onToggleSource: (source: string) => void
-   selectedSources: Set<string>
-   showContext: boolean
-+  sources: Record<string, unknown>
- }
- 
- interface ValueRendererProps {
-@@ -64,7 +66,8 @@ function DataRow({
-   isPaused,
-   onToggleSource,
-   selectedSources,
--  showContext
-+  showContext,
-+  sources
- }: DataRowProps) {
-   // When showContext is true, path$SourceKey is a composite key: context\0realKey
-   const nullIdx = showContext ? path$SourceKey.indexOf('\0') : -1
-@@ -196,7 +199,8 @@ function DataRow({
-           />
-         </label>
-         <CopyToClipboardWithFade text={source}>
--          {source} <span className="copy-icon" aria-hidden="true" />
-+          {getSourceDisplayLabel(source, sources)}{' '}
-+          <span className="copy-icon" aria-hidden="true" />
-         </CopyToClipboardWithFade>{' '}
-         {data.pgn && <span>&nbsp;{data.pgn}</span>}
-         {data.sentence && <span>&nbsp;{data.sentence}</span>}
-diff --git a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.tsx b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.tsx
-index 1d6eb19..e2eaabe 100644
---- a/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.tsx
-+++ b/packages/server-admin-ui/src/views/DataBrowser/VirtualizedDataTable.tsx
-@@ -8,6 +8,7 @@ import {
- } from 'react'
- import DataRow from './DataRow'
- import granularSubscriptionManager from './GranularSubscriptionManager'
-+import { useSources } from '../../hooks/useSources'
- import './VirtualTable.css'
- 
- interface VisibleItem {
-@@ -38,6 +39,7 @@ function VirtualizedDataTable({
-   sourceFilterActive,
-   showContext
- }: VirtualizedDataTableProps) {
-+  const sources = useSources()
-   const containerRef = useRef<HTMLDivElement>(null)
-   const [isNarrowScreen, setIsNarrowScreen] = useState(
-     typeof window !== 'undefined' && window.innerWidth <= 768
-@@ -236,6 +238,7 @@ function VirtualizedDataTable({
-             onToggleSource={onToggleSource}
-             selectedSources={selectedSources}
-             showContext={showContext}
-+            sources={sources}
-           />
-         ))}
- 
-diff --git a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.tsx b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.tsx
-index e90c657..4ba0803 100644
---- a/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.tsx
-+++ b/packages/server-admin-ui/src/views/ServerConfig/SourcePriorities.tsx
-@@ -14,6 +14,8 @@ import { faFloppyDisk } from '@fortawesome/free-solid-svg-icons/faFloppyDisk'
- import Creatable from 'react-select/creatable'
- import uniq from 'lodash.uniq'
- import { useStore, useSourcePriorities } from '../../store'
-+import { useSources } from '../../hooks/useSources'
-+import { getSourceDisplayLabel } from '../../hooks/sourceLabelUtils'
- 
- // Types
- interface Priority {
-@@ -51,13 +53,15 @@ interface PrefsEditorProps {
-   priorities: Priority[]
-   pathIndex: number
-   isSaving: boolean
-+  sources: Record<string, unknown>
- }
- 
- const PrefsEditor: React.FC<PrefsEditorProps> = ({
-   path,
-   priorities,
-   pathIndex,
--  isSaving
-+  isSaving,
-+  sources
- }) => {
-   const changePriority = useStore((s) => s.changePriority)
-   const deletePriority = useStore((s) => s.deletePriority)
-@@ -76,8 +80,11 @@ const PrefsEditor: React.FC<PrefsEditorProps> = ({
- 
-   const toggleEditor = () => setIsOpen((prev) => !prev)
- 
-+  const resolveSourceLabel = (ref: string): string =>
-+    getSourceDisplayLabel(ref, sources)
-+
-   const options: SelectOption[] = sourceRefs.map((ref) => ({
--    label: ref,
-+    label: resolveSourceLabel(ref),
-     value: ref
-   }))
- 
-@@ -107,7 +114,7 @@ const PrefsEditor: React.FC<PrefsEditorProps> = ({
-                       <Creatable
-                         menuPortalTarget={document.body}
-                         options={options}
--                        value={{ value: sourceRef, label: sourceRef }}
-+                        value={{ value: sourceRef, label: resolveSourceLabel(sourceRef) }}
-                         onChange={(e) => {
-                           changePriority(
-                             pathIndex,
-@@ -199,6 +206,7 @@ const SourcePriorities: React.FC = () => {
-   const { sourcePriorities, saveState } = sourcePrioritiesData
- 
-   const [availablePaths, setAvailablePaths] = useState<SelectOption[]>([])
-+  const sources = useSources()
- 
-   useEffect(() => {
-     fetchAvailablePaths((pathsArray) => {
-@@ -312,6 +320,7 @@ const SourcePriorities: React.FC = () => {
-                       priorities={priorities}
-                       pathIndex={index}
-                       isSaving={saveState.isSaving || false}
-+                      sources={sources}
-                     />
-                   </td>
-                   <td style={{ border: 'none' }}>
 diff --git a/src/interfaces/ws.ts b/src/interfaces/ws.ts
-index e0f7608..4f4b4ac 100644
+index 9e9c073..778b4bd 100644
 --- a/src/interfaces/ws.ts
 +++ b/src/interfaces/ws.ts
-@@ -22,11 +22,12 @@ import { getSourceId, getMetadata } from '@signalk/signalk-schema'
+@@ -22,7 +22,8 @@ import { getMetadata } from '@signalk/path-metadata'
  import {
    requestAccess,
    InvalidTokenError,
@@ -350,11 +129,7 @@ index e0f7608..4f4b4ac 100644
  } from '../security'
  import {
    LoginRateLimiter,
-   LOGIN_RATE_LIMIT_MESSAGE
- } from '../login-rate-limiter'
- import { WithConfig } from '../app'
- import {
-@@ -50,6 +51,98 @@ import { Delta, hasValues } from '@signalk/server-api'
+@@ -57,6 +58,98 @@ import { Delta, hasValues } from '@signalk/server-api'
  const debug = createDebug('signalk-server:interfaces:ws')
  const debugConnection = createDebug('signalk-server:interfaces:ws:connections')
  
@@ -453,16 +228,16 @@ index e0f7608..4f4b4ac 100644
  interface SkPrincipal {
    identifier: string
  }
-@@ -175,6 +268,8 @@ interface DeltaCache {
-     filter: (delta: WithContext) => boolean,
-     principal?: SkPrincipal
+@@ -230,6 +323,8 @@ interface DeltaCache {
+     context?: string,
+     sourcePolicy?: string
    ) => Delta[]
 +  setSourceDelta?: (key: string, delta: unknown) => void
 +  sourceDeltas?: Record<string, unknown>
  }
  
  interface WsAppConfig {
-@@ -416,6 +511,7 @@ function wsInterface(app: WsApp): WsApi {
+@@ -502,6 +597,7 @@ function wsInterface(app: WsApp): WsApi {
            let principalId: string | undefined
            if (spark.request.skPrincipal) {
              principalId = spark.request.skPrincipal.identifier
@@ -470,7 +245,7 @@ index e0f7608..4f4b4ac 100644
            }
  
            debugConnection(
-@@ -699,9 +795,13 @@ function wsInterface(app: WsApp): WsApi {
+@@ -793,9 +889,13 @@ function wsInterface(app: WsApp): WsApi {
              if (res.accessRequest && res.accessRequest.token) {
                spark.request.token = res.accessRequest.token
                app.securityStrategy.authorizeWS(spark.request)
@@ -487,7 +262,7 @@ index e0f7608..4f4b4ac 100644
              }
            }
            spark.write(res)
-@@ -776,7 +876,7 @@ function createPrimusAuthorize(
+@@ -917,7 +1017,7 @@ function createPrimusAuthorize(
        const identifier = req.skPrincipal?.identifier
        if (identifier) {
          debug(`authorized username: ${identifier}`)
@@ -497,10 +272,10 @@ index e0f7608..4f4b4ac 100644
      } catch (error) {
        if (
 diff --git a/test/security.js b/test/security.js
-index 391da01..5ad8e45 100644
+index ff1f8d7..f5b07ff 100644
 --- a/test/security.js
 +++ b/test/security.js
-@@ -506,6 +506,7 @@ describe('Security', () => {
+@@ -696,6 +696,7 @@ describe('Security', () => {
      json.accessRequest.should.have.property('permission')
      json.accessRequest.permission.should.equal('APPROVED')
      json.accessRequest.should.have.property('token')
@@ -508,7 +283,7 @@ index 391da01..5ad8e45 100644
  
      result = await fetch(`${url}/skServer/security/devices`, {
        headers: {
-@@ -519,6 +520,31 @@ describe('Security', () => {
+@@ -709,6 +710,31 @@ describe('Security', () => {
      json[0].clientId.should.equal('1235-45653-343453')
      json[0].permissions.should.equal('readwrite')
      json[0].description.should.equal('My Awesome Sensor')
@@ -540,4 +315,3 @@ index 391da01..5ad8e45 100644
    })
  
    it('Device access request and denial works', async function () {
-
