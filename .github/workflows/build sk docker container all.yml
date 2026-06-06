@@ -65,8 +65,9 @@ jobs:
       - name: signalk-server tags
         id: tags
         run: |
-          tag=$(curl -fsSL https://api.github.com/repos/SignalK/signalk-server/releases/latest \
-                | jq -r .tag_name)
+          version=$(curl -fsSL https://raw.githubusercontent.com/SignalK/signalk-server/master/package.json \
+                | jq -r .version)
+          tag="v$version"
           # tag=v2.21.3
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "Extracted tag: $tag"
