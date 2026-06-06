@@ -49,7 +49,7 @@ index 89ae104..b77467f 100644
    if (!n2k) return { primary: sourceRef, secondary: null }
  
 diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx b/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
-index ce130f0..248b1b3 100644
+index ae46535..2c92468 100644
 --- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
 +++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
 @@ -5,8 +5,17 @@ import ProgressBar from 'react-bootstrap/ProgressBar'
@@ -88,7 +88,7 @@ index ce130f0..248b1b3 100644
          </span>
          {(providerStats.writeRate || 0) > 0 && (
            <span className="value" style={{ fontWeight: 'normal' }}>
-@@ -139,7 +149,7 @@ export default function Dashboard() {
+@@ -140,7 +150,7 @@ export default function Dashboard() {
          <td>
            {status.statusType === 'plugin'
              ? pluginNameLink(status.id)
@@ -97,8 +97,8 @@ index ce130f0..248b1b3 100644
          </td>
          <td>
            <p className="text-danger">{lastError}</p>
-@@ -292,11 +302,15 @@ function pluginNameLink(id: string): ReactNode {
-   return <a href={'#/serverConfiguration/plugins/' + id}>{id}</a>
+@@ -293,11 +303,15 @@ function pluginNameLink(id: string): ReactNode {
+   return <a href={'#/apps/configuration/' + encodeURIComponent(id)}>{id}</a>
  }
  
 -function providerIdLink(id: string): ReactNode {
@@ -113,10 +113,10 @@ index ce130f0..248b1b3 100644
 +    const label = buildSourceLabel(id, sourcesData)
 +    return <a href={'#/security/devices'}>{label || id}</a>
    } else {
-     return <a href={'#/serverConfiguration/connections/' + id}>{id}</a>
-   }
+     return (
+       <a href={'#/serverConfiguration/connections/' + encodeURIComponent(id)}>
 diff --git a/src/interfaces/ws.ts b/src/interfaces/ws.ts
-index 9e9c073..778b4bd 100644
+index 584ab1d..53a004f 100644
 --- a/src/interfaces/ws.ts
 +++ b/src/interfaces/ws.ts
 @@ -22,7 +22,8 @@ import { getMetadata } from '@signalk/path-metadata'
@@ -225,10 +225,10 @@ index 9e9c073..778b4bd 100644
 +  app.deltaCache.setSourceDelta!(sourceRef, sourceDelta)
 +}
 +
- interface SkPrincipal {
-   identifier: string
- }
-@@ -230,6 +323,8 @@ interface DeltaCache {
+ function incrementIpCount(
+   ipConnectionCounts: Map<string, number>,
+   ip: string
+@@ -252,6 +345,8 @@ interface DeltaCache {
      context?: string,
      sourcePolicy?: string
    ) => Delta[]
@@ -237,7 +237,7 @@ index 9e9c073..778b4bd 100644
  }
  
  interface WsAppConfig {
-@@ -502,6 +597,7 @@ function wsInterface(app: WsApp): WsApi {
+@@ -527,6 +622,7 @@ function wsInterface(app: WsApp): WsApi {
            let principalId: string | undefined
            if (spark.request.skPrincipal) {
              principalId = spark.request.skPrincipal.identifier
@@ -245,7 +245,7 @@ index 9e9c073..778b4bd 100644
            }
  
            debugConnection(
-@@ -793,9 +889,13 @@ function wsInterface(app: WsApp): WsApi {
+@@ -809,9 +905,13 @@ function wsInterface(app: WsApp): WsApi {
              if (res.accessRequest && res.accessRequest.token) {
                spark.request.token = res.accessRequest.token
                app.securityStrategy.authorizeWS(spark.request)
@@ -262,7 +262,7 @@ index 9e9c073..778b4bd 100644
              }
            }
            spark.write(res)
-@@ -917,7 +1017,7 @@ function createPrimusAuthorize(
+@@ -936,7 +1036,7 @@ function createPrimusAuthorize(
        const identifier = req.skPrincipal?.identifier
        if (identifier) {
          debug(`authorized username: ${identifier}`)
@@ -272,10 +272,10 @@ index 9e9c073..778b4bd 100644
      } catch (error) {
        if (
 diff --git a/test/security.js b/test/security.js
-index ff1f8d7..f5b07ff 100644
+index d532145..4b7d137 100644
 --- a/test/security.js
 +++ b/test/security.js
-@@ -696,6 +696,7 @@ describe('Security', () => {
+@@ -718,6 +718,7 @@ describe('Security', () => {
      json.accessRequest.should.have.property('permission')
      json.accessRequest.permission.should.equal('APPROVED')
      json.accessRequest.should.have.property('token')
@@ -283,7 +283,7 @@ index ff1f8d7..f5b07ff 100644
  
      result = await fetch(`${url}/skServer/security/devices`, {
        headers: {
-@@ -709,6 +710,31 @@ describe('Security', () => {
+@@ -731,6 +732,31 @@ describe('Security', () => {
      json[0].clientId.should.equal('1235-45653-343453')
      json[0].permissions.should.equal('readwrite')
      json[0].description.should.equal('My Awesome Sensor')
