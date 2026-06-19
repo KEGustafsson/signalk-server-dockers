@@ -160,7 +160,7 @@ jobs:
           password: ${{ secrets.GHCR_TOKEN }}
 
       - name: Build base image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ${{ matrix.dockerfile }}
@@ -180,7 +180,7 @@ jobs:
             ./docker/Dockerfile_rel_user
       - name: Build Signal K test docker
         if: matrix.build_test
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./docker/Dockerfile_rel_user
