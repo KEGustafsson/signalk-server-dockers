@@ -142,7 +142,7 @@ jobs:
         include: ${{ fromJSON(needs.prepare.outputs.build_matrix) }}
     steps:
       - uses: actions/checkout@v6
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Login to dhi.io
         if: matrix.login_dhi
