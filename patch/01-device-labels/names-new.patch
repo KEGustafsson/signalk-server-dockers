@@ -1,0 +1,636 @@
+From eb007d65e163094c84dd8cebad580475c458b87d Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 25 Jun 2026 19:15:57 +0000
+Subject: [PATCH 1/2] feat(sources): show human-readable names for WebSocket
+ devices
+
+WebSocket device sources appear as cryptic refs like
+"ws.3d3e48a1-1185-2fe3-c494-1c1a9ee6f41f" across the Dashboard, Data
+Browser and Source Priorities. The device's registration description
+(e.g. "sensesp-engines") is already in the security config, just never
+surfaced.
+
+Expose a read-only GET /sourceNames map (ws device descriptions merged
+with manual aliases) that every authenticated client can read, so
+non-admin users see the names too. The map is cached server-side and
+rebuilt only when devices or aliases change, never on the per-delta
+path. Source-name editing stays admin-only.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MZcHu5BBMQe1ZPjYe7xsdC
+---
+ packages/server-admin-ui/src/dataFetching.ts  |  1 +
+ .../src/hooks/useSourceAliases.ts             | 11 +++--
+ .../src/services/WebSocketService.ts          |  5 ++
+ packages/server-admin-ui/src/store/index.ts   |  4 ++
+ .../src/store/slices/appSlice.ts              | 12 +++++
+ .../src/utils/sourceLabels.test.ts            | 25 ++++++++++
+ .../server-admin-ui/src/utils/sourceLabels.ts | 19 +++++--
+ .../src/views/Dashboard/Dashboard.tsx         | 13 +++--
+ .../src/views/DataBrowser/DataBrowser.tsx     |  6 ++-
+ .../src/views/DataBrowser/SourceLabel.tsx     | 10 ++++
+ src/serverroutes.ts                           | 48 ++++++++++++++++++
+ src/sourceNames.ts                            | 49 +++++++++++++++++++
+ test/sourceNames.ts                           | 49 +++++++++++++++++++
+ 13 files changed, 239 insertions(+), 13 deletions(-)
+ create mode 100644 src/sourceNames.ts
+ create mode 100644 test/sourceNames.ts
+
+diff --git a/packages/server-admin-ui/src/dataFetching.ts b/packages/server-admin-ui/src/dataFetching.ts
+index 313cfa3af..12203736d 100644
+--- a/packages/server-admin-ui/src/dataFetching.ts
++++ b/packages/server-admin-ui/src/dataFetching.ts
+@@ -118,6 +118,7 @@ export async function fetchAllData(): Promise<void> {
+       state.setPriorityDefaultsFromServer(data.defaults || {})
+     }),
+     fetchAndSet('/sourceAliases', state.setSourceAliases),
++    fetchAndSet('/sourceNames', state.setSourceNames),
+     fetchAndSet('/ignoredInstanceConflicts', state.setIgnoredInstanceConflicts),
+     fetchAndSet('/n2kDeviceStatus', state.setN2kDeviceStatus),
+     fetchAndSet('/livePreferredSources', state.setLivePreferredSources),
+diff --git a/packages/server-admin-ui/src/hooks/useSourceAliases.ts b/packages/server-admin-ui/src/hooks/useSourceAliases.ts
+index 381785968..4aea97e46 100644
+--- a/packages/server-admin-ui/src/hooks/useSourceAliases.ts
++++ b/packages/server-admin-ui/src/hooks/useSourceAliases.ts
+@@ -106,6 +106,7 @@ function persistAliases(
+ export function useSourceAliases() {
+   const aliases = useStore((s) => s.sourceAliases)
+   const loaded = useStore((s) => s.sourceAliasesLoaded)
++  const sourceNames = useStore((s) => s.sourceNames)
+ 
+   // Migration runs once when the server's aliases have arrived; reading
+   // current state from the store keeps `aliases` out of the dependency
+@@ -133,10 +134,12 @@ export function useSourceAliases() {
+ 
+   const getDisplayName = useCallback(
+     (sourceRef: string, sourcesData?: SourcesData | null): string => {
++      // Local alias first for instant feedback on admin edits before the
++      // server-merged sourceNames map round-trips.
+       if (aliases[sourceRef]) return aliases[sourceRef]
+-      return buildSourceLabel(sourceRef, sourcesData ?? null)
++      return buildSourceLabel(sourceRef, sourcesData ?? null, sourceNames)
+     },
+-    [aliases]
++    [aliases, sourceNames]
+   )
+ 
+   const getDisplayParts = useCallback(
+@@ -147,9 +150,9 @@ export function useSourceAliases() {
+       if (aliases[sourceRef]) {
+         return { primary: aliases[sourceRef], secondary: sourceRef }
+       }
+-      return buildSourceLabelParts(sourceRef, sourcesData ?? null)
++      return buildSourceLabelParts(sourceRef, sourcesData ?? null, sourceNames)
+     },
+-    [aliases]
++    [aliases, sourceNames]
+   )
+ 
+   return { aliases, setAlias, removeAlias, getDisplayName, getDisplayParts }
+diff --git a/packages/server-admin-ui/src/services/WebSocketService.ts b/packages/server-admin-ui/src/services/WebSocketService.ts
+index 3189aed8b..a8a283038 100644
+--- a/packages/server-admin-ui/src/services/WebSocketService.ts
++++ b/packages/server-admin-ui/src/services/WebSocketService.ts
+@@ -309,6 +309,11 @@ export class WebSocketService {
+           .getState()
+           .setSourceAliases((data ?? {}) as Record<string, string>)
+         break
++      case 'SOURCENAMES':
++        useStore
++          .getState()
++          .setSourceNames((data ?? {}) as Record<string, string>)
++        break
+       case 'MULTISOURCEPATHS':
+         useStore
+           .getState()
+diff --git a/packages/server-admin-ui/src/store/index.ts b/packages/server-admin-ui/src/store/index.ts
+index a99e5c2d6..76c6bb5a2 100644
+--- a/packages/server-admin-ui/src/store/index.ts
++++ b/packages/server-admin-ui/src/store/index.ts
+@@ -255,6 +255,10 @@ export function useSourceAliasesData() {
+   return useStore((s) => s.sourceAliases)
+ }
+ 
++export function useSourceNames() {
++  return useStore((s) => s.sourceNames)
++}
++
+ export function useIgnoredInstanceConflicts() {
+   return useStore((s) => s.ignoredInstanceConflicts)
+ }
+diff --git a/packages/server-admin-ui/src/store/slices/appSlice.ts b/packages/server-admin-ui/src/store/slices/appSlice.ts
+index c0c6b0f25..385cc2857 100644
+--- a/packages/server-admin-ui/src/store/slices/appSlice.ts
++++ b/packages/server-admin-ui/src/store/slices/appSlice.ts
+@@ -58,6 +58,12 @@ export interface AppSliceState {
+   sourcesData: SourcesData | null
+   sourceAliases: Record<string, string>
+   sourceAliasesLoaded: boolean
++  /**
++   * Merged human-readable names (ws device descriptions + manual aliases)
++   * served read-only to all clients via GET /sourceNames. Drives source
++   * labels for non-admin users, who cannot read the admin-only registry.
++   */
++  sourceNames: Record<string, string>
+   multiSourcePaths: Record<string, string[]>
+   /**
+    * Reconciled priority groups: server-computed view of saved groups
+@@ -138,6 +144,7 @@ export interface AppSliceActions {
+   setBackpressureWarning: (warning: BackpressureWarning | null) => void
+   setSourcesData: (data: SourcesData) => void
+   setSourceAliases: (aliases: Record<string, string>) => void
++  setSourceNames: (names: Record<string, string>) => void
+   setIgnoredInstanceConflicts: (conflicts: Record<string, string>) => void
+   setActiveConflictCount: (count: number) => void
+   setN2kDeviceStatus: (status: {
+@@ -224,6 +231,7 @@ const initialAppState: AppSliceState = {
+   sourcesData: null,
+   sourceAliases: {},
+   sourceAliasesLoaded: false,
++  sourceNames: {},
+   multiSourcePaths: {},
+   reconciledGroups: [],
+   livePreferredSources: {},
+@@ -335,6 +343,10 @@ export const createAppSlice: StateCreator<AppSlice, [], [], AppSlice> = (
+     set({ sourceAliases, sourceAliasesLoaded: true })
+   },
+ 
++  setSourceNames: (sourceNames) => {
++    set({ sourceNames })
++  },
++
+   setIgnoredInstanceConflicts: (ignoredInstanceConflicts) => {
+     set({ ignoredInstanceConflicts })
+   },
+diff --git a/packages/server-admin-ui/src/utils/sourceLabels.test.ts b/packages/server-admin-ui/src/utils/sourceLabels.test.ts
+index c7e985e79..959f9efff 100644
+--- a/packages/server-admin-ui/src/utils/sourceLabels.test.ts
++++ b/packages/server-admin-ui/src/utils/sourceLabels.test.ts
+@@ -140,6 +140,31 @@ describe('buildSourceLabel', () => {
+   it('returns raw sourceRef for unknown connections', () => {
+     expect(buildSourceLabel('UNKNOWN.1', sourcesData)).toBe('UNKNOWN.1')
+   })
++
++  it('uses sourceNames for ws device sources', () => {
++    const sourceNames = {
++      'ws.3d3e48a1-1185-2fe3-c494-1c1a9ee6f41f': 'sensesp-engines'
++    }
++    expect(
++      buildSourceLabel(
++        'ws.3d3e48a1-1185-2fe3-c494-1c1a9ee6f41f',
++        sourcesData,
++        sourceNames
++      )
++    ).toBe('sensesp-engines (ws.3d3e48a1-1185-2fe3-c494-1c1a9ee6f41f)')
++  })
++
++  it('falls back to raw ref for ws sources missing from sourceNames', () => {
++    expect(buildSourceLabel('ws.unknown-device', sourcesData, {})).toBe(
++      'ws.unknown-device'
++    )
++  })
++
++  it('lets sourceNames override N2K-derived labels', () => {
++    expect(
++      buildSourceLabel('YDEN02.37', sourcesData, { 'YDEN02.37': 'My Charger' })
++    ).toBe('My Charger (YDEN02.37)')
++  })
+ })
+ 
+ describe('canonicaliseSourceRef', () => {
+diff --git a/packages/server-admin-ui/src/utils/sourceLabels.ts b/packages/server-admin-ui/src/utils/sourceLabels.ts
+index 89ae10475..494a7f2f3 100644
+--- a/packages/server-admin-ui/src/utils/sourceLabels.ts
++++ b/packages/server-admin-ui/src/utils/sourceLabels.ts
+@@ -104,9 +104,14 @@ export function getDeviceInfo(
+  */
+ export function buildSourceLabel(
+   sourceRef: string,
+-  sourcesData: SourcesData | null
++  sourcesData: SourcesData | null,
++  sourceNames?: Record<string, string> | null
+ ): string {
+-  const { primary, secondary } = buildSourceLabelParts(sourceRef, sourcesData)
++  const { primary, secondary } = buildSourceLabelParts(
++    sourceRef,
++    sourcesData,
++    sourceNames
++  )
+   return secondary ? `${primary} (${secondary})` : primary
+ }
+ 
+@@ -118,8 +123,16 @@ export function buildSourceLabel(
+  */
+ export function buildSourceLabelParts(
+   sourceRef: string,
+-  sourcesData: SourcesData | null
++  sourcesData: SourcesData | null,
++  sourceNames?: Record<string, string> | null
+ ): { primary: string; secondary: string | null } {
++  // Server-supplied names (WebSocket device descriptions, merged with any
++  // manual aliases) take precedence over bus-derived labels. This is the
++  // only path available to non-admin users, who cannot read the device
++  // registry directly.
++  const name = sourceNames?.[sourceRef]
++  if (name) return { primary: name, secondary: sourceRef }
++
+   if (!sourcesData) return { primary: sourceRef, secondary: null }
+ 
+   const n2k = getDeviceInfo(sourceRef, sourcesData)
+diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx b/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
+index ae46535fb..3f43a2726 100644
+--- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
++++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
+@@ -13,6 +13,7 @@ export default function Dashboard() {
+   const serverStatistics = useServerStats()
+   const websocketStatus = useWsStatus()
+   const providerStatus = useStore((state) => state.providerStatus) ?? []
++  const sourceNames = useStore((state) => state.sourceNames)
+   const navigate = useNavigate()
+ 
+   const deltaRate = serverStatistics?.deltaRate ?? 0
+@@ -79,7 +80,7 @@ export default function Dashboard() {
+         <span className="title">
+           {linkType === 'plugin'
+             ? pluginNameLink(providerId)
+-            : providerIdLink(providerId)}
++            : providerIdLink(providerId, sourceNames[providerId])}
+         </span>
+         {(providerStats.writeRate || 0) > 0 && (
+           <span className="value" style={{ fontWeight: 'normal' }}>
+@@ -140,7 +141,7 @@ export default function Dashboard() {
+         <td>
+           {status.statusType === 'plugin'
+             ? pluginNameLink(status.id)
+-            : providerIdLink(status.id)}
++            : providerIdLink(status.id, sourceNames[status.id])}
+         </td>
+         <td>
+           <p className="text-danger">{lastError}</p>
+@@ -293,11 +294,15 @@ function pluginNameLink(id: string): ReactNode {
+   return <a href={'#/apps/configuration/' + encodeURIComponent(id)}>{id}</a>
+ }
+ 
+-function providerIdLink(id: string): ReactNode {
++function providerIdLink(id: string, displayName?: string): ReactNode {
+   if (id === 'defaults') {
+     return <a href={'#/serverConfiguration/settings'}>{id}</a>
+   } else if (id.startsWith('ws.')) {
+-    return <a href={'#/security/devices'}>{id}</a>
++    return (
++      <a href={'#/security/devices'} title={id}>
++        {displayName || id}
++      </a>
++    )
+   } else {
+     return (
+       <a href={'#/serverConfiguration/connections/' + encodeURIComponent(id)}>
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.tsx b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.tsx
+index 2f34e70d5..ba701764b 100644
+--- a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.tsx
++++ b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.tsx
+@@ -154,6 +154,7 @@ const DataBrowser: React.FC = () => {
+   const updateMeta = useStore((s) => s.updateMeta)
+   const getPathData = useStore((s) => s.getPathData)
+ 
++  const sourceNames = useStore((s) => s.sourceNames)
+   const unitPrefsLoaded = useUnitPrefsLoaded()
+   const fetchUnitPreferences = useStore((s) => s.fetchUnitPreferences)
+   const configuredPriorityPaths = useConfiguredPriorityPaths()
+@@ -611,7 +612,7 @@ const DataBrowser: React.FC = () => {
+       if (!src) return ''
+       let label = sourceLabels.get(src)
+       if (label === undefined) {
+-        label = buildSourceLabel(src, rawSourcesData)
++        label = buildSourceLabel(src, rawSourcesData, sourceNames)
+         sourceLabels.set(src, label)
+       }
+       return label
+@@ -786,7 +787,8 @@ const DataBrowser: React.FC = () => {
+     liveWinnerForCurrentContext,
+     skSelf,
+     collapsedSources,
+-    rawSourcesData
++    rawSourcesData,
++    sourceNames
+   ])
+ 
+   // Keep the ref in sync with the current memoised path list so the
+diff --git a/packages/server-admin-ui/src/views/DataBrowser/SourceLabel.tsx b/packages/server-admin-ui/src/views/DataBrowser/SourceLabel.tsx
+index 32be10f2b..52d99e018 100644
+--- a/packages/server-admin-ui/src/views/DataBrowser/SourceLabel.tsx
++++ b/packages/server-admin-ui/src/views/DataBrowser/SourceLabel.tsx
+@@ -1,5 +1,6 @@
+ import React, { useState, useRef, useEffect } from 'react'
+ import { useSourceAliases } from '../../hooks/useSourceAliases'
++import { useLoginStatus } from '../../store'
+ import type { SourcesData } from '../../utils/sourceLabels'
+ 
+ interface SourceLabelProps {
+@@ -12,6 +13,11 @@ const SourceLabel: React.FC<SourceLabelProps> = ({
+   sourcesData
+ }) => {
+   const { aliases, setAlias, getDisplayName } = useSourceAliases()
++  const loginStatus = useLoginStatus()
++  // Alias writes go to the admin-only /sourceAliases endpoint; non-admins
++  // see the resolved name but get no edit affordance.
++  const isAdmin =
++    !loginStatus.authenticationRequired || loginStatus.userLevel === 'admin'
+   const [isEditing, setIsEditing] = useState(false)
+   const [editValue, setEditValue] = useState('')
+   const inputRef = useRef<HTMLInputElement>(null)
+@@ -62,6 +68,10 @@ const SourceLabel: React.FC<SourceLabelProps> = ({
+   const displayName = getDisplayName(sourceRef, sourcesData)
+   const hasAlias = !!aliases[sourceRef]
+ 
++  if (!isAdmin) {
++    return <span>{displayName}</span>
++  }
++
+   if (isEditing) {
+     return (
+       <span
+diff --git a/src/serverroutes.ts b/src/serverroutes.ts
+index 150b3b9f8..2e2016339 100644
+--- a/src/serverroutes.ts
++++ b/src/serverroutes.ts
+@@ -49,6 +49,7 @@ import {
+ } from './config/config'
+ import { resetPriorities } from './config/priorities-file'
+ import { buildDeviceIdentities } from './deviceIdentities'
++import { buildSourceNames } from './sourceNames'
+ import { SERVERROUTESPREFIX } from './constants'
+ import { handleAdminUICORSOrigin } from './cors'
+ import { createDebug, listKnownDebugs } from './debug'
+@@ -566,6 +567,10 @@ module.exports = function (
+             res.status(500).send('Unable to save configuration change')
+             return
+           }
++          // Device add/update/delete and access-request approval all
++          // funnel through here, so this is the single point that keeps
++          // the WebSocket device names fresh.
++          refreshSourceNames()
+           res.type('text/plain').send(success)
+         })
+       } else {
+@@ -574,6 +579,37 @@ module.exports = function (
+     }
+   }
+ 
++  // Cached source-name map (ws device descriptions + manual aliases),
++  // rebuilt only when devices or aliases change — never on the per-delta
++  // path. Served read-only to all authenticated clients via GET
++  // /sourceNames so non-admin users see human-readable WebSocket device
++  // names too.
++  let cachedSourceNames: Record<string, string> | null = null
++
++  const computeSourceNames = (): Record<string, string> => {
++    const config = getSecurityConfig(app)
++    const devices =
++      typeof app.securityStrategy.getDevices === 'function'
++        ? app.securityStrategy.getDevices(config)
++        : []
++    return buildSourceNames(devices, app.config.settings.sourceAliases || {})
++  }
++
++  const getSourceNames = (): Record<string, string> => {
++    if (cachedSourceNames === null) {
++      cachedSourceNames = computeSourceNames()
++    }
++    return cachedSourceNames
++  }
++
++  const refreshSourceNames = (): void => {
++    cachedSourceNames = computeSourceNames()
++    app.emit('serverAdminEvent', {
++      type: 'SOURCENAMES',
++      data: cachedSourceNames
++    })
++  }
++
+   function checkAllowConfigure(req: Request, res: Response) {
+     if (app.securityStrategy.allowConfigure(req)) {
+       return true
+@@ -1726,6 +1762,17 @@ module.exports = function (
+     }
+   )
+ 
++  // Read-only and intentionally NOT behind addAdminMiddleware: every
++  // authenticated client (including read-only users) needs these names to
++  // render human-readable source labels. Writes stay admin-only via
++  // /sourceAliases and /security/devices.
++  app.get(
++    `${SERVERROUTESPREFIX}/sourceNames`,
++    (req: Request, res: Response) => {
++      res.json(getSourceNames())
++    }
++  )
++
+   app.securityStrategy.addAdminMiddleware(`${SERVERROUTESPREFIX}/sourceAliases`)
+ 
+   app.get(
+@@ -1758,6 +1805,7 @@ module.exports = function (
+             type: 'SOURCEALIASES',
+             data: validation.value
+           })
++          refreshSourceNames()
+           res.json({ result: 'ok' })
+         }
+       })
+diff --git a/src/sourceNames.ts b/src/sourceNames.ts
+new file mode 100644
+index 000000000..22ad0e5ad
+--- /dev/null
++++ b/src/sourceNames.ts
+@@ -0,0 +1,49 @@
++/*
++ * Human-readable names for source references.
++ *
++ * WebSocket device sources appear as `ws.<clientId>` (see the source-ref
++ * construction in src/interfaces/ws.ts). A device's human-readable name is
++ * the `description` it supplied when requesting access, stored in the
++ * security config. Exposing that mapping lets every UI surface show e.g.
++ * "sensesp-engines" instead of "ws.3d3e48a1-1185-2fe3-c494-1c1a9ee6f41f".
++ *
++ * The resulting map is served read-only to all authenticated clients via
++ * GET /sourceNames, so non-admin users see the names too, while changes
++ * remain on the admin-only device and alias endpoints.
++ */
++
++interface NamedDevice {
++  clientId: string
++  description?: string
++}
++
++const WS_SOURCE_PREFIX = 'ws.'
++
++/**
++ * Reconstruct the `$source` ref a device authenticates as. Mirrors
++ * src/interfaces/ws.ts: the principal identifier (the device clientId)
++ * has dots replaced with underscores so it stays a single label suffix.
++ */
++export function wsSourceRef(clientId: string): string {
++  return WS_SOURCE_PREFIX + clientId.replace(/\./g, '_')
++}
++
++/**
++ * Merge auto-derived WebSocket device descriptions with admin-set manual
++ * aliases. Manual aliases win so an explicit override always takes effect.
++ */
++export function buildSourceNames(
++  devices: NamedDevice[],
++  aliases: Record<string, string>
++): Record<string, string> {
++  const names: Record<string, string> = {}
++  for (const device of devices) {
++    if (device.description) {
++      names[wsSourceRef(device.clientId)] = device.description
++    }
++  }
++  for (const sourceRef of Object.keys(aliases)) {
++    names[sourceRef] = aliases[sourceRef]
++  }
++  return names
++}
+diff --git a/test/sourceNames.ts b/test/sourceNames.ts
+new file mode 100644
+index 000000000..6ef7c7432
+--- /dev/null
++++ b/test/sourceNames.ts
+@@ -0,0 +1,49 @@
++import { expect } from 'chai'
++import { buildSourceNames, wsSourceRef } from '../src/sourceNames'
++
++// WebSocket device sources authenticate as `ws.<clientId>` and carry the
++// device's registration description as their human-readable name. The map
++// served at GET /sourceNames merges those with any admin-set manual alias.
++
++describe('wsSourceRef', function () {
++  it('prefixes with ws. and leaves a UUID clientId intact', function () {
++    expect(wsSourceRef('3d3e48a1-1185-2fe3-c494-1c1a9ee6f41f')).to.equal(
++      'ws.3d3e48a1-1185-2fe3-c494-1c1a9ee6f41f'
++    )
++  })
++
++  it('replaces dots so the ref stays a single label suffix', function () {
++    expect(wsSourceRef('host.local')).to.equal('ws.host_local')
++  })
++})
++
++describe('buildSourceNames', function () {
++  it('maps ws device refs to their description', function () {
++    const names = buildSourceNames(
++      [
++        {
++          clientId: '3d3e48a1-1185-2fe3-c494-1c1a9ee6f41f',
++          description: 'sensesp-engines'
++        }
++      ],
++      {}
++    )
++    expect(names['ws.3d3e48a1-1185-2fe3-c494-1c1a9ee6f41f']).to.equal(
++      'sensesp-engines'
++    )
++  })
++
++  it('skips devices without a description', function () {
++    const names = buildSourceNames([{ clientId: 'abc' }], {})
++    expect(names).to.deep.equal({})
++  })
++
++  it('lets manual aliases override device descriptions', function () {
++    const names = buildSourceNames(
++      [{ clientId: 'abc', description: 'auto-name' }],
++      { 'ws.abc': 'My Sensor', 'YDEN02.37': 'My Charger' }
++    )
++    expect(names['ws.abc']).to.equal('My Sensor')
++    expect(names['YDEN02.37']).to.equal('My Charger')
++  })
++})
+
+From 3dc16b6a5b4c0864053efa2ca3511a1eaf75657d Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 25 Jun 2026 19:40:14 +0000
+Subject: [PATCH 2/2] fix(sources): guard /sourceNames and keep map fresh
+
+Address review feedback on the WebSocket device-names change:
+
+- Require read access for GET /sourceNames (authenticated, anonymous
+  read-only enabled, or security disabled) so device descriptions are
+  not exposed to anonymous clients.
+- Broadcast SOURCENAMES on the general serverevent channel instead of
+  serverAdminEvent so non-admin clients receive live updates, not just
+  the initial fetch.
+- Refresh the cached map when /removeSource deletes a source alias.
+- Default the /sourceNames fetch response to an empty object so a
+  null/empty body cannot break source-label rendering.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01MZcHu5BBMQe1ZPjYe7xsdC
+---
+ packages/server-admin-ui/src/dataFetching.ts |  4 +++-
+ src/serverroutes.ts                          | 19 +++++++++++++++++--
+ 2 files changed, 20 insertions(+), 3 deletions(-)
+
+diff --git a/packages/server-admin-ui/src/dataFetching.ts b/packages/server-admin-ui/src/dataFetching.ts
+index 12203736d..29870dd7f 100644
+--- a/packages/server-admin-ui/src/dataFetching.ts
++++ b/packages/server-admin-ui/src/dataFetching.ts
+@@ -118,7 +118,9 @@ export async function fetchAllData(): Promise<void> {
+       state.setPriorityDefaultsFromServer(data.defaults || {})
+     }),
+     fetchAndSet('/sourceAliases', state.setSourceAliases),
+-    fetchAndSet('/sourceNames', state.setSourceNames),
++    fetchAndSet('/sourceNames', (data) =>
++      state.setSourceNames((data ?? {}) as Record<string, string>)
++    ),
+     fetchAndSet('/ignoredInstanceConflicts', state.setIgnoredInstanceConflicts),
+     fetchAndSet('/n2kDeviceStatus', state.setN2kDeviceStatus),
+     fetchAndSet('/livePreferredSources', state.setLivePreferredSources),
+diff --git a/src/serverroutes.ts b/src/serverroutes.ts
+index 2e2016339..390bf266e 100644
+--- a/src/serverroutes.ts
++++ b/src/serverroutes.ts
+@@ -604,7 +604,9 @@ module.exports = function (
+ 
+   const refreshSourceNames = (): void => {
+     cachedSourceNames = computeSourceNames()
+-    app.emit('serverAdminEvent', {
++    // serverevent (not serverAdminEvent) so non-admin clients get live
++    // updates too — serverAdminEvent is only forwarded to admins.
++    app.emit('serverevent', {
+       type: 'SOURCENAMES',
+       data: cachedSourceNames
+     })
+@@ -1685,6 +1687,7 @@ module.exports = function (
+             type: 'SOURCEALIASES',
+             data: aliases
+           })
++          refreshSourceNames()
+           respondOk()
+         })
+       } else {
+@@ -1765,10 +1768,22 @@ module.exports = function (
+   // Read-only and intentionally NOT behind addAdminMiddleware: every
+   // authenticated client (including read-only users) needs these names to
+   // render human-readable source labels. Writes stay admin-only via
+-  // /sourceAliases and /security/devices.
++  // /sourceAliases and /security/devices. Access mirrors the data read
++  // policy: served when security is off, the request is authenticated, or
++  // anonymous read-only access is enabled — otherwise rejected, so the
++  // device descriptions are not exposed to anonymous clients.
+   app.get(
+     `${SERVERROUTESPREFIX}/sourceNames`,
+     (req: Request, res: Response) => {
++      const skReq = req as Request & { skIsAuthenticated?: boolean }
++      if (
++        !app.securityStrategy.isDummy() &&
++        !skReq.skIsAuthenticated &&
++        !app.securityStrategy.allowReadOnly()
++      ) {
++        res.status(403).json('Permission denied')
++        return
++      }
+       res.json(getSourceNames())
+     }
+   )
