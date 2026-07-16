@@ -1,6 +1,6 @@
-From eb007d65e163094c84dd8cebad580475c458b87d Mon Sep 17 00:00:00 2001
+From b1dfffa2249c3865139e17d4c7c009be7ed7b7a8 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
-Date: Thu, 25 Jun 2026 19:15:57 +0000
+Date: Thu, 16 Jul 2026 11:44:17 +0000
 Subject: [PATCH 1/2] feat(sources): show human-readable names for WebSocket
  devices
 
@@ -37,10 +37,10 @@ Claude-Session: https://claude.ai/code/session_01MZcHu5BBMQe1ZPjYe7xsdC
  create mode 100644 test/sourceNames.ts
 
 diff --git a/packages/server-admin-ui/src/dataFetching.ts b/packages/server-admin-ui/src/dataFetching.ts
-index 313cfa3af..12203736d 100644
+index 53d733f..e6d0547 100644
 --- a/packages/server-admin-ui/src/dataFetching.ts
 +++ b/packages/server-admin-ui/src/dataFetching.ts
-@@ -118,6 +118,7 @@ export async function fetchAllData(): Promise<void> {
+@@ -121,6 +121,7 @@ export async function fetchAllData(): Promise<void> {
        state.setPriorityDefaultsFromServer(data.defaults || {})
      }),
      fetchAndSet('/sourceAliases', state.setSourceAliases),
@@ -49,7 +49,7 @@ index 313cfa3af..12203736d 100644
      fetchAndSet('/n2kDeviceStatus', state.setN2kDeviceStatus),
      fetchAndSet('/livePreferredSources', state.setLivePreferredSources),
 diff --git a/packages/server-admin-ui/src/hooks/useSourceAliases.ts b/packages/server-admin-ui/src/hooks/useSourceAliases.ts
-index 381785968..4aea97e46 100644
+index 3817859..4aea97e 100644
 --- a/packages/server-admin-ui/src/hooks/useSourceAliases.ts
 +++ b/packages/server-admin-ui/src/hooks/useSourceAliases.ts
 @@ -106,6 +106,7 @@ function persistAliases(
@@ -88,10 +88,10 @@ index 381785968..4aea97e46 100644
  
    return { aliases, setAlias, removeAlias, getDisplayName, getDisplayParts }
 diff --git a/packages/server-admin-ui/src/services/WebSocketService.ts b/packages/server-admin-ui/src/services/WebSocketService.ts
-index 3189aed8b..a8a283038 100644
+index 3b576a3..80ba2dc 100644
 --- a/packages/server-admin-ui/src/services/WebSocketService.ts
 +++ b/packages/server-admin-ui/src/services/WebSocketService.ts
-@@ -309,6 +309,11 @@ export class WebSocketService {
+@@ -305,6 +305,11 @@ export class WebSocketService {
            .getState()
            .setSourceAliases((data ?? {}) as Record<string, string>)
          break
@@ -104,10 +104,10 @@ index 3189aed8b..a8a283038 100644
          useStore
            .getState()
 diff --git a/packages/server-admin-ui/src/store/index.ts b/packages/server-admin-ui/src/store/index.ts
-index a99e5c2d6..76c6bb5a2 100644
+index cc958c3..506d618 100644
 --- a/packages/server-admin-ui/src/store/index.ts
 +++ b/packages/server-admin-ui/src/store/index.ts
-@@ -255,6 +255,10 @@ export function useSourceAliasesData() {
+@@ -262,6 +262,10 @@ export function useSourceAliasesData() {
    return useStore((s) => s.sourceAliases)
  }
  
@@ -119,7 +119,7 @@ index a99e5c2d6..76c6bb5a2 100644
    return useStore((s) => s.ignoredInstanceConflicts)
  }
 diff --git a/packages/server-admin-ui/src/store/slices/appSlice.ts b/packages/server-admin-ui/src/store/slices/appSlice.ts
-index c0c6b0f25..385cc2857 100644
+index 7918e61..5e25c6f 100644
 --- a/packages/server-admin-ui/src/store/slices/appSlice.ts
 +++ b/packages/server-admin-ui/src/store/slices/appSlice.ts
 @@ -58,6 +58,12 @@ export interface AppSliceState {
@@ -163,10 +163,10 @@ index c0c6b0f25..385cc2857 100644
      set({ ignoredInstanceConflicts })
    },
 diff --git a/packages/server-admin-ui/src/utils/sourceLabels.test.ts b/packages/server-admin-ui/src/utils/sourceLabels.test.ts
-index c7e985e79..959f9efff 100644
+index 3d1e5e1..47387d4 100644
 --- a/packages/server-admin-ui/src/utils/sourceLabels.test.ts
 +++ b/packages/server-admin-ui/src/utils/sourceLabels.test.ts
-@@ -140,6 +140,31 @@ describe('buildSourceLabel', () => {
+@@ -141,6 +141,31 @@ describe('buildSourceLabel', () => {
    it('returns raw sourceRef for unknown connections', () => {
      expect(buildSourceLabel('UNKNOWN.1', sourcesData)).toBe('UNKNOWN.1')
    })
@@ -199,10 +199,10 @@ index c7e985e79..959f9efff 100644
  
  describe('canonicaliseSourceRef', () => {
 diff --git a/packages/server-admin-ui/src/utils/sourceLabels.ts b/packages/server-admin-ui/src/utils/sourceLabels.ts
-index 89ae10475..494a7f2f3 100644
+index 27042d3..5fa4534 100644
 --- a/packages/server-admin-ui/src/utils/sourceLabels.ts
 +++ b/packages/server-admin-ui/src/utils/sourceLabels.ts
-@@ -104,9 +104,14 @@ export function getDeviceInfo(
+@@ -103,9 +103,14 @@ export function getDeviceInfo(
   */
  export function buildSourceLabel(
    sourceRef: string,
@@ -219,7 +219,7 @@ index 89ae10475..494a7f2f3 100644
    return secondary ? `${primary} (${secondary})` : primary
  }
  
-@@ -118,8 +123,16 @@ export function buildSourceLabel(
+@@ -117,8 +122,16 @@ export function buildSourceLabel(
   */
  export function buildSourceLabelParts(
    sourceRef: string,
@@ -238,7 +238,7 @@ index 89ae10475..494a7f2f3 100644
  
    const n2k = getDeviceInfo(sourceRef, sourcesData)
 diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx b/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
-index ae46535fb..3f43a2726 100644
+index ae46535..3f43a27 100644
 --- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
 +++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
 @@ -13,6 +13,7 @@ export default function Dashboard() {
@@ -286,10 +286,10 @@ index ae46535fb..3f43a2726 100644
      return (
        <a href={'#/serverConfiguration/connections/' + encodeURIComponent(id)}>
 diff --git a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.tsx b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.tsx
-index 2f34e70d5..ba701764b 100644
+index 824e2cc..12a93b0 100644
 --- a/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.tsx
 +++ b/packages/server-admin-ui/src/views/DataBrowser/DataBrowser.tsx
-@@ -154,6 +154,7 @@ const DataBrowser: React.FC = () => {
+@@ -155,6 +155,7 @@ const DataBrowser: React.FC = () => {
    const updateMeta = useStore((s) => s.updateMeta)
    const getPathData = useStore((s) => s.getPathData)
  
@@ -297,7 +297,7 @@ index 2f34e70d5..ba701764b 100644
    const unitPrefsLoaded = useUnitPrefsLoaded()
    const fetchUnitPreferences = useStore((s) => s.fetchUnitPreferences)
    const configuredPriorityPaths = useConfiguredPriorityPaths()
-@@ -611,7 +612,7 @@ const DataBrowser: React.FC = () => {
+@@ -612,7 +613,7 @@ const DataBrowser: React.FC = () => {
        if (!src) return ''
        let label = sourceLabels.get(src)
        if (label === undefined) {
@@ -317,7 +317,7 @@ index 2f34e70d5..ba701764b 100644
  
    // Keep the ref in sync with the current memoised path list so the
 diff --git a/packages/server-admin-ui/src/views/DataBrowser/SourceLabel.tsx b/packages/server-admin-ui/src/views/DataBrowser/SourceLabel.tsx
-index 32be10f2b..52d99e018 100644
+index 32be10f..52d99e0 100644
 --- a/packages/server-admin-ui/src/views/DataBrowser/SourceLabel.tsx
 +++ b/packages/server-admin-ui/src/views/DataBrowser/SourceLabel.tsx
 @@ -1,5 +1,6 @@
@@ -351,7 +351,7 @@ index 32be10f2b..52d99e018 100644
      return (
        <span
 diff --git a/src/serverroutes.ts b/src/serverroutes.ts
-index 150b3b9f8..2e2016339 100644
+index 61262e1..02eeeef 100644
 --- a/src/serverroutes.ts
 +++ b/src/serverroutes.ts
 @@ -49,6 +49,7 @@ import {
@@ -360,9 +360,9 @@ index 150b3b9f8..2e2016339 100644
  import { buildDeviceIdentities } from './deviceIdentities'
 +import { buildSourceNames } from './sourceNames'
  import { SERVERROUTESPREFIX } from './constants'
+ import { readDesignLengthOverall } from './api/sensors/vesselDimensions'
  import { handleAdminUICORSOrigin } from './cors'
- import { createDebug, listKnownDebugs } from './debug'
-@@ -566,6 +567,10 @@ module.exports = function (
+@@ -602,6 +603,10 @@ module.exports = function (
              res.status(500).send('Unable to save configuration change')
              return
            }
@@ -373,7 +373,7 @@ index 150b3b9f8..2e2016339 100644
            res.type('text/plain').send(success)
          })
        } else {
-@@ -574,6 +579,37 @@ module.exports = function (
+@@ -610,6 +615,37 @@ module.exports = function (
      }
    }
  
@@ -411,7 +411,7 @@ index 150b3b9f8..2e2016339 100644
    function checkAllowConfigure(req: Request, res: Response) {
      if (app.securityStrategy.allowConfigure(req)) {
        return true
-@@ -1726,6 +1762,17 @@ module.exports = function (
+@@ -1820,6 +1856,17 @@ module.exports = function (
      }
    )
  
@@ -429,7 +429,7 @@ index 150b3b9f8..2e2016339 100644
    app.securityStrategy.addAdminMiddleware(`${SERVERROUTESPREFIX}/sourceAliases`)
  
    app.get(
-@@ -1758,6 +1805,7 @@ module.exports = function (
+@@ -1852,6 +1899,7 @@ module.exports = function (
              type: 'SOURCEALIASES',
              data: validation.value
            })
@@ -439,7 +439,7 @@ index 150b3b9f8..2e2016339 100644
        })
 diff --git a/src/sourceNames.ts b/src/sourceNames.ts
 new file mode 100644
-index 000000000..22ad0e5ad
+index 0000000..22ad0e5
 --- /dev/null
 +++ b/src/sourceNames.ts
 @@ -0,0 +1,49 @@
@@ -494,7 +494,7 @@ index 000000000..22ad0e5ad
 +}
 diff --git a/test/sourceNames.ts b/test/sourceNames.ts
 new file mode 100644
-index 000000000..6ef7c7432
+index 0000000..6ef7c74
 --- /dev/null
 +++ b/test/sourceNames.ts
 @@ -0,0 +1,49 @@
@@ -547,10 +547,13 @@ index 000000000..6ef7c7432
 +    expect(names['YDEN02.37']).to.equal('My Charger')
 +  })
 +})
+-- 
+2.43.0
 
-From 3dc16b6a5b4c0864053efa2ca3511a1eaf75657d Mon Sep 17 00:00:00 2001
+
+From d6b5cdcdb3bd0eb248c51e9eaee080683ea5c54d Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
-Date: Thu, 25 Jun 2026 19:40:14 +0000
+Date: Thu, 16 Jul 2026 11:44:17 +0000
 Subject: [PATCH 2/2] fix(sources): guard /sourceNames and keep map fresh
 
 Address review feedback on the WebSocket device-names change:
@@ -573,10 +576,10 @@ Claude-Session: https://claude.ai/code/session_01MZcHu5BBMQe1ZPjYe7xsdC
  2 files changed, 20 insertions(+), 3 deletions(-)
 
 diff --git a/packages/server-admin-ui/src/dataFetching.ts b/packages/server-admin-ui/src/dataFetching.ts
-index 12203736d..29870dd7f 100644
+index e6d0547..0ba63b4 100644
 --- a/packages/server-admin-ui/src/dataFetching.ts
 +++ b/packages/server-admin-ui/src/dataFetching.ts
-@@ -118,7 +118,9 @@ export async function fetchAllData(): Promise<void> {
+@@ -121,7 +121,9 @@ export async function fetchAllData(): Promise<void> {
        state.setPriorityDefaultsFromServer(data.defaults || {})
      }),
      fetchAndSet('/sourceAliases', state.setSourceAliases),
@@ -588,10 +591,10 @@ index 12203736d..29870dd7f 100644
      fetchAndSet('/n2kDeviceStatus', state.setN2kDeviceStatus),
      fetchAndSet('/livePreferredSources', state.setLivePreferredSources),
 diff --git a/src/serverroutes.ts b/src/serverroutes.ts
-index 2e2016339..390bf266e 100644
+index 02eeeef..6450952 100644
 --- a/src/serverroutes.ts
 +++ b/src/serverroutes.ts
-@@ -604,7 +604,9 @@ module.exports = function (
+@@ -640,7 +640,9 @@ module.exports = function (
  
    const refreshSourceNames = (): void => {
      cachedSourceNames = computeSourceNames()
@@ -602,7 +605,7 @@ index 2e2016339..390bf266e 100644
        type: 'SOURCENAMES',
        data: cachedSourceNames
      })
-@@ -1685,6 +1687,7 @@ module.exports = function (
+@@ -1779,6 +1781,7 @@ module.exports = function (
              type: 'SOURCEALIASES',
              data: aliases
            })
@@ -610,7 +613,7 @@ index 2e2016339..390bf266e 100644
            respondOk()
          })
        } else {
-@@ -1765,10 +1768,22 @@ module.exports = function (
+@@ -1859,10 +1862,22 @@ module.exports = function (
    // Read-only and intentionally NOT behind addAdminMiddleware: every
    // authenticated client (including read-only users) needs these names to
    // render human-readable source labels. Writes stay admin-only via
@@ -634,3 +637,6 @@ index 2e2016339..390bf266e 100644
        res.json(getSourceNames())
      }
    )
+-- 
+2.43.0
+
