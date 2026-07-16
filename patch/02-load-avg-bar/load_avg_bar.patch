@@ -1,8 +1,16 @@
 diff --git a/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx b/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
-index 03f1bbd..6ee623e 100644
+index 3f43a27..55510c9 100644
 --- a/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
 +++ b/packages/server-admin-ui/src/views/Dashboard/Dashboard.tsx
-@@ -37,6 +37,11 @@ export default function Dashboard() {
+@@ -1,7 +1,6 @@
+ import { ReactNode } from 'react'
+ import { useNavigate } from 'react-router-dom'
+ import Card from 'react-bootstrap/Card'
+-import ProgressBar from 'react-bootstrap/ProgressBar'
+ import Row from 'react-bootstrap/Row'
+ import Col from 'react-bootstrap/Col'
+ import Table from 'react-bootstrap/Table'
+@@ -22,6 +21,11 @@ export default function Dashboard() {
    const providerStatistics: Record<string, ProviderStatistics> =
      serverStatistics?.providerStatistics ?? {}
    const uptime = serverStatistics?.uptime ?? 0
@@ -14,7 +22,7 @@ index 03f1bbd..6ee623e 100644
  
    const errorCount = providerStatus.filter((s) => s.type === 'error').length
    const uptimeNum = typeof uptime === 'number' ? uptime : 0
-@@ -135,11 +140,28 @@ export default function Dashboard() {
+@@ -111,11 +115,28 @@ export default function Dashboard() {
            </span>
          )}
          <div className="bars">
@@ -48,7 +56,7 @@ index 03f1bbd..6ee623e 100644
          </div>
        </li>
      )
-@@ -219,6 +241,15 @@ export default function Dashboard() {
+@@ -193,6 +214,15 @@ export default function Dashboard() {
                        {uptimeD} days, {uptimeH} hours, {uptimeM} minutes
                      </strong>
                    </div>
