@@ -18,12 +18,20 @@ on:
         description: 'Ubuntu 24.04 + Node 24.x'
         type: boolean
         default: true
+      ubuntu_24_04_node_26:
+        description: 'Ubuntu 24.04 + Node 26.x'
+        type: boolean
+        default: true
       ubuntu_26_04_node_22:
         description: 'Ubuntu 26.04 + Node 22.x'
         type: boolean
         default: false
       ubuntu_26_04_node_24:
         description: 'Ubuntu 26.04 + Node 24.x'
+        type: boolean
+        default: true
+      ubuntu_26_04_node_26:
+        description: 'Ubuntu 26.04 + Node 26.x'
         type: boolean
         default: true
       alpine_node_22:
@@ -34,12 +42,20 @@ on:
         description: 'Alpine + Node 24'
         type: boolean
         default: true
+      alpine_node_26:
+        description: 'Alpine + Node 26'
+        type: boolean
+        default: true
       debian_node_22:
         description: 'Debian + Node 22'
         type: boolean
         default: false
       debian_node_24:
         description: 'Debian + Node 24'
+        type: boolean
+        default: false
+      debian_node_26:
+        description: 'Debian + Node 26'
         type: boolean
         default: false
       # <<< END auto-generated dispatch inputs
