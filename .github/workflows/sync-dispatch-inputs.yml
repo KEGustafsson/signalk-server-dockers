@@ -65,4 +65,19 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/workflows/*.yml
           git commit -m "chore: sync workflow_dispatch inputs from build-matrix.json [skip ci]"
-          git push
+
+          # main can move between checkout and push (e.g. another bot commit
+          # landing concurrently), which rejects a plain push as non-fast-forward.
+          # Retry with a rebase instead of failing the job outright.
+          for attempt in 1 2 3 4 5; do
+            if git push; then
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}/5) — fetching and rebasing onto origin/${GITHUB_REF_NAME}..."
+            git fetch origin "${GITHUB_REF_NAME}"
+            git rebase "origin/${GITHUB_REF_NAME}"
+            sleep $(( RANDOM % 5 + 1 ))
+          done
+
+          echo "Push failed after 5 attempts." >&2
+          exit 1
