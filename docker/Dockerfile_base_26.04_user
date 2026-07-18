@@ -13,7 +13,7 @@ RUN apt-get update \
   && groupadd -r docker \
   && groupadd -r i2c \
   && groupadd -r spi \
-  && usermod -a -G dialout,i2c,spi,netdev,docker node \
+  && usermod -a -G dialout,i2c,spi,docker node \
   && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
   && chmod u+s /usr/bin/date
 
