@@ -6,21 +6,16 @@ RUN userdel -r ubuntu \
   && groupadd --gid 1000 node \
   && useradd --uid 1000 --gid node --shell /bin/bash --create-home node
 
-COPY docker/avahi/avahi-dbus.conf docker/bluez/bluezuser.conf /etc/dbus-1/system.d/
-
 RUN apt-get update \
   && apt-get -y install --no-install-recommends apt-utils sudo git \
-  python3 python3-venv python3-pip build-essential avahi-daemon libnss-mdns \
-  sysstat procps nano curl libcap2-bin dbus bluez tini \
+  python3 python3-venv python3-pip build-essential \
+  sysstat procps nano curl libcap2-bin bluez tini \
   && groupadd -r docker \
   && groupadd -r i2c \
   && groupadd -r spi \
   && usermod -a -G dialout,i2c,spi,netdev,docker node \
   && echo 'node ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers \
-  && chmod u+s /usr/bin/date \
-  && mkdir -p /var/run/dbus/ /var/run/avahi-daemon/ \
-  && chmod -R 777 /var/run/dbus/ /var/run/avahi-daemon/ \
-  && chown -R avahi:avahi /var/run/avahi-daemon/
+  && chmod u+s /usr/bin/date
 
 RUN curl -fsSL https://deb.nodesource.com/setup_$NODE | bash - \
   && apt-get -y install --no-install-recommends nodejs \
