@@ -16,7 +16,8 @@
       "default_enabled": true,
       "manifest_short_tags": {
         "22": ["latest-22.x"],
-        "24": ["latest", "latest-24.x"]
+        "24": ["latest", "latest-24.x"],
+        "26": ["latest-26.x"]
       }
     },
     {
@@ -29,7 +30,8 @@
       "default_enabled": true,
       "manifest_short_tags": {
         "22": ["latest-ubuntu-26.04-22.x"],
-        "24": ["latest-ubuntu-26.04", "latest-ubuntu-26.04-24.x"]
+        "24": ["latest-ubuntu-26.04", "latest-ubuntu-26.04-24.x"],
+        "26": ["latest-ubuntu-26.04-26.x"]
       }
     },
     {
@@ -42,7 +44,8 @@
       "default_enabled": true,
       "manifest_short_tags": {
         "22": ["latest-alpine-22"],
-        "24": ["latest-alpine"]
+        "24": ["latest-alpine"],
+        "26": ["latest-alpine-26"]
       }
     },
     {
@@ -55,12 +58,14 @@
       "default_enabled": false,
       "manifest_short_tags": {
         "22": ["latest-debian-22"],
-        "24": ["latest-debian"]
+        "24": ["latest-debian"],
+        "26": ["latest-debian-26"]
       }
     }
   ],
   "node_versions": [
     { "id": "22", "default_enabled": false, "extra_platforms": { "arm64": "linux/arm/v7" } },
-    { "id": "24", "default_enabled": true,  "extra_platforms": {} }
+    { "id": "24", "default_enabled": true,  "extra_platforms": {} },
+    { "id": "26", "default_enabled": true,  "extra_platforms": {} }
   ]
 }
