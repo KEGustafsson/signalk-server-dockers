@@ -1,0 +1,187 @@
+From fbf048eb48bbc6529fe53bf616283d740140074b Mon Sep 17 00:00:00 2001
+From: Karl-Erik Gustafsson <ke.gustafsson@gmail.com>
+Date: Wed, 22 Jul 2026 12:02:16 +0300
+Subject: [PATCH] fix(mdns): log advertisement errors at debug level
+
+Without an active network interface the @astronautlabs/mdns library
+emits errors such as "Timed out getting default route". The advertisement
+error handler logged these via console.log/console.error, surfacing a
+scary, seemingly-fatal error on an isolated (offline) server even though
+mDNS advertisement is a best-effort, non-critical feature.
+
+Log advertisement errors at debug level instead so an offline server
+starts cleanly.
+---
+ src/mdns.js  |   7 ++-
+ test/mdns.ts | 143 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 148 insertions(+), 2 deletions(-)
+ create mode 100644 test/mdns.ts
+
+diff --git a/src/mdns.js b/src/mdns.js
+index 60bfdad880..781371f15b 100644
+--- a/src/mdns.js
++++ b/src/mdns.js
+@@ -108,9 +108,12 @@ module.exports = function mdnsResponder(app) {
+         type.port
+     )
+     const ad = new Advertisement(type.type, type.port, options)
++    // mDNS advertisement is best-effort; without a network interface the
++    // library emits errors such as "Timed out getting default route". Log
++    // them at debug level instead of the console so an isolated (offline)
++    // server does not surface a scary, seemingly-fatal error.
+     ad.on('error', (err) => {
+-      console.log(type.type)
+-      console.error(err)
++      debug(`mDNS advertisement error for ${type.type}: ${err.message || err}`)
+     })
+     ad.start()
+     ads.push(ad)
+diff --git a/test/mdns.ts b/test/mdns.ts
+new file mode 100644
+index 0000000000..e1b9a23981
+--- /dev/null
++++ b/test/mdns.ts
+@@ -0,0 +1,143 @@
++import { expect } from 'chai'
++import { EventEmitter } from 'node:events'
++
++type LoadFn = (
++  request: string,
++  parent: NodeModule | null,
++  isMain: boolean
++) => unknown
++
++// eslint-disable-next-line @typescript-eslint/no-require-imports
++const Module = require('node:module') as typeof import('node:module') & {
++  _load: LoadFn
++}
++
++const mdnsModulePath = require.resolve('../dist/mdns.js')
++
++class FakeAdvertisement extends EventEmitter {
++  static instances: FakeAdvertisement[] = []
++
++  readonly serviceType: string
++
++  constructor(serviceType: string) {
++    super()
++    this.serviceType = serviceType
++    FakeAdvertisement.instances.push(this)
++  }
++
++  start() {
++    return this
++  }
++
++  stop() {
++    return this
++  }
++}
++
++type App = {
++  config: {
++    settings: Record<string, unknown>
++    name: string
++    version: string
++    getExternalHostname: () => string
++    isExternalSsl: () => boolean
++  }
++  selfId: string
++  interfaces: Record<string, unknown>
++}
++
++describe('mdnsResponder', () => {
++  const originalLoad = Module._load
++  let debugMessages: string[]
++
++  afterEach(() => {
++    Module._load = originalLoad
++    FakeAdvertisement.instances = []
++    delete require.cache[mdnsModulePath]
++  })
++
++  function loadResponder(): (app: App) => unknown {
++    debugMessages = []
++
++    Module._load = ((request, parent, isMain) => {
++      if (request === '@astronautlabs/mdns') {
++        return { Advertisement: FakeAdvertisement }
++      }
++      if (request === './mdnsPatch') {
++        return { patchAstronautLabsMdns: () => {} }
++      }
++      if (request === './ports') {
++        return { getExternalPort: () => 3000 }
++      }
++      if (request === './debug') {
++        return {
++          createDebug: () => (message: unknown) => {
++            if (typeof message === 'string') {
++              debugMessages.push(message)
++            }
++          }
++        }
++      }
++      if (request === 'os') {
++        return { hostname: () => 'testhost' }
++      }
++      return originalLoad(request, parent, isMain)
++    }) as LoadFn
++
++    delete require.cache[mdnsModulePath]
++
++    // eslint-disable-next-line @typescript-eslint/no-require-imports
++    return require('../dist/mdns.js') as (app: App) => unknown
++  }
++
++  function makeApp(): App {
++    return {
++      config: {
++        settings: {},
++        name: 'signalk-server',
++        version: '2.0.0',
++        getExternalHostname: () => 'testhost',
++        isExternalSsl: () => false
++      },
++      selfId: 'urn:mrn:signalk:uuid:test',
++      interfaces: {}
++    }
++  }
++
++  it('logs advertisement errors at debug level, not to the console', () => {
++    const logged: unknown[][] = []
++    const originalConsoleError = console.error
++    const originalConsoleLog = console.log
++
++    console.error = (...args: unknown[]) => {
++      logged.push(args)
++    }
++    console.log = (...args: unknown[]) => {
++      logged.push(args)
++    }
++
++    try {
++      const mdnsResponder = loadResponder()
++      mdnsResponder(makeApp())
++
++      expect(FakeAdvertisement.instances).to.have.length(1)
++
++      FakeAdvertisement.instances[0].emit(
++        'error',
++        new Error('Timed out getting default route')
++      )
++
++      expect(logged).to.have.length(0)
++      expect(
++        debugMessages.some(
++          (message) =>
++            message.includes('_http._tcp') &&
++            message.includes('Timed out getting default route')
++        )
++      ).to.equal(true)
++    } finally {
++      console.error = originalConsoleError
++      console.log = originalConsoleLog
++    }
++  })
++})
