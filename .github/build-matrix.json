@@ -40,8 +40,8 @@
       "os_arg": "alpine",
       "dockerfile": "./docker/Dockerfile_base_alpine",
       "build_test": false,
-      "login_dhi": true,
-      "default_enabled": true,
+      "login_dhi": false,
+      "default_enabled": false,
       "manifest_short_tags": {
         "22": ["latest-alpine-22"],
         "24": ["latest-alpine"],
