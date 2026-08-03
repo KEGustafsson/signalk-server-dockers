@@ -3,10 +3,17 @@ name: Sync workflow_dispatch inputs from build-matrix.json
 # Keeps the per-(OS x Node) checkboxes in the build workflows in lockstep with
 # .github/build-matrix.json so the JSON is the single source of truth.
 #
-#   PR        -> runs in --check mode and fails if the generated YAML differs.
-#                Author must run the generator locally and push the result.
-#   push main -> regenerates the YAML and auto-commits with [skip ci] if it
-#                drifted (e.g. after merging a PR that only edited the JSON).
+# Always runs the generator in --check mode and fails if the committed YAML
+# differs from what build-matrix.json produces. Fix a failure by running
+#
+#     node .github/scripts/sync-dispatch-inputs.mjs
+#
+# locally and committing the regenerated workflows.
+#
+# The job deliberately does not auto-commit: pushes made with the default
+# GITHUB_TOKEN are rejected for any file under .github/workflows/ ("refusing to
+# allow a GitHub App to create or update workflow ... without `workflows`
+# permission"), and that is not something the `permissions:` block can grant.
 
 on:
   push:
@@ -14,6 +21,9 @@ on:
     paths:
       - '.github/build-matrix.json'
       - '.github/scripts/sync-dispatch-inputs.mjs'
+      - '.github/workflows/build sk docker container all.yml'
+      - '.github/workflows/build sk docker container 24h.yml'
+      - '.github/workflows/build docker base container all.yml'
       - '.github/workflows/sync-dispatch-inputs.yml'
   pull_request:
     paths:
@@ -26,7 +36,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   sync:
@@ -34,50 +44,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          # Default GITHUB_TOKEN is fine for pushing back to main. If branch
-          # protection blocks the bot push, swap to a PAT via repo secret.
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Node
         uses: actions/setup-node@v6
         with:
           node-version: '24.x'
 
-      - name: Check (PR) or regenerate (push)
+      - name: Check dispatch inputs match build-matrix.json
         run: |
           set -euo pipefail
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            node .github/scripts/sync-dispatch-inputs.mjs --check
-          else
-            node .github/scripts/sync-dispatch-inputs.mjs
+          if ! node .github/scripts/sync-dispatch-inputs.mjs --check; then
+            echo "::error::Dispatch inputs are out of sync. Run 'node .github/scripts/sync-dispatch-inputs.mjs' and commit the regenerated workflows."
+            exit 1
           fi
-
-      - name: Commit regenerated YAML
-        if: github.event_name != 'pull_request'
-        run: |
-          set -euo pipefail
-          if git diff --quiet -- .github/workflows; then
-            echo "No drift — nothing to commit."
-            exit 0
-          fi
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/*.yml
-          git commit -m "chore: sync workflow_dispatch inputs from build-matrix.json [skip ci]"
-
-          # main can move between checkout and push (e.g. another bot commit
-          # landing concurrently), which rejects a plain push as non-fast-forward.
-          # Retry with a rebase instead of failing the job outright.
-          for attempt in 1 2 3 4 5; do
-            if git push; then
-              exit 0
-            fi
-            echo "Push rejected (attempt ${attempt}/5) — fetching and rebasing onto origin/${GITHUB_REF_NAME}..."
-            git fetch origin "${GITHUB_REF_NAME}"
-            git rebase "origin/${GITHUB_REF_NAME}"
-            sleep $(( RANDOM % 5 + 1 ))
-          done
-
-          echo "Push failed after 5 attempts." >&2
-          exit 1
