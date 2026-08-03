@@ -38,11 +38,11 @@ on:
       alpine_node_24:
         description: 'Alpine + Node 24'
         type: boolean
-        default: true
+        default: false
       alpine_node_26:
         description: 'Alpine + Node 26'
         type: boolean
-        default: true
+        default: false
       debian_node_22:
         description: 'Debian + Node 22'
         type: boolean
