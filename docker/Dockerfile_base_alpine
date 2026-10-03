@@ -25,6 +25,7 @@ RUN npm config rm proxy \
  && npm config set fetch-retry-maxtimeout 120000 \
  && npm config set registry "https://registry.npmjs.org/" \
  && npm cache clean -f \
+ && npm install -g pnpm@11 \
  && rm -rf /tmp/* /var/tmp/*
 
 RUN addgroup -g 1000 node \
@@ -39,3 +40,7 @@ RUN addgroup -g 1000 node \
 
 WORKDIR /home/node
 USER node
+
+ENV pnpm_config_fetch_retries=5 \
+  pnpm_config_fetch_retry_mintimeout=60000 \
+  pnpm_config_fetch_retry_maxtimeout=120000

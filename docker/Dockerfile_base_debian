@@ -32,8 +32,12 @@ RUN curl -fsSL https://deb.nodesource.com/setup_${NODE}.x | bash - \
  && npm config set registry "https://registry.npmjs.org/" \
  && npm config set @backup:registry "https://registry.yarnpkg.com/" \
  && npm cache clean --force \
- && npm install -g npm@latest pm2 \
+ && npm install -g npm@latest pm2 pnpm@11 \
  && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 USER node
 WORKDIR /home/node
+
+ENV pnpm_config_fetch_retries=5 \
+  pnpm_config_fetch_retry_mintimeout=60000 \
+  pnpm_config_fetch_retry_maxtimeout=120000

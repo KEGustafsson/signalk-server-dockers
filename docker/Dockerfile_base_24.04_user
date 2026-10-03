@@ -31,5 +31,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_$NODE | bash - \
   && npm config set fetch-retry-maxtimeout 120000 \
   && npm config set registry "https://registry.npmjs.org/" \
   && npm cache clean -f \
-  && npm install npm@latest -g \
+  && npm install -g npm@latest pnpm@11 \
   && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+ENV pnpm_config_fetch_retries=5 \
+  pnpm_config_fetch_retry_mintimeout=60000 \
+  pnpm_config_fetch_retry_maxtimeout=120000
