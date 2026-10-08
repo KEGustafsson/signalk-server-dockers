@@ -35,6 +35,12 @@ if tar -tzf "$server_tarball" | grep -q '^package/dist/bundled-packages.js$'; th
   pnpm add ./*.tgz
   # node_modules holds hard links to the store, so the store can go
   rm -rf "$(pnpm store path)" "$HOME/.cache/pnpm"
+  # canboatjs swallows a failed addon build, so assert it here: without the
+  # addon the server starts but has no CAN interface
+  if [ -z "$(find node_modules -path '*/@canboat/canboatjs/build/Release/canSocket.node' -print -quit)" ]; then
+    echo "canSocket.node missing: the canboatjs native CAN addon did not build" >&2
+    exit 1
+  fi
 else
   extras=$(ls *.tgz | grep -v "^$server_tarball\$" || true)
   echo "Found Extras: $extras"
