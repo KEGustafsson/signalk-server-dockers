@@ -39,13 +39,5 @@ else
     sudo service bluetooth restart
 fi
 
-# --- NSOLID & PM2 OPTIMIZATION ---
-# Explicitly tell PM2 to use the N|Solid (node) binary
-export PM2_NODE_BINARY=$(command -v node)
-
-# We use pm2-runtime (the successor to pm2-docker) for better container signal handling.
-# The '--' separates PM2 arguments from the Signal K arguments.
-exec pm2-runtime start /home/node/signalk/node_modules/signalk-server/bin/signalk-server \
-    --name "signalk-server" \
-    --node-args="--trace-deprecation" \
-    -- --securityenabled
+# exec so the server replaces this shell and receives container signals directly
+exec node /home/node/signalk/node_modules/signalk-server/bin/signalk-server --securityenabled "$@"
