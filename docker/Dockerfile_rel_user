@@ -16,9 +16,13 @@ RUN npm config rm proxy \
   && npm config set @backup:registry "https://registry.yarnpkg.com/" \
   && npm cache clean -f
 
-COPY --chown=node:node --chmod=755 docker/install-server.sh /tmp/install-server.sh
-RUN npm pack "signalk-server@$TAG" \
-  && /tmp/install-server.sh
+RUN npm i signalk-server@$TAG \
+  && mkdir -p node_modules/signalk-server/node_modules \
+  && ln -s /home/node/signalk/node_modules/@signalk /home/node/signalk/node_modules/signalk-server/node_modules/@signalk \
+  && rm -rf node_modules/@signalk/ \
+  && mkdir -p node_modules/signalk-server/node_modules/@mxtommy/ \
+  && cp -rf node_modules/@mxtommy/kip node_modules/signalk-server/node_modules/@mxtommy/ \
+  && rm -rf node_modules/@mxtommy/;
 
 COPY --chown=node docker/startup.sh startup.sh
 RUN chmod +x startup.sh

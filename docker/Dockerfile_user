@@ -1,6 +1,11 @@
 ARG BASE_IMAGE
 FROM ghcr.io/kegustafsson/signalk-server-base:latest-${BASE_IMAGE} AS base
 
+# The server installs its bundled packages, App Store plugins and webapps
+# with pnpm, so the image carries it whether or not the base image does.
+RUN npm install -g pnpm@11 \
+  && npm cache clean --force
+
 USER node
 WORKDIR /home/node/signalk
 
@@ -15,8 +20,34 @@ RUN mkdir -p /home/node/.signalk/ /home/node/signalk/ \
 FROM base AS tarballs_installed
 COPY --chown=node:node *.tgz .
 
-COPY --chown=node:node --chmod=755 docker/install-server.sh /tmp/install-server.sh
-RUN /tmp/install-server.sh
+# pnpm runs dependency install scripts only for approved packages.
+# @canboat/canboatjs builds its native SocketCAN addon from an "install"
+# script and ships no prebuilt binaries; it turns a failed build into a log
+# line and pnpm skips failing scripts, so the addon is asserted afterwards.
+# Other dependencies' scripts are not needed at runtime. The overrides make
+# the server's dependencies on the workspace packages resolve to these
+# tarballs instead of the registry. node_modules holds hard links into the
+# pnpm store, so the store is removed once the install is done.
+RUN printf '%s\n' \
+       'strictDepBuilds: false' \
+       'allowBuilds:' \
+       "  '@canboat/canboatjs': true" \
+       "  '@serialport/bindings-cpp': true" \
+       'minimumReleaseAgeExclude:' \
+       "  - '@signalk/*'" \
+       "  - '@canboat/*'" \
+       'overrides:' > pnpm-workspace.yaml \
+  && for tgz in *.tgz; do \
+       name=$(tar -xOzf "$tgz" package/package.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).name') \
+       && printf "  '%s': file:./%s\n" "$name" "$tgz" >> pnpm-workspace.yaml; \
+     done \
+  && printf '{"name":"signalk","private":true}\n' > package.json \
+  && pnpm add ./*.tgz \
+  && rm -rf "$(pnpm store path)" "$HOME/.cache/pnpm" *.tgz \
+  && if [ -z "$(find node_modules -path '*/@canboat/canboatjs/build/Release/canSocket.node' -print -quit)" ]; then \
+       echo "canSocket.node missing: the canboatjs native CAN addon did not build" >&2; \
+       exit 1; \
+     fi
 
 FROM base
 USER node
