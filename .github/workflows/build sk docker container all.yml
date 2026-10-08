@@ -94,8 +94,9 @@ jobs:
           echo "major_minor=$MAJOR.$MINOR" >> $GITHUB_OUTPUT
       - name: signalk-server download and patch
         run: |
-          git clone https://github.com/SignalK/signalk-server.git
+          git clone https://github.com/kegustafsson/signalk-server.git
           cd signalk-server
+          git checkout pnpm
           # git fetch --tags
           # git checkout v2.21.3
           applied=false
