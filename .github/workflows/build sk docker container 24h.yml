@@ -177,8 +177,9 @@ jobs:
           echo "major_minor=$MAJOR.$MINOR" >> $GITHUB_OUTPUT
       - name: signalk-server download and patch
         run: |
-          git clone https://github.com/SignalK/signalk-server.git
+          git clone https://github.com/kegustafsson/signalk-server.git
           cd signalk-server
+          git checkout pnpm
           applied=false
           for dir in ./../patch/[0-9]*/; do
             if [ -d "$dir" ] && ls "$dir"*.patch 1>/dev/null 2>&1; then
