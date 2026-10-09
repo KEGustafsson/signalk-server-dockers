@@ -215,11 +215,11 @@ jobs:
           trap 'docker stop sk-smoke >/dev/null; docker rm sk-smoke >/dev/null' EXIT
           fail() { echo "::error::$1"; docker logs sk-smoke; exit 1; }
           for i in $(seq 1 60); do
-            curl -fs localhost:3000/signalk >/dev/null && break
+            curl -fs --max-time 5 localhost:3000/signalk >/dev/null && break
             [ "$i" -lt 60 ] || fail "server did not answer on /signalk within 60 s"
             sleep 1
           done
-          status=$(curl -s -o /dev/null -w '%{http_code}' localhost:3000/admin/)
+          status=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' localhost:3000/admin/)
           [ "$status" = 200 ] || fail "/admin/ answered $status instead of 200"
           echo "server up after ${i}s, /admin/ answered 200"
 
