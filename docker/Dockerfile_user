@@ -26,24 +26,40 @@ COPY --chown=node:node *.tgz .
 # line and pnpm skips failing scripts, so the addon is asserted afterwards.
 # Other dependencies' scripts are not needed at runtime. The overrides make
 # the server's dependencies on the workspace packages resolve to these
-# tarballs instead of the registry. node_modules holds hard links into the
-# pnpm store, so the store is removed once the install is done.
+# tarballs instead of the registry, so only the server tarball is added:
+# workspace packages nothing depends on stay out of the image. The image
+# bundles exactly the versions the server declares, so pnpm's release-age
+# gate is off; it would otherwise silently pick older versions of freshly
+# released bundled plugins. node_modules holds hard links into the pnpm
+# store, so the store is removed once the install is done, together with
+# the node-gyp headers that building the addon leaves in ~/.cache.
 RUN printf '%s\n' \
        'strictDepBuilds: false' \
        'allowBuilds:' \
        "  '@canboat/canboatjs': true" \
        "  '@serialport/bindings-cpp': true" \
-       'minimumReleaseAgeExclude:' \
-       "  - '@signalk/*'" \
-       "  - '@canboat/*'" \
+       'minimumReleaseAge: 0' \
        'overrides:' > pnpm-workspace.yaml \
   && for tgz in *.tgz; do \
        name=$(tar -xOzf "$tgz" package/package.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).name') \
-       && printf "  '%s': file:./%s\n" "$name" "$tgz" >> pnpm-workspace.yaml; \
+       && printf "  '%s': file:./%s\n" "$name" "$tgz" >> pnpm-workspace.yaml \
+       && if [ "$name" = signalk-server ]; then server="$tgz"; fi; \
      done \
+  && : "${server:?no signalk-server tarball in the build context}" \
   && printf '{"name":"signalk","private":true}\n' > package.json \
-  && pnpm add ./*.tgz \
-  && rm -rf "$(pnpm store path)" "$HOME/.cache/pnpm" *.tgz \
+  && pnpm add "./$server" \
+  # Servers that predate module-resolution lookup (dist/bundled-packages.js)
+  # expect the admin UI and bundled plugins under <server>/node_modules/.
+  # pnpm places those as siblings of the server inside its virtual store
+  # directory, so a symlink to that directory makes the old lookup work.
+  # pnpm only keeps bin shims for package scripts in <server>/node_modules,
+  # and the image never runs those, so the directory is replaced.
+  && if [ ! -f node_modules/signalk-server/dist/bundled-packages.js ]; then \
+       real=$(readlink -f node_modules/signalk-server) \
+       && rm -rf "$real/node_modules" \
+       && ln -s .. "$real/node_modules"; \
+     fi \
+  && rm -rf "$(pnpm store path)" "$HOME/.cache" *.tgz \
   && if [ -z "$(find node_modules -path '*/@canboat/canboatjs/build/Release/canSocket.node' -print -quit)" ]; then \
        echo "canSocket.node missing: the canboatjs native CAN addon did not build" >&2; \
        exit 1; \
@@ -60,4 +76,6 @@ ENV SKIP_ADMINUI_VERSION_CHECK=true
 WORKDIR /home/node/.signalk
 USER node
 EXPOSE 3000
-ENTRYPOINT ["/home/node/signalk/startup.sh"]
+# tini as PID 1 forwards the SIGTERM of "docker stop" to the server; node
+# as PID 1 would ignore it and the container would be killed after 10 s.
+ENTRYPOINT ["tini", "--", "/home/node/signalk/startup.sh"]
