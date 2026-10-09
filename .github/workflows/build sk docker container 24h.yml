@@ -193,7 +193,9 @@ jobs:
         run: |
           cd signalk-server
           rm -rf node_modules
-          # The server moved from npm to pnpm; build older sources with npm
+          # The clone is pinned to the pnpm branch; the npm path is kept for
+          # building sources that predate pnpm, e.g. when checking out an
+          # older tag above instead.
           if [ -f pnpm-lock.yaml ]; then
             npm install -g pnpm@11
             pnpm install --frozen-lockfile
