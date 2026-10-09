@@ -214,14 +214,15 @@ jobs:
           docker run -d --name sk-smoke -p 3000:3000 sk-smoke:test
           trap 'docker stop sk-smoke >/dev/null; docker rm sk-smoke >/dev/null' EXIT
           fail() { echo "::error::$1"; docker logs sk-smoke; exit 1; }
-          for i in $(seq 1 60); do
-            curl -fs --max-time 5 localhost:3000/signalk >/dev/null && break
-            [ "$i" -lt 60 ] || fail "server did not answer on /signalk within 60 s"
+          start=$SECONDS
+          until curl -fs --max-time 5 localhost:3000/signalk >/dev/null; do
+            [ $((SECONDS - start)) -lt 60 ] || fail "server did not answer on /signalk within 60 s"
             sleep 1
           done
-          status=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' localhost:3000/admin/)
+          status=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' localhost:3000/admin/) \
+            || fail "/admin/ did not answer within 10 s"
           [ "$status" = 200 ] || fail "/admin/ answered $status instead of 200"
-          echo "server up after ${i}s, /admin/ answered 200"
+          echo "server up after $((SECONDS - start))s, /admin/ answered 200"
 
   manifest:
     name: Manifest ${{ matrix.os_label }} node-${{ matrix.node }}
