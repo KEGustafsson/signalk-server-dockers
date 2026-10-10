@@ -187,7 +187,9 @@ jobs:
           build-args: |
             NODE=${{ matrix.node }}
 
-      # Ubuntu-only smoke test: rebuild the user image against the base we just pushed.
+      # Ubuntu-only smoke test: build the release image against the base we
+      # just pushed, for the runner's own platform so it can be loaded and
+      # run, and check that the server and its admin UI answer.
       - name: Modify Dockerfile_rel for testing
         if: matrix.build_test
         run: |
@@ -200,9 +202,33 @@ jobs:
         with:
           context: .
           file: ./docker/Dockerfile_rel_user
-          platforms: ${{ matrix.platform }}
+          load: true
+          provenance: false
+          tags: sk-smoke:test
           build-args: |
             TAG=latest
+      - name: Run Signal K test docker
+        if: matrix.build_test
+        run: |
+          set -euo pipefail
+          docker run -d --name sk-smoke -p 3000:3000 sk-smoke:test
+          trap 'docker stop sk-smoke >/dev/null; docker rm sk-smoke >/dev/null' EXIT
+          fail() { echo "::error::$1"; docker logs sk-smoke; exit 1; }
+          start=$SECONDS
+          deadline=$((start + 60))
+          # Each request is cut off at the deadline, so the poll never overruns it
+          until
+            remaining=$((deadline - SECONDS)) &&
+            ((remaining > 0)) &&
+            curl -fs --max-time "$((remaining < 5 ? remaining : 5))" localhost:3000/signalk >/dev/null
+          do
+            [ "$remaining" -gt 0 ] || fail "server did not answer on /signalk within 60 s"
+            sleep 1
+          done
+          status=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' localhost:3000/admin/) \
+            || fail "/admin/ did not answer within 10 s"
+          [ "$status" = 200 ] || fail "/admin/ answered $status instead of 200"
+          echo "server up after $((SECONDS - start))s, /admin/ answered 200"
 
   manifest:
     name: Manifest ${{ matrix.os_label }} node-${{ matrix.node }}

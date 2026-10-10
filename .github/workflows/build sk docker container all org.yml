@@ -307,6 +307,9 @@ jobs:
           registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}  # ✅ Replaced GHCR_USERNAME + GHCR_TOKEN
+      # Dockerfile_user installs with pnpm whatever the server was built with.
+      # A server without module-resolution lookup of its bundled packages
+      # (upstream builds included) is handled there by a compatibility symlink.
       - name: Build and push
         if: steps.check.outputs.skip != 'true'
         uses: docker/build-push-action@v6
