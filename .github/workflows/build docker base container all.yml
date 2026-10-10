@@ -215,8 +215,14 @@ jobs:
           trap 'docker stop sk-smoke >/dev/null; docker rm sk-smoke >/dev/null' EXIT
           fail() { echo "::error::$1"; docker logs sk-smoke; exit 1; }
           start=$SECONDS
-          until curl -fs --max-time 5 localhost:3000/signalk >/dev/null; do
-            [ $((SECONDS - start)) -lt 60 ] || fail "server did not answer on /signalk within 60 s"
+          deadline=$((start + 60))
+          # Each request is cut off at the deadline, so the poll never overruns it
+          until
+            remaining=$((deadline - SECONDS)) &&
+            ((remaining > 0)) &&
+            curl -fs --max-time "$((remaining < 5 ? remaining : 5))" localhost:3000/signalk >/dev/null
+          do
+            [ "$remaining" -gt 0 ] || fail "server did not answer on /signalk within 60 s"
             sleep 1
           done
           status=$(curl -s --max-time 10 -o /dev/null -w '%{http_code}' localhost:3000/admin/) \
