@@ -3,6 +3,8 @@ FROM ghcr.io/kegustafsson/signalk-server-base:latest-${BASE_IMAGE} AS base
 
 # The server installs its bundled packages, App Store plugins and webapps
 # with pnpm, so the image carries it whether or not the base image does.
+# Some base images end as user node, which cannot write the global prefix.
+USER root
 RUN npm install -g pnpm@11 \
   && npm cache clean --force
 
