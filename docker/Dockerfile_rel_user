@@ -2,8 +2,9 @@ FROM ghcr.io/kegustafsson/signalk-server-base:latest
 
 ARG TAG
 
-# The server installs its bundled packages, App Store plugins and webapps
-# with pnpm, so the image carries it whether or not the base image does.
+# The image installs the server with pnpm, so it carries pnpm whether or not
+# the base image does. The App Store and signalk-pnpm use the pnpm that comes
+# with the server.
 # Some base images end as user node, which cannot write the global prefix.
 USER root
 RUN command -v pnpm >/dev/null || (npm install -g pnpm@11 && npm cache clean --force)
@@ -25,7 +26,8 @@ RUN mkdir -p /home/node/.signalk/ /home/node/signalk/ \
 # @canboat/canboatjs builds its native SocketCAN addon from an "install"
 # script and ships no prebuilt binaries; it turns a failed build into a log
 # line and pnpm skips failing scripts, so the addon is asserted afterwards.
-# Other dependencies' scripts are not needed at runtime. The image bundles
+# Other dependencies' scripts are not needed at runtime; the explicit
+# "false" entries keep pnpm from reporting them as ignored. The image bundles
 # exactly the versions the server declares, so pnpm's release-age gate is
 # off; it would otherwise silently pick older versions of freshly released
 # bundled plugins. node_modules holds hard links into the pnpm store, so
@@ -36,6 +38,11 @@ RUN printf '%s\n' \
        'allowBuilds:' \
        "  '@canboat/canboatjs': true" \
        "  '@serialport/bindings-cpp': true" \
+       "  '@parcel/watcher': false" \
+       "  '@scarf/scarf': false" \
+       '  core-js: false' \
+       '  es5-ext: false' \
+       '  storage-engine: false' \
        'minimumReleaseAge: 0' > pnpm-workspace.yaml \
   && printf '{"name":"signalk","private":true}\n' > package.json \
   && pnpm add "signalk-server@$TAG" \
@@ -59,8 +66,13 @@ RUN printf '%s\n' \
 COPY --chown=node:node --chmod=755 docker/startup.sh startup.sh
 
 ENV IS_IN_DOCKER=true
+# The server's commands, such as signalk-pnpm for installing plugins from a
+# shell or a derived image
+ENV PATH="/home/node/signalk/node_modules/.bin:${PATH}"
 WORKDIR /home/node/.signalk
 EXPOSE 3000
 # tini as PID 1 forwards the SIGTERM of "docker stop" to the server; node
 # as PID 1 would ignore it and the container would be killed after 10 s.
-ENTRYPOINT ["tini", "--", "/home/node/signalk/startup.sh"]
+# -s keeps tini working without a warning when "docker run --init" already
+# provides a PID 1.
+ENTRYPOINT ["tini", "-s", "--", "/home/node/signalk/startup.sh"]
