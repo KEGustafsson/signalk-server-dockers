@@ -84,4 +84,6 @@ USER node
 EXPOSE 3000
 # tini as PID 1 forwards the SIGTERM of "docker stop" to the server; node
 # as PID 1 would ignore it and the container would be killed after 10 s.
-ENTRYPOINT ["tini", "--", "/home/node/signalk/startup.sh"]
+# -s keeps tini working without a warning when "docker run --init" already
+# provides a PID 1.
+ENTRYPOINT ["tini", "-s", "--", "/home/node/signalk/startup.sh"]
