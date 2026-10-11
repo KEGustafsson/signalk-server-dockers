@@ -26,7 +26,8 @@ RUN mkdir -p /home/node/.signalk/ /home/node/signalk/ \
 # @canboat/canboatjs builds its native SocketCAN addon from an "install"
 # script and ships no prebuilt binaries; it turns a failed build into a log
 # line and pnpm skips failing scripts, so the addon is asserted afterwards.
-# Other dependencies' scripts are not needed at runtime. The image bundles
+# Other dependencies' scripts are not needed at runtime; the explicit
+# "false" entries keep pnpm from reporting them as ignored. The image bundles
 # exactly the versions the server declares, so pnpm's release-age gate is
 # off; it would otherwise silently pick older versions of freshly released
 # bundled plugins. node_modules holds hard links into the pnpm store, so
@@ -37,6 +38,11 @@ RUN printf '%s\n' \
        'allowBuilds:' \
        "  '@canboat/canboatjs': true" \
        "  '@serialport/bindings-cpp': true" \
+       "  '@parcel/watcher': false" \
+       "  '@scarf/scarf': false" \
+       '  core-js: false' \
+       '  es5-ext: false' \
+       '  storage-engine: false' \
        'minimumReleaseAge: 0' > pnpm-workspace.yaml \
   && printf '{"name":"signalk","private":true}\n' > package.json \
   && pnpm add "signalk-server@$TAG" \

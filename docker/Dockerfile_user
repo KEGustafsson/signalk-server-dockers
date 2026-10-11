@@ -27,7 +27,8 @@ COPY --chown=node:node *.tgz .
 # @canboat/canboatjs builds its native SocketCAN addon from an "install"
 # script and ships no prebuilt binaries; it turns a failed build into a log
 # line and pnpm skips failing scripts, so the addon is asserted afterwards.
-# Other dependencies' scripts are not needed at runtime. The overrides make
+# Other dependencies' scripts are not needed at runtime; the explicit
+# "false" entries keep pnpm from reporting them as ignored. The overrides make
 # the server's dependencies on the workspace packages resolve to these
 # tarballs instead of the registry, so only the server tarball is added:
 # workspace packages nothing depends on stay out of the image. The image
@@ -41,6 +42,11 @@ RUN printf '%s\n' \
        'allowBuilds:' \
        "  '@canboat/canboatjs': true" \
        "  '@serialport/bindings-cpp': true" \
+       "  '@parcel/watcher': false" \
+       "  '@scarf/scarf': false" \
+       '  core-js: false' \
+       '  es5-ext: false' \
+       '  storage-engine: false' \
        'minimumReleaseAge: 0' \
        'overrides:' > pnpm-workspace.yaml \
   && for tgz in *.tgz; do \
