@@ -1,8 +1,9 @@
 ARG BASE_IMAGE
 FROM ghcr.io/kegustafsson/signalk-server-base:latest-${BASE_IMAGE} AS base
 
-# The server installs its bundled packages, App Store plugins and webapps
-# with pnpm, so the image carries it whether or not the base image does.
+# The image installs the server with pnpm, so it carries pnpm whether or not
+# the base image does. The App Store and signalk-pnpm use the pnpm that comes
+# with the server.
 # Some base images end as user node, which cannot write the global prefix.
 USER root
 RUN npm install -g pnpm@11 \
@@ -74,6 +75,9 @@ COPY --from=tarballs_installed --chown=node:node /home/node/ /home/node/
 COPY --chown=node:node --chmod=755 docker/startup.sh startup.sh
 
 ENV IS_IN_DOCKER=true
+# The server's commands, such as signalk-pnpm for installing plugins from a
+# shell or a derived image
+ENV PATH="/home/node/signalk/node_modules/.bin:${PATH}"
 ENV SKIP_ADMINUI_VERSION_CHECK=true
 WORKDIR /home/node/.signalk
 USER node
