@@ -2,9 +2,9 @@
 
 Generated automatically from Docker Hub tag endpoints.
 
-- Workflow run: `259`
+- Workflow run: `260`
 - Workflow attempt: `1`
-- Generated at: `2026-10-28 02:56:42 UTC`
+- Generated at: `2026-10-29 03:22:50 UTC`
 - Source branch: `main`
 - Docker Hub repository: [`signalk/signalk-server`](https://hub.docker.com/r/signalk/signalk-server)
 
