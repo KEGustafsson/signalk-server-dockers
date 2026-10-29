@@ -84,7 +84,7 @@ jobs:
           version=$(curl -fsSL https://raw.githubusercontent.com/SignalK/signalk-server/master/package.json \
                 | jq -r .version)
           tag="v$version"
-          tag=v2.35.3194
+          # tag=v2.35.3194
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "Extracted tag: $tag"
 
@@ -94,11 +94,11 @@ jobs:
           echo "major_minor=$MAJOR.$MINOR" >> $GITHUB_OUTPUT
       - name: signalk-server download and patch
         run: |
-          # git clone https://github.com/SignalK/signalk-server.git
-          git clone https://github.com/kegustafsson/signalk-server.git
+          git clone https://github.com/SignalK/signalk-server.git
+          # git clone https://github.com/kegustafsson/signalk-server.git
           cd signalk-server
-          git fetch --tags
-          git checkout test-revert-3194
+          # git fetch --tags
+          # git checkout test-revert-3194
           # git checkout server-log-clear
           applied=false
           for dir in ./../patch/[0-9]*/; do
