@@ -126,7 +126,9 @@ jobs:
         with:
           retention-days: 1
           name: packed-modules
-          path: ./signalk-server/*.tgz
+          path: |
+            ./signalk-server/*.tgz
+            ./signalk-server/docker/install-default-packages.sh
 
   # Computes which variants are enabled and emits matrices used by the
   # build / manifest / copy jobs. The OS x Node catalogue lives in

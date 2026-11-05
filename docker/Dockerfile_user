@@ -26,12 +26,14 @@ RUN set -x; \
     if [ -d node_modules/@signalk ]; then \
         dest="node_modules/signalk-server/node_modules" && \
         mkdir -p "$dest/@signalk" && \
-        cp -rf node_modules/@signalk/* "$dest/@signalk/" && \
-        mkdir -p "$dest/@mxtommy" && \
-        if [ -d node_modules/@mxtommy/kip ]; then cp -rf node_modules/@mxtommy/kip "$dest/@mxtommy/"; fi; \
+        cp -rf node_modules/@signalk/* "$dest/@signalk/"; \
     fi && \
     npm cache clean --force && \
     rm *.tgz
+
+COPY --chown=node:node --chmod=755 docker/install-default-packages.sh /tmp/install-default-packages.sh
+RUN /tmp/install-default-packages.sh /home/node/signalk/node_modules/signalk-server/package.json /home/node/signalk/default-config full \
+  && rm /tmp/install-default-packages.sh
 
 FROM base
 USER node
@@ -41,6 +43,7 @@ COPY --chown=node:node --chmod=755 docker/startup.sh startup.sh
 
 ENV IS_IN_DOCKER=true
 ENV SKIP_ADMINUI_VERSION_CHECK=true
+ENV SIGNALK_DEFAULT_CONFIG_DIR=/home/node/signalk/default-config
 WORKDIR /home/node/.signalk
 USER node
 EXPOSE 3000
