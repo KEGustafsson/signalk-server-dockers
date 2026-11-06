@@ -161,7 +161,9 @@ jobs:
         with:
           retention-days: 1
           name: packed-modules
-          path: ./signalk-server/*.tgz
+          path: |
+            ./signalk-server/*.tgz
+            ./signalk-server/docker/install-default-packages.sh
 
   generate-tags:
     name: Generate Docker tags
