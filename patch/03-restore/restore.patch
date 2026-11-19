@@ -1,7 +1,7 @@
 From ed7b004777602a3b3056fa393e62f5652ef814f1 Mon Sep 17 00:00:00 2001
 From: KEGustafsson <ke.gustafsson@gmail.com>
 Date: Tue, 10 Nov 2026 20:06:13 +0000
-Subject: [PATCH 1/2] feat(server-api): add FullSignalK.restoreDelta
+Subject: [PATCH 01/10] feat(server-api): add FullSignalK.restoreDelta
 
 Adds values to the full tree without emitting a delta or stamping
 source freshness, for values saved by an earlier run.
@@ -94,7 +94,7 @@ index ca15dc3499..6b1d76fd70 100644
 From e9dd2d9402ba9b4cd3623f8673542ae1de5583d7 Mon Sep 17 00:00:00 2001
 From: KEGustafsson <ke.gustafsson@gmail.com>
 Date: Tue, 10 Nov 2026 20:06:13 +0000
-Subject: [PATCH 2/2] feat: restore cached values after a clean restart
+Subject: [PATCH 02/10] feat: restore cached values after a clean restart
 
 With the new restoreOwnData setting the server saves its own vessel's
 cached values when it stops cleanly (admin restart button, reboot,
@@ -765,3 +765,2147 @@ index 0000000000..d4d9dd7f76
 +    expect(await restartedValue(false)).to.equal(undefined)
 +  })
 +})
+
+From 2a1a3133de4027ef128ae0d6eb5c3ea50a10e617 Mon Sep 17 00:00:00 2001
+From: KEGustafsson <ke.gustafsson@gmail.com>
+Date: Tue, 10 Nov 2026 22:11:29 +0000
+Subject: [PATCH 03/10] fix: skip reload saves and notification paths
+
+An in-process reload keeps the cache in memory, so a file saved for it
+is never read and would be restored stale on a later start that follows
+a power cut. Save only when the process stops.
+
+Notifications are no longer saved: an alarm is an event, and a restored
+one would lack the state the notification manager needs to clear it.
+---
+ src/deltacachePersistence.ts   | 16 ++++++++++-
+ src/index.ts                   | 14 ++++++----
+ test/deltacache-persistence.ts | 51 ++++++++++++++++++++++++++++++++++
+ 3 files changed, 75 insertions(+), 6 deletions(-)
+
+diff --git a/src/deltacachePersistence.ts b/src/deltacachePersistence.ts
+index dbfc0bac15..e920134449 100644
+--- a/src/deltacachePersistence.ts
++++ b/src/deltacachePersistence.ts
+@@ -16,6 +16,9 @@ const MS_PER_MINUTE = 60 * 1000
+ // Base data is reloaded from baseDeltas.json on every start; saving it here
+ // could bring back a field the user has since cleared.
+ const BASE_DATA_SOURCE = 'defaults'
++// An alarm is an event rather than a measurement, and a restored one would
++// lack the state the notification manager keeps for clearing it.
++const NOTIFICATIONS_PATH_PREFIX = 'notifications.'
+ 
+ export interface DeltaCachePersistenceApp {
+   config: {
+@@ -35,6 +38,17 @@ export function deltaCacheFilePath(configPath: string): string {
+   return join(configPath, SERVERSTATEDIRNAME, FILE_NAME)
+ }
+ 
++function isWorthSaving(delta: Delta): boolean {
++  const update = delta.updates[0]
++  if (!update || update.$source === BASE_DATA_SOURCE) {
++    return false
++  }
++  return !(
++    'values' in update &&
++    update.values.some((pv) => pv.path.startsWith(NOTIFICATIONS_PATH_PREFIX))
++  )
++}
++
+ /**
+  * Save the cached values on a clean stop so that the next start can
+  * restore them.
+@@ -51,7 +65,7 @@ export async function saveDeltaCache(
+     : ({ context }) => context === app.selfContext
+   const deltas = app.deltaCache
+     .getCachedDeltas(matcher, undefined, undefined, 'all', true)
+-    .filter((delta) => delta.updates[0]?.$source !== BASE_DATA_SOURCE)
++    .filter(isWorthSaving)
+   const filePath = deltaCacheFilePath(app.config.configPath)
+   await mkdir(join(app.config.configPath, SERVERSTATEDIRNAME), {
+     recursive: true
+diff --git a/src/index.ts b/src/index.ts
+index 0f7b1bd5a8..63cc9b6948 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -831,7 +831,7 @@ class Server {
+     // stop() resolves only once the plugins have stopped and the HTTP server
+     // has closed; a start() before that would lose its port and its timers to
+     // the stop still running.
+-    this.stop()
++    this.stop(undefined, { reloading: true })
+       .catch((e) => console.error(e))
+       .then(() => this.start())
+       .catch((e) => console.error(e))
+@@ -839,7 +839,7 @@ class Server {
+     return this
+   }
+ 
+-  async stop(cb?: () => void) {
++  async stop(cb?: () => void, { reloading = false } = {}) {
+     this.providerStatusEmitter.cancel()
+     const { connections, redirectConnections } = this
+     if (!this.app.started || !connections) {
+@@ -847,9 +847,13 @@ class Server {
+     }
+ 
+     try {
+-      await saveDeltaCache(this.app).catch((err: Error) => {
+-        console.error(`Unable to save cached values: ${err.message}`)
+-      })
++      // A reload keeps the cache in memory, and a file saved for it would be
++      // restored stale on a later start that follows a power cut.
++      if (!reloading) {
++        await saveDeltaCache(this.app).catch((err: Error) => {
++          console.error(`Unable to save cached values: ${err.message}`)
++        })
++      }
+ 
+       // The plugins interface resolves once every plugin's stop() has, and a
+       // shutdown exits as soon as this method resolves: without the wait, a
+diff --git a/test/deltacache-persistence.ts b/test/deltacache-persistence.ts
+index d4d9dd7f76..61f63b72bc 100644
+--- a/test/deltacache-persistence.ts
++++ b/test/deltacache-persistence.ts
+@@ -228,6 +228,29 @@ describe('delta cache persistence', function () {
+     expect(cachedPaths(after, SELF)).to.deep.equal([])
+   })
+ 
++  it('does not save notifications', async function () {
++    const before = makeApp({ restoreOwnData: true })
++    const timestamp = new Date().toISOString()
++    before.deltaCache.ingestDelta(
++      valueDelta(
++        SELF,
++        'notifications.environment.depth.belowKeel',
++        { state: 'alarm', method: ['sound'], message: 'Shallow water' },
++        timestamp
++      )
++    )
++    before.deltaCache.ingestDelta(
++      valueDelta(SELF, 'environment.depth.belowKeel', 1.2, timestamp)
++    )
++    await saveDeltaCache(before)
++
++    const after = makeApp({ restoreOwnData: true })
++    restoreDeltaCache(after)
++    expect(cachedPaths(after, SELF)).to.deep.equal([
++      { path: 'environment.depth.belowKeel', value: 1.2 }
++    ])
++  })
++
+   it('skips saved entries without a context', function () {
+     fs.mkdirSync(path.dirname(deltaCacheFilePath(configPath)), {
+       recursive: true
+@@ -300,4 +323,32 @@ describe('delta cache persistence across a server restart', function () {
+   it('starts empty when turned off', async function () {
+     expect(await restartedValue(false)).to.equal(undefined)
+   })
++
++  it('saves nothing when settings are reloaded in-process', async function () {
++    const { server, sendDelta, stop } = await startServer({
++      restoreOwnData: true
++    })
++    try {
++      await sendDelta('tanks.fuel.0.currentLevel', 0.62)
++      const start = server.start.bind(server)
++      let restarted: Promise<unknown> | undefined
++      server.start = () => {
++        restarted = start()
++        return restarted
++      }
++      server.reload(undefined)
++      while (!restarted) {
++        await new Promise((resolve) => setTimeout(resolve, 10))
++      }
++      await restarted
++      expect(
++        fs.existsSync(deltaCacheFilePath(server.app.config.configPath))
++      ).to.equal(false)
++    } finally {
++      await stop()
++      fs.rmSync(deltaCacheFilePath(server.app.config.configPath), {
++        force: true
++      })
++    }
++  })
+ })
+
+From d993c020ca590332a2488f50e7fc496aabbbc89e Mon Sep 17 00:00:00 2001
+From: KEGustafsson <ke.gustafsson@gmail.com>
+Date: Wed, 11 Nov 2026 06:33:25 +0000
+Subject: [PATCH 04/10] fix: keep bad saved values from blocking pruning
+
+A saved vessel with a timestamp in the future would never be pruned,
+so its restore time is capped at now. A saved delta with no usable
+value no longer creates the vessel or refreshes its last-modified
+time.
+---
+ src/deltacache.ts              | 35 ++++++++++++++++----------
+ src/deltacachePersistence.ts   | 10 +++++---
+ test/deltacache-persistence.ts | 45 ++++++++++++++++++++++++++++++++++
+ 3 files changed, 73 insertions(+), 17 deletions(-)
+
+diff --git a/src/deltacache.ts b/src/deltacache.ts
+index f5831c8c94..6d935e06c4 100644
+--- a/src/deltacache.ts
++++ b/src/deltacache.ts
+@@ -699,17 +699,19 @@ export default class DeltaCache {
+    * Put values saved by an earlier run back into the cache without
+    * passing them through the delta chain, so plugins, the priority engine
+    * and source freshness do not treat them as live data. A value that
+-   * arrived live before the restore is kept.
++   * arrived live before the restore is kept. Returns whether any value
++   * was usable.
+    */
+-  restoreDelta(delta: Delta, lastModified: number) {
++  restoreDelta(delta: Delta, lastModified: number): boolean {
+     if (typeof delta?.context !== 'string' || !Array.isArray(delta.updates)) {
+-      return
++      return false
+     }
++    let restored = false
+     for (const update of delta.updates) {
+       if (!('values' in update) || !Array.isArray(update.values)) continue
+       for (const pathValue of update.values) {
+         if (typeof pathValue?.path !== 'string') continue
+-        this.restoreValue({
++        const usable = this.restoreValue({
+           context: delta.context,
+           source: update.source,
+           $source: update.$source,
+@@ -719,17 +721,21 @@ export default class DeltaCache {
+           state: pathValue.state,
+           isMeta: false
+         } as NormalizedDelta)
++        restored ||= usable
+       }
+     }
+-    this.lastModifieds[delta.context] = Math.max(
+-      this.lastModifieds[delta.context] ?? 0,
+-      lastModified
+-    )
++    if (restored) {
++      this.lastModifieds[delta.context] = Math.max(
++        this.lastModifieds[delta.context] ?? 0,
++        lastModified
++      )
++    }
++    return restored
+   }
+ 
+-  private restoreValue(msg: NormalizedDelta) {
++  private restoreValue(msg: NormalizedDelta): boolean {
+     if (typeof msg.$source !== 'string' || msg.value === undefined) {
+-      return
++      return false
+     }
+     const leaf = getLeafObject(
+       this.cache,
+@@ -737,20 +743,23 @@ export default class DeltaCache {
+       true
+     )
+     if (!leaf) {
+-      return
++      return false
+     }
+     if (msg.path.length !== 0) {
+       leaf[msg.$source] ??= msg
+-      return
++      return true
+     }
+     if (typeof msg.value !== 'object' || msg.value === null) {
+-      return
++      return false
+     }
++    let restored = false
+     for (const key of Object.keys(msg.value)) {
+       if (FORBIDDEN_PATH_KEYS.has(key)) continue
+       leaf[key] ??= {}
+       leaf[key][msg.$source] ??= msg
++      restored = true
+     }
++    return restored
+   }
+ 
+   setSourceDelta(key: string, delta: any) {
+diff --git a/src/deltacachePersistence.ts b/src/deltacachePersistence.ts
+index e920134449..e8bdca2c21 100644
+--- a/src/deltacachePersistence.ts
++++ b/src/deltacachePersistence.ts
+@@ -129,10 +129,12 @@ export function restoreDeltaCache(app: DeltaCachePersistenceApp): void {
+       continue
+     }
+     // Other vessels age out by their last real update, so a restored AIS
+-    // target is pruned as if the server had never stopped.
+-    const lastModified = isSelf ? now : timestampMs
+-    app.deltaCache.restoreDelta(delta, lastModified)
+-    app.signalk.restoreDelta(delta, lastModified)
++    // target is pruned as if the server had never stopped. A timestamp in
++    // the future is capped so that it cannot keep a target forever.
++    const lastModified = isSelf ? now : Math.min(timestampMs, now)
++    if (app.deltaCache.restoreDelta(delta, lastModified)) {
++      app.signalk.restoreDelta(delta, lastModified)
++    }
+   }
+   debug('Restored %d cached values', deltas.length)
+ }
+diff --git a/test/deltacache-persistence.ts b/test/deltacache-persistence.ts
+index 61f63b72bc..857e6cb164 100644
+--- a/test/deltacache-persistence.ts
++++ b/test/deltacache-persistence.ts
+@@ -142,6 +142,24 @@ describe('delta cache persistence', function () {
+     expect(after.deltaCache.lastModifieds[OTHER]).to.equal(Date.parse(recent))
+   })
+ 
++  it('lets a vessel saved with a future timestamp age out', async function () {
++    const settings = { restoreOwnData: true, restoreOtherVessels: true }
++    const before = makeApp(settings)
++    const future = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString()
++    before.deltaCache.ingestDelta(
++      valueDelta(OTHER, 'navigation.speedOverGround', 3.1, future)
++    )
++    await saveDeltaCache(before)
++
++    const after = makeApp(settings)
++    const restoredAt = Date.now()
++    restoreDeltaCache(after)
++    expect(after.deltaCache.lastModifieds[OTHER]).to.be.within(
++      restoredAt,
++      Date.now()
++    )
++  })
++
+   it('reads the saved file only once', async function () {
+     const before = makeApp({ restoreOwnData: true })
+     before.deltaCache.ingestDelta(
+@@ -274,6 +292,33 @@ describe('delta cache persistence', function () {
+     ])
+   })
+ 
++  it('does not mark a vessel restored when none of its values are usable', function () {
++    fs.mkdirSync(path.dirname(deltaCacheFilePath(configPath)), {
++      recursive: true
++    })
++    fs.writeFileSync(
++      deltaCacheFilePath(configPath),
++      JSON.stringify([
++        {
++          context: OTHER,
++          updates: [
++            {
++              $source: 'can0.35',
++              timestamp: new Date().toISOString(),
++              values: [{ path: 'navigation.speedOverGround' }]
++            }
++          ]
++        }
++      ])
++    )
++    const app = makeApp({ restoreOwnData: true, restoreOtherVessels: true })
++    restoreDeltaCache(app)
++    expect(app.deltaCache.lastModifieds).to.not.have.property(OTHER)
++    expect(
++      (app.signalk as FullSignalK).retrieve().vessels
++    ).to.not.have.property('urn:mrn:imo:mmsi:230000002')
++  })
++
+   it('starts empty when the saved file is broken', function () {
+     fs.mkdirSync(path.dirname(deltaCacheFilePath(configPath)), {
+       recursive: true
+
+From 38106bde0811bc2ac416229aeb8f030842258497 Mon Sep 17 00:00:00 2001
+From: KEGustafsson <ke.gustafsson@gmail.com>
+Date: Wed, 18 Nov 2026 20:42:12 +0000
+Subject: [PATCH 05/10] feat: skip restoring values after a long downtime
+
+A computer without a real-time clock boots with the time it last
+saved, so the wall clock can't tell how long the server was off. The
+saved file now records the boot id and uptime with the save time.
+
+Within the same boot the downtime comes from uptime and is exact.
+After a reboot it comes from the wall clock, and is checked again once
+the clock is set by NTP or a GNSS time source: if the server was off
+longer than restoreMaxAgeMinutes (default 60) after all, restored
+values that live data has not replaced are dropped.
+---
+ .../src/views/ServerConfig/Settings.tsx       |  30 +++
+ src/config/config.ts                          |   2 +
+ src/deltacache.ts                             | 123 ++++++----
+ src/deltacachePersistence.ts                  | 145 ++++++++++-
+ src/serverroutes.ts                           |   7 +
+ test/deltacache-persistence.ts                | 228 +++++++++++++++---
+ 6 files changed, 451 insertions(+), 84 deletions(-)
+
+diff --git a/packages/server-admin-ui/src/views/ServerConfig/Settings.tsx b/packages/server-admin-ui/src/views/ServerConfig/Settings.tsx
+index fc02d4958d..57321360bb 100644
+--- a/packages/server-admin-ui/src/views/ServerConfig/Settings.tsx
++++ b/packages/server-admin-ui/src/views/ServerConfig/Settings.tsx
+@@ -23,6 +23,7 @@ interface ServerSettingsData {
+   options?: Record<string, boolean>
+   interfaces?: Record<string, boolean>
+   pruneContextsMinutes?: string
++  restoreMaxAgeMinutes?: string
+   loggingDirectory?: string
+   keepMostRecentLogsOnly?: boolean
+   logCountToKeep?: string
+@@ -482,6 +483,35 @@ const ServerSettings: React.FC = () => {
+                 </Form.Text>
+               </Col>
+             </Form.Group>
++            <Form.Group
++              as={Row}
++              style={
++                settings.options?.restoreOwnData
++                  ? undefined
++                  : { opacity: DISABLED_ROW_OPACITY }
++              }
++            >
++              <Col md="2">
++                <Form.Label htmlFor="restoreMaxAgeMinutes">
++                  Maximum age of restored data
++                </Form.Label>
++              </Col>
++              <Col xs="12" md={fieldColWidthMd}>
++                <Form.Control
++                  type="text"
++                  id="restoreMaxAgeMinutes"
++                  name="restoreMaxAgeMinutes"
++                  autoComplete="off"
++                  disabled={!settings.options?.restoreOwnData}
++                  onChange={handleChange}
++                  value={settings.restoreMaxAgeMinutes || ''}
++                />
++                <Form.Text muted>
++                  Kept values are not restored if the server was off for longer
++                  than this many minutes
++                </Form.Text>
++              </Col>
++            </Form.Group>
+             <Form.Group as={Row}>
+               <Col md="2">
+                 <Form.Label htmlFor="loggingDirectory">
+diff --git a/src/config/config.ts b/src/config/config.ts
+index 5c7a6d7368..e07ebbafe8 100644
+--- a/src/config/config.ts
++++ b/src/config/config.ts
+@@ -118,6 +118,8 @@ export interface Config {
+     restoreOwnData?: boolean
+     /** With restoreOwnData, also save and restore other vessels. */
+     restoreOtherVessels?: boolean
++    /** Saved values are not restored after a longer downtime, in minutes. */
++    restoreMaxAgeMinutes?: number
+     mdns?: boolean
+     sslport?: number
+     port?: number
+diff --git a/src/deltacache.ts b/src/deltacache.ts
+index 6d935e06c4..3608aa9b33 100644
+--- a/src/deltacache.ts
++++ b/src/deltacache.ts
+@@ -146,6 +146,7 @@ export function pruneSourcesByProvider(
+ export default class DeltaCache {
+   cache: StringKeyed = {}
+   lastModifieds: StringKeyed = {}
++  private restoredValues: NormalizedDelta[] = []
+   app: SignalKServer
+   defaults: any
+   sourceDeltas: StringKeyed = {}
+@@ -746,7 +747,10 @@ export default class DeltaCache {
+       return false
+     }
+     if (msg.path.length !== 0) {
+-      leaf[msg.$source] ??= msg
++      if (leaf[msg.$source] === undefined) {
++        leaf[msg.$source] = msg
++        this.restoredValues.push(msg)
++      }
+       return true
+     }
+     if (typeof msg.value !== 'object' || msg.value === null) {
+@@ -762,6 +766,37 @@ export default class DeltaCache {
+     return restored
+   }
+ 
++  /**
++   * Remove the restored values that live data has not replaced yet, from
++   * both the cache and the FullSignalK tree. A live value from the same
++   * source replaces the cached message object and carries a newer
++   * timestamp, so it is never removed.
++   */
++  dropRestoredValues() {
++    const root = (this.app.signalk as any)?.root ?? {}
++    for (const msg of this.restoredValues) {
++      const parts = this.getContextAndPathParts(msg)
++      const leaf = getLeafObject(this.cache, parts, false)
++      if (leaf?.[msg.$source] !== msg) continue
++      delete leaf[msg.$source]
++      const treeLeaf = getLeafObject(root, parts, false)
++      const treeEntry = treeLeaf?.values
++        ? treeLeaf.values[msg.$source]
++        : treeLeaf?.$source === msg.$source
++          ? treeLeaf
++          : undefined
++      if (treeEntry?.timestamp === msg.timestamp) {
++        pruneSourceFromLeaf(treeLeaf, msg.$source)
++      }
++    }
++    this.restoredValues = []
++  }
++
++  /** Keep the restored values and stop tracking them. */
++  forgetRestoredValues() {
++    this.restoredValues = []
++  }
++
+   setSourceDelta(key: string, delta: any) {
+     // Deduplicate by canName: if a different key already exists for the
+     // same canName (e.g. a device moved from address 254 to its final
+@@ -1789,53 +1824,57 @@ function getLeafObject(
+  * REST and WS-replay views keep serving stale values for the evicted
+  * source even though the deltacache is empty.
+  */
+-function pruneSourceFromFullSignalK(root: any, sourceRef: string): void {
+-  if (!root || typeof root !== 'object') return
+-  const visit = (node: any): void => {
+-    if (!node || typeof node !== 'object') return
+-    if (Array.isArray(node)) return
+-    // Multi-source leaf: { values: { <sourceRef>: {...}, ... }, ... }
+-    if (node.values && typeof node.values === 'object') {
+-      if (node.values[sourceRef] !== undefined) {
+-        delete node.values[sourceRef]
+-        const remainingRefs = Object.keys(node.values)
+-        // If the singleton-form fields point at the source we just
+-        // removed, replace them with another remaining source so the
+-        // leaf stays consistent — otherwise downstream readers see a
+-        // stale $source that no longer exists in `values`.
+-        if (node['$source'] === sourceRef) {
+-          if (remainingRefs.length > 0) {
+-            const survivor = remainingRefs[0]!
+-            const survivorLeaf = node.values[survivor]
+-            if (survivorLeaf && typeof survivorLeaf === 'object') {
+-              if ('value' in survivorLeaf) node.value = survivorLeaf.value
+-              node['$source'] = survivor
+-              if (survivorLeaf.timestamp) {
+-                node.timestamp = survivorLeaf.timestamp
+-              }
++function pruneSourceFromLeaf(node: any, sourceRef: string): void {
++  // Multi-source leaf: { values: { <sourceRef>: {...}, ... }, ... }
++  if (node.values && typeof node.values === 'object') {
++    if (node.values[sourceRef] !== undefined) {
++      delete node.values[sourceRef]
++      const remainingRefs = Object.keys(node.values)
++      // If the singleton-form fields point at the source we just
++      // removed, replace them with another remaining source so the
++      // leaf stays consistent — otherwise downstream readers see a
++      // stale $source that no longer exists in `values`.
++      if (node['$source'] === sourceRef) {
++        if (remainingRefs.length > 0) {
++          const survivor = remainingRefs[0]!
++          const survivorLeaf = node.values[survivor]
++          if (survivorLeaf && typeof survivorLeaf === 'object') {
++            if ('value' in survivorLeaf) node.value = survivorLeaf.value
++            node['$source'] = survivor
++            if (survivorLeaf.timestamp) {
++              node.timestamp = survivorLeaf.timestamp
+             }
+-          } else {
+-            delete node.value
+-            delete node['$source']
+-            delete node.timestamp
+-            delete node.values
+           }
+-        } else if (remainingRefs.length === 0) {
++        } else {
++          delete node.value
++          delete node['$source']
++          delete node.timestamp
+           delete node.values
+         }
++      } else if (remainingRefs.length === 0) {
++        delete node.values
+       }
+     }
+-    // Singleton-form leaf with no `values` map: drop it outright if
+-    // the lone source is the one we're evicting.
+-    if (
+-      node['$source'] === sourceRef &&
+-      node.value !== undefined &&
+-      !node.values
+-    ) {
+-      delete node.value
+-      delete node['$source']
+-      delete node.timestamp
+-    }
++  }
++  // Singleton-form leaf with no `values` map: drop it outright if
++  // the lone source is the one we're evicting.
++  if (
++    node['$source'] === sourceRef &&
++    node.value !== undefined &&
++    !node.values
++  ) {
++    delete node.value
++    delete node['$source']
++    delete node.timestamp
++  }
++}
++
++function pruneSourceFromFullSignalK(root: any, sourceRef: string): void {
++  if (!root || typeof root !== 'object') return
++  const visit = (node: any): void => {
++    if (!node || typeof node !== 'object') return
++    if (Array.isArray(node)) return
++    pruneSourceFromLeaf(node, sourceRef)
+     for (const key of Object.keys(node)) {
+       // Skip leaf-internal fields and the source-meta tree (cleaned
+       // separately by removeSourceDelta and the route handler).
+diff --git a/src/deltacachePersistence.ts b/src/deltacachePersistence.ts
+index e8bdca2c21..23489f6549 100644
+--- a/src/deltacachePersistence.ts
++++ b/src/deltacachePersistence.ts
+@@ -1,6 +1,8 @@
+ import { mkdir } from 'fs/promises'
+ import { readFileSync, unlinkSync } from 'fs'
++import { uptime } from 'os'
+ import { join } from 'path'
++import { performance } from 'perf_hooks'
+ import { Delta, FullSignalK } from '@signalk/server-api'
+ import { atomicWriteFile } from './atomicWrite'
+ import { createDebug } from './debug'
+@@ -12,7 +14,16 @@ const debug = createDebug('signalk-server:deltacache-persistence')
+ 
+ const FILE_NAME = 'deltacache.json'
+ const DEFAULT_PRUNE_CONTEXTS_MINUTES = 60
+-const MS_PER_MINUTE = 60 * 1000
++const DEFAULT_RESTORE_MAX_AGE_MINUTES = 60
++const MS_PER_SECOND = 1000
++const MS_PER_MINUTE = 60 * MS_PER_SECOND
++// Linux gives every boot a random id; elsewhere it is missing and every
++// start is treated as a reboot.
++const BOOT_ID_PATH = '/proc/sys/kernel/random/boot_id'
++const CLOCK_CHECK_INTERVAL_MS = MS_PER_MINUTE
++// Smaller differences between the wall clock and the monotonic clock are
++// drift and slewing, not the clock being set.
++const CLOCK_STEP_THRESHOLD_MS = MS_PER_MINUTE
+ // Base data is reloaded from baseDeltas.json on every start; saving it here
+ // could bring back a field the user has since cleared.
+ const BASE_DATA_SOURCE = 'defaults'
+@@ -26,6 +37,7 @@ export interface DeltaCachePersistenceApp {
+     settings: {
+       restoreOwnData?: boolean
+       restoreOtherVessels?: boolean
++      restoreMaxAgeMinutes?: number
+       pruneContextsMinutes?: number
+     }
+   }
+@@ -34,10 +46,46 @@ export interface DeltaCachePersistenceApp {
+   signalk: Pick<FullSignalK, 'restoreDelta'>
+ }
+ 
++/**
++ * Wall-clock time can't be trusted at boot: a computer without a
++ * real-time clock starts from the last time it saved, so even months off
++ * look like moments. Uptime and the boot id are not affected by the clock.
++ */
++interface SavedDeltaCache {
++  savedAt: number
++  bootId?: string
++  uptimeSeconds: number
++  deltas: Delta[]
++}
++
++/** When a restore happened, to work out the real downtime once the clock is set. */
++export interface RestoreClock {
++  savedAt: number
++  restoredAt: number
++  restoredAtMonotonic: number
++}
++
+ export function deltaCacheFilePath(configPath: string): string {
+   return join(configPath, SERVERSTATEDIRNAME, FILE_NAME)
+ }
+ 
++function readBootId(): string | undefined {
++  try {
++    return readFileSync(BOOT_ID_PATH, 'utf-8').trim() || undefined
++  } catch {
++    return undefined
++  }
++}
++
++function isSavedDeltaCache(data: unknown): data is SavedDeltaCache {
++  const saved = data as SavedDeltaCache
++  return (
++    typeof saved?.savedAt === 'number' &&
++    typeof saved.uptimeSeconds === 'number' &&
++    Array.isArray(saved.deltas)
++  )
++}
++
+ function isWorthSaving(delta: Delta): boolean {
+   const update = delta.updates[0]
+   if (!update || update.$source === BASE_DATA_SOURCE) {
+@@ -70,14 +118,25 @@ export async function saveDeltaCache(
+   await mkdir(join(app.config.configPath, SERVERSTATEDIRNAME), {
+     recursive: true
+   })
+-  await atomicWriteFile(filePath, JSON.stringify(deltas))
++  const saved: SavedDeltaCache = {
++    savedAt: Date.now(),
++    bootId: readBootId(),
++    uptimeSeconds: uptime(),
++    deltas
++  }
++  await atomicWriteFile(filePath, JSON.stringify(saved))
+   debug('Saved %d cached values to %s', deltas.length, filePath)
+ }
+ 
+ /**
+- * Restore values saved by the previous clean stop. The file is removed as
+- * soon as it is read: after a power cut no new file is written, and a
+- * file left behind would bring back the values of an older run.
++ * Restore values saved by the previous clean stop, unless the server was
++ * off for longer than the maximum age. The file is removed as soon as it
++ * is read: after a power cut no new file is written, and a file left
++ * behind would bring back the values of an older run.
++ *
++ * Within the same boot the downtime is exact, from uptime. After a reboot
++ * it comes from the wall clock, and is checked again when the clock is
++ * set later, by NTP or a GNSS time source.
+  */
+ export function restoreDeltaCache(app: DeltaCachePersistenceApp): void {
+   const filePath = deltaCacheFilePath(app.config.configPath)
+@@ -92,24 +151,44 @@ export function restoreDeltaCache(app: DeltaCachePersistenceApp): void {
+     return
+   }
+ 
+-  const { restoreOwnData, restoreOtherVessels, pruneContextsMinutes } =
+-    app.config.settings
++  const {
++    restoreOwnData,
++    restoreOtherVessels,
++    restoreMaxAgeMinutes,
++    pruneContextsMinutes
++  } = app.config.settings
+   if (!restoreOwnData) {
+     return
+   }
+ 
+-  let deltas: unknown
++  let saved: unknown
+   try {
+-    deltas = JSON.parse(data)
++    saved = JSON.parse(data)
+   } catch (err) {
+     console.error(`Unable to parse ${filePath}: ${(err as Error).message}`)
+     return
+   }
+-  if (!Array.isArray(deltas)) {
++  if (!isSavedDeltaCache(saved)) {
+     return
+   }
+ 
+   const now = Date.now()
++  const maxAgeMs =
++    (restoreMaxAgeMinutes || DEFAULT_RESTORE_MAX_AGE_MINUTES) * MS_PER_MINUTE
++  const bootId = readBootId()
++  const sameBoot = bootId !== undefined && bootId === saved.bootId
++  const downtimeMs = sameBoot
++    ? (uptime() - saved.uptimeSeconds) * MS_PER_SECOND
++    : now - saved.savedAt
++  if (downtimeMs > maxAgeMs) {
++    debug(
++      'Not restoring values saved %d minutes ago',
++      downtimeMs / MS_PER_MINUTE
++    )
++    return
++  }
++
++  const { deltas } = saved
+   const oldestOtherVesselMs =
+     now -
+     (pruneContextsMinutes || DEFAULT_PRUNE_CONTEXTS_MINUTES) * MS_PER_MINUTE
+@@ -137,4 +216,50 @@ export function restoreDeltaCache(app: DeltaCachePersistenceApp): void {
+     }
+   }
+   debug('Restored %d cached values', deltas.length)
++
++  if (sameBoot) {
++    app.deltaCache.forgetRestoredValues()
++    return
++  }
++  const clock: RestoreClock = {
++    savedAt: saved.savedAt,
++    restoredAt: now,
++    restoredAtMonotonic: performance.now()
++  }
++  const timer = setInterval(() => {
++    if (checkRestoreClock(app, clock)) {
++      clearInterval(timer)
++    }
++  }, CLOCK_CHECK_INTERVAL_MS)
++  timer.unref()
++}
++
++/**
++ * Once the wall clock has been set, the real time of the restore is known.
++ * If the server was off for longer than the maximum age after all, the
++ * restored values that live data has not replaced are dropped. Returns
++ * whether the check is done.
++ */
++export function checkRestoreClock(
++  app: DeltaCachePersistenceApp,
++  clock: RestoreClock,
++  wallNow = Date.now(),
++  monotonicNow = performance.now()
++): boolean {
++  const sinceRestoreMs = monotonicNow - clock.restoredAtMonotonic
++  const clockStepMs = wallNow - clock.restoredAt - sinceRestoreMs
++  if (Math.abs(clockStepMs) < CLOCK_STEP_THRESHOLD_MS) {
++    return false
++  }
++  const maxAgeMs =
++    (app.config.settings.restoreMaxAgeMinutes ||
++      DEFAULT_RESTORE_MAX_AGE_MINUTES) * MS_PER_MINUTE
++  const downtimeMs = wallNow - sinceRestoreMs - clock.savedAt
++  if (downtimeMs > maxAgeMs) {
++    debug('Clock was set, dropping values restored after a long downtime')
++    app.deltaCache.dropRestoredValues()
++  } else {
++    app.deltaCache.forgetRestoredValues()
++  }
++  return true
+ }
+diff --git a/src/serverroutes.ts b/src/serverroutes.ts
+index 0cf570d2a7..3009214742 100644
+--- a/src/serverroutes.ts
++++ b/src/serverroutes.ts
+@@ -885,6 +885,7 @@ module.exports = function (
+       },
+       loggingDirectory: app.config.settings.loggingDirectory,
+       pruneContextsMinutes: app.config.settings.pruneContextsMinutes || 60,
++      restoreMaxAgeMinutes: app.config.settings.restoreMaxAgeMinutes || 60,
+       keepMostRecentLogsOnly:
+         isUndefined(app.config.settings.keepMostRecentLogsOnly) ||
+         app.config.settings.keepMostRecentLogsOnly,
+@@ -1234,6 +1235,12 @@ module.exports = function (
+       )
+     }
+ 
++    if (!isUndefined(settings.restoreMaxAgeMinutes)) {
++      updatedSettings.restoreMaxAgeMinutes = Number(
++        settings.restoreMaxAgeMinutes
++      )
++    }
++
+     if (!isUndefined(settings.keepMostRecentLogsOnly)) {
+       updatedSettings.keepMostRecentLogsOnly = settings.keepMostRecentLogsOnly
+     }
+diff --git a/test/deltacache-persistence.ts b/test/deltacache-persistence.ts
+index 857e6cb164..3c22cbc178 100644
+--- a/test/deltacache-persistence.ts
++++ b/test/deltacache-persistence.ts
+@@ -2,9 +2,11 @@ import { expect } from 'chai'
+ import fs from 'fs'
+ import os from 'os'
+ import path from 'path'
++import { performance } from 'perf_hooks'
+ import { Delta, FullSignalK } from '@signalk/server-api'
+ import DeltaCache from '../src/deltacache'
+ import {
++  checkRestoreClock,
+   DeltaCachePersistenceApp,
+   deltaCacheFilePath,
+   restoreDeltaCache,
+@@ -19,6 +21,17 @@ import { startServerP } from './servertestutilities'
+ 
+ const SELF = 'vessels.urn:mrn:imo:mmsi:230000001'
+ const OTHER = 'vessels.urn:mrn:imo:mmsi:230000002'
++const MINUTE_MS = 60 * 1000
++const HOUR_MS = 60 * MINUTE_MS
++const BOOT_ID_PATH = '/proc/sys/kernel/random/boot_id'
++
++function currentBootId(): string | undefined {
++  try {
++    return fs.readFileSync(BOOT_ID_PATH, 'utf-8').trim()
++  } catch {
++    return undefined
++  }
++}
+ 
+ function valueDelta(
+   context: string,
+@@ -66,6 +79,31 @@ describe('delta cache persistence', function () {
+       .map((d) => ('values' in d.updates[0] ? d.updates[0].values[0] : null))
+   }
+ 
++  function writeSaved(
++    deltas: unknown[],
++    header: { savedAt?: number; bootId?: string; uptimeSeconds?: number } = {}
++  ) {
++    fs.mkdirSync(path.dirname(deltaCacheFilePath(configPath)), {
++      recursive: true
++    })
++    fs.writeFileSync(
++      deltaCacheFilePath(configPath),
++      JSON.stringify({
++        savedAt: Date.now(),
++        bootId: currentBootId(),
++        uptimeSeconds: os.uptime(),
++        ...header,
++        deltas
++      })
++    )
++  }
++
++  function fullTreeDepth(app: DeltaCachePersistenceApp) {
++    return (app.signalk as FullSignalK).retrieve().vessels[
++      'urn:mrn:imo:mmsi:230000001'
++    ]?.environment?.depth?.belowKeel?.value
++  }
++
+   beforeEach(function () {
+     configPath = fs.mkdtempSync(path.join(os.tmpdir(), 'sk-deltacache-'))
+   })
+@@ -270,21 +308,15 @@ describe('delta cache persistence', function () {
+   })
+ 
+   it('skips saved entries without a context', function () {
+-    fs.mkdirSync(path.dirname(deltaCacheFilePath(configPath)), {
+-      recursive: true
+-    })
+     const timestamp = new Date().toISOString()
+-    fs.writeFileSync(
+-      deltaCacheFilePath(configPath),
+-      JSON.stringify([
+-        { updates: [{ $source: 'can0.35', timestamp, values: [] }] },
+-        {
+-          context: 42,
+-          updates: [{ $source: 'can0.35', timestamp, values: [] }]
+-        },
+-        valueDelta(SELF, 'environment.depth.belowKeel', 4.2, timestamp)
+-      ])
+-    )
++    writeSaved([
++      { updates: [{ $source: 'can0.35', timestamp, values: [] }] },
++      {
++        context: 42,
++        updates: [{ $source: 'can0.35', timestamp, values: [] }]
++      },
++      valueDelta(SELF, 'environment.depth.belowKeel', 4.2, timestamp)
++    ])
+     const app = makeApp({ restoreOwnData: true, restoreOtherVessels: true })
+     restoreDeltaCache(app)
+     expect(cachedPaths(app, SELF)).to.deep.equal([
+@@ -293,24 +325,18 @@ describe('delta cache persistence', function () {
+   })
+ 
+   it('does not mark a vessel restored when none of its values are usable', function () {
+-    fs.mkdirSync(path.dirname(deltaCacheFilePath(configPath)), {
+-      recursive: true
+-    })
+-    fs.writeFileSync(
+-      deltaCacheFilePath(configPath),
+-      JSON.stringify([
+-        {
+-          context: OTHER,
+-          updates: [
+-            {
+-              $source: 'can0.35',
+-              timestamp: new Date().toISOString(),
+-              values: [{ path: 'navigation.speedOverGround' }]
+-            }
+-          ]
+-        }
+-      ])
+-    )
++    writeSaved([
++      {
++        context: OTHER,
++        updates: [
++          {
++            $source: 'can0.35',
++            timestamp: new Date().toISOString(),
++            values: [{ path: 'navigation.speedOverGround' }]
++          }
++        ]
++      }
++    ])
+     const app = makeApp({ restoreOwnData: true, restoreOtherVessels: true })
+     restoreDeltaCache(app)
+     expect(app.deltaCache.lastModifieds).to.not.have.property(OTHER)
+@@ -319,6 +345,144 @@ describe('delta cache persistence', function () {
+     ).to.not.have.property('urn:mrn:imo:mmsi:230000002')
+   })
+ 
++  it('does not restore after a longer downtime within the same boot', function () {
++    if (!currentBootId()) {
++      this.skip()
++    }
++    // Saved "two hours of uptime ago", with the wall clock claiming it was
++    // just now, as on a computer whose clock was set back meanwhile.
++    writeSaved(
++      [
++        valueDelta(
++          SELF,
++          'environment.depth.belowKeel',
++          4.2,
++          new Date().toISOString()
++        )
++      ],
++      { savedAt: Date.now(), uptimeSeconds: os.uptime() - 2 * 3600 }
++    )
++    const app = makeApp({ restoreOwnData: true, restoreMaxAgeMinutes: 60 })
++    restoreDeltaCache(app)
++    expect(cachedPaths(app, SELF)).to.deep.equal([])
++  })
++
++  it('restores within the same boot even if the clock jumped', function () {
++    if (!currentBootId()) {
++      this.skip()
++    }
++    writeSaved(
++      [
++        valueDelta(
++          SELF,
++          'environment.depth.belowKeel',
++          4.2,
++          new Date().toISOString()
++        )
++      ],
++      { savedAt: Date.now() - 30 * 24 * HOUR_MS, uptimeSeconds: os.uptime() }
++    )
++    const app = makeApp({ restoreOwnData: true })
++    restoreDeltaCache(app)
++    expect(cachedPaths(app, SELF)).to.deep.equal([
++      { path: 'environment.depth.belowKeel', value: 4.2 }
++    ])
++  })
++
++  it('does not restore after a reboot when the clock shows a long downtime', function () {
++    writeSaved(
++      [
++        valueDelta(
++          SELF,
++          'environment.depth.belowKeel',
++          4.2,
++          new Date().toISOString()
++        )
++      ],
++      { savedAt: Date.now() - 2 * HOUR_MS, bootId: 'an-earlier-boot' }
++    )
++    const app = makeApp({ restoreOwnData: true, restoreMaxAgeMinutes: 60 })
++    restoreDeltaCache(app)
++    expect(cachedPaths(app, SELF)).to.deep.equal([])
++  })
++
++  describe('after a reboot with an unset clock', function () {
++    const timestamp = new Date().toISOString()
++
++    function restoreAfterReboot() {
++      const savedAt = Date.now()
++      writeSaved(
++        [
++          valueDelta(SELF, 'environment.depth.belowKeel', 4.2, timestamp),
++          valueDelta(SELF, 'tanks.fuel.0.currentLevel', 0.62, timestamp)
++        ],
++        { savedAt, bootId: 'an-earlier-boot' }
++      )
++      const app = makeApp({ restoreOwnData: true, restoreMaxAgeMinutes: 60 })
++      restoreDeltaCache(app)
++      const clock = {
++        savedAt,
++        restoredAt: Date.now(),
++        restoredAtMonotonic: performance.now()
++      }
++      return { app, clock }
++    }
++
++    it('drops restored values when the clock is set and shows a long downtime', function () {
++      const { app, clock } = restoreAfterReboot()
++      app.deltaCache.ingestDelta(
++        valueDelta(
++          SELF,
++          'tanks.fuel.0.currentLevel',
++          0.5,
++          new Date().toISOString()
++        )
++      )
++
++      const done = checkRestoreClock(
++        app,
++        clock,
++        clock.restoredAt + 3 * 24 * HOUR_MS,
++        clock.restoredAtMonotonic + 2 * MINUTE_MS
++      )
++
++      expect(done).to.equal(true)
++      expect(cachedPaths(app, SELF)).to.deep.equal([
++        { path: 'tanks.fuel.0.currentLevel', value: 0.5 }
++      ])
++      expect(fullTreeDepth(app)).to.equal(undefined)
++    })
++
++    it('keeps restored values when the clock is set and the downtime was short', function () {
++      const { app, clock } = restoreAfterReboot()
++
++      const done = checkRestoreClock(
++        app,
++        clock,
++        clock.restoredAt + 20 * MINUTE_MS,
++        clock.restoredAtMonotonic + 2 * MINUTE_MS
++      )
++
++      expect(done).to.equal(true)
++      expect(fullTreeDepth(app)).to.equal(4.2)
++      expect(cachedPaths(app, SELF)).to.have.length(2)
++    })
++
++    it('keeps waiting while the clock runs evenly', function () {
++      const { app, clock } = restoreAfterReboot()
++
++      const done = checkRestoreClock(
++        app,
++        clock,
++        clock.restoredAt + 2 * MINUTE_MS,
++        clock.restoredAtMonotonic + 2 * MINUTE_MS
++      )
++
++      expect(done).to.equal(false)
++      expect(cachedPaths(app, SELF)).to.have.length(2)
++    })
++  })
++
+   it('starts empty when the saved file is broken', function () {
+     fs.mkdirSync(path.dirname(deltaCacheFilePath(configPath)), {
+       recursive: true
+
+From 19e98250e25115e34700c2e9b4cd50e16fd36183 Mon Sep 17 00:00:00 2001
+From: KEGustafsson <ke.gustafsson@gmail.com>
+Date: Wed, 18 Nov 2026 20:42:19 +0000
+Subject: [PATCH 06/10] feat: offer restart with no data
+
+Restart from the admin UI opens a dialog in place of the browser's
+confirm prompt. When cached values are kept over a restart, it offers
+"Restart, keep data", "Restart with no data" and "Cancel", so the
+server can also be started with a clean slate. PUT /skServer/restart
+takes an optional { keepData: false } body; without one, data is kept
+as before.
+---
+ packages/server-admin-ui/src/actions.ts       | 32 +++++---
+ .../src/components/Header/Header.tsx          |  2 +
+ .../RestartDialog/RestartDialog.test.tsx      | 75 +++++++++++++++++++
+ .../RestartDialog/RestartDialog.tsx           | 40 ++++++++++
+ packages/server-admin-ui/src/store/index.ts   |  4 +
+ .../src/store/slices/appSlice.ts              | 12 +++
+ src/deltacachePersistence.ts                  |  5 ++
+ src/index.ts                                  | 29 ++++---
+ src/serverroutes.ts                           |  6 +-
+ test/deltacache-persistence.ts                | 41 +++++++++-
+ 10 files changed, 223 insertions(+), 23 deletions(-)
+ create mode 100644 packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
+ create mode 100644 packages/server-admin-ui/src/components/RestartDialog/RestartDialog.tsx
+
+diff --git a/packages/server-admin-ui/src/actions.ts b/packages/server-admin-ui/src/actions.ts
+index 7a51f7f5fa..ac0c3aa11e 100644
+--- a/packages/server-admin-ui/src/actions.ts
++++ b/packages/server-admin-ui/src/actions.ts
+@@ -20,15 +20,29 @@ export async function logoutAction(): Promise<void> {
+   await fetchLoginStatus()
+ }
+ 
+-export function restartAction(): void {
+-  if (confirm('Are you sure you want to restart?')) {
+-    fetch(`${window.serverRoutesPrefix}/restart`, {
+-      credentials: 'include',
+-      method: 'PUT'
+-    }).then(() => {
+-      useStore.getState().setRestarting(true)
+-    })
+-  }
++/**
++ * Ask before restarting. When the server keeps its latest values over a
++ * restart, the dialog also offers to start with no data.
++ */
++export async function restartAction(): Promise<void> {
++  const keepsData = await fetch(`${window.serverRoutesPrefix}/settings`, {
++    credentials: 'include'
++  })
++    .then((res) => (res.ok ? res.json() : undefined))
++    .then((settings) => Boolean(settings?.options?.restoreOwnData))
++    .catch(() => false)
++  useStore.getState().setRestartDialog({ keepsData })
++}
++
++export function requestRestart(keepData: boolean): void {
++  fetch(`${window.serverRoutesPrefix}/restart`, {
++    credentials: 'include',
++    method: 'PUT',
++    headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify({ keepData })
++  }).then(() => {
++    useStore.getState().setRestarting(true)
++  })
+ }
+ 
+ export async function loginAction(
+diff --git a/packages/server-admin-ui/src/components/Header/Header.tsx b/packages/server-admin-ui/src/components/Header/Header.tsx
+index 844013922f..aa21c9a4a2 100644
+--- a/packages/server-admin-ui/src/components/Header/Header.tsx
++++ b/packages/server-admin-ui/src/components/Header/Header.tsx
+@@ -15,6 +15,7 @@ import {
+   useBackpressureWarning
+ } from '../../store'
+ import { logoutAction, restartAction } from '../../actions'
++import RestartDialog from '../RestartDialog/RestartDialog'
+ 
+ // Header banners are absolutely positioned just below the navbar. The
+ // stacked offset places a second banner below the first when both show.
+@@ -200,6 +201,7 @@ export default function Header() {
+           </Dropdown>
+         </div>
+       </Nav>
++      <RestartDialog />
+     </header>
+   )
+ }
+diff --git a/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
+new file mode 100644
+index 0000000000..858178e4d6
+--- /dev/null
++++ b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
+@@ -0,0 +1,75 @@
++import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
++import { render, screen, fireEvent, waitFor } from '@testing-library/react'
++import { useStore } from '../../store'
++import { restartAction } from '../../actions'
++import RestartDialog from './RestartDialog'
++
++function mockServer(restoreOwnData: boolean) {
++  const fetchMock = vi.fn((url: string, _init?: RequestInit) =>
++    Promise.resolve(
++      new Response(
++        JSON.stringify(
++          url.endsWith('/settings')
++            ? { options: { restoreOwnData } }
++            : 'Restarting...'
++        ),
++        { status: 200 }
++      )
++    )
++  )
++  vi.stubGlobal('fetch', fetchMock)
++  return fetchMock
++}
++
++function restartRequests(fetchMock: ReturnType<typeof mockServer>) {
++  return fetchMock.mock.calls
++    .filter(([url]) => url.endsWith('/restart'))
++    .map(([, init]) => JSON.parse(init?.body as string))
++}
++
++describe('RestartDialog', () => {
++  beforeEach(() => {
++    window.serverRoutesPrefix = '/skServer'
++    useStore.setState({ restartDialog: null, restarting: false })
++  })
++
++  afterEach(() => {
++    vi.unstubAllGlobals()
++  })
++
++  it('offers to restart with or without data when data is kept', async () => {
++    const fetchMock = mockServer(true)
++    render(<RestartDialog />)
++    await restartAction()
++
++    fireEvent.click(await screen.findByText('Restart with no data'))
++    await waitFor(() => expect(useStore.getState().restarting).toBe(true))
++    expect(restartRequests(fetchMock)).toEqual([{ keepData: false }])
++    expect(useStore.getState().restartDialog).toBeNull()
++  })
++
++  it('keeps data with the default choice', async () => {
++    const fetchMock = mockServer(true)
++    render(<RestartDialog />)
++    await restartAction()
++
++    fireEvent.click(await screen.findByText('Restart, keep data'))
++    await waitFor(() =>
++      expect(restartRequests(fetchMock)).toEqual([{ keepData: true }])
++    )
++  })
++
++  it('asks a plain question when data is not kept', async () => {
++    const fetchMock = mockServer(false)
++    render(<RestartDialog />)
++    await restartAction()
++
++    expect(
++      await screen.findByText('Are you sure you want to restart?')
++    ).toBeDefined()
++    expect(screen.queryByText('Restart with no data')).toBeNull()
++    fireEvent.click(screen.getByText('Cancel'))
++    await waitFor(() => expect(useStore.getState().restartDialog).toBeNull())
++    expect(restartRequests(fetchMock)).toEqual([])
++  })
++})
+diff --git a/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.tsx b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.tsx
+new file mode 100644
+index 0000000000..7529ad69dd
+--- /dev/null
++++ b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.tsx
+@@ -0,0 +1,40 @@
++import Button from 'react-bootstrap/Button'
++import Modal from 'react-bootstrap/Modal'
++import { useRestartDialog, useStore } from '../../store'
++import { requestRestart } from '../../actions'
++
++export default function RestartDialog() {
++  const dialog = useRestartDialog()
++
++  const close = () => useStore.getState().setRestartDialog(null)
++  const restart = (keepData: boolean) => {
++    close()
++    requestRestart(keepData)
++  }
++
++  return (
++    <Modal show={dialog !== null} onHide={close} centered>
++      <Modal.Header closeButton>
++        <Modal.Title>Restart server</Modal.Title>
++      </Modal.Header>
++      <Modal.Body>
++        {dialog?.keepsData
++          ? 'The latest values are kept over the restart. Restart with no data to start with a clean slate.'
++          : 'Are you sure you want to restart?'}
++      </Modal.Body>
++      <Modal.Footer>
++        <Button variant="secondary" onClick={close}>
++          Cancel
++        </Button>
++        {dialog?.keepsData && (
++          <Button variant="outline-danger" onClick={() => restart(false)}>
++            Restart with no data
++          </Button>
++        )}
++        <Button variant="primary" onClick={() => restart(true)}>
++          {dialog?.keepsData ? 'Restart, keep data' : 'Restart'}
++        </Button>
++      </Modal.Footer>
++    </Modal>
++  )
++}
+diff --git a/packages/server-admin-ui/src/store/index.ts b/packages/server-admin-ui/src/store/index.ts
+index f651b942aa..08731748e1 100644
+--- a/packages/server-admin-ui/src/store/index.ts
++++ b/packages/server-admin-ui/src/store/index.ts
+@@ -235,6 +235,10 @@ export function useRestarting() {
+   return useStore((s) => s.restarting)
+ }
+ 
++export function useRestartDialog() {
++  return useStore((s) => s.restartDialog)
++}
++
+ export function useRestartRequired() {
+   return useStore((s) => s.restartRequired)
+ }
+diff --git a/packages/server-admin-ui/src/store/slices/appSlice.ts b/packages/server-admin-ui/src/store/slices/appSlice.ts
+index 420b2bee5c..b5c67b8b0b 100644
+--- a/packages/server-admin-ui/src/store/slices/appSlice.ts
++++ b/packages/server-admin-ui/src/store/slices/appSlice.ts
+@@ -44,6 +44,11 @@ export type AppstoreView = 'All' | 'Installed' | 'Updates' | 'Installing'
+  * the grace so slow-starting provider backends don't flash the warning
+  * badge on every restart.
+  */
++export interface RestartDialogState {
++  /** The server keeps its latest values over a restart. */
++  keepsData: boolean
++}
++
+ export interface HistoryProvidersState {
+   ids: string[]
+   defaultId: string | undefined
+@@ -60,6 +65,7 @@ export interface AppSliceState {
+   serverSpecification: ServerSpecification
+   restarting: boolean
+   restartRequired: boolean
++  restartDialog: RestartDialogState | null
+   accessRequests: AccessRequest[]
+   devices: DeviceInfo[]
+   discoveredProviders: DiscoveredProvider[]
+@@ -150,6 +156,7 @@ export interface AppSliceActions {
+   setServerStatistics: (stats: ServerStatistics) => void
+   setProviderStatus: (status: ProviderStatus[]) => void
+   setRestarting: (restarting: boolean) => void
++  setRestartDialog: (restartDialog: RestartDialogState | null) => void
+   setRestartRequired: (restartRequired: boolean) => void
+   setAccessRequests: (requests: AccessRequest[]) => void
+   setDevices: (devices: DeviceInfo[]) => void
+@@ -231,6 +238,7 @@ const initialAppState: AppSliceState = {
+   serverSpecification: {},
+   restarting: false,
+   restartRequired: false,
++  restartDialog: null,
+   accessRequests: [],
+   devices: [],
+   discoveredProviders: [],
+@@ -318,6 +326,10 @@ export const createAppSlice: StateCreator<AppSlice, [], [], AppSlice> = (
+     set({ restarting })
+   },
+ 
++  setRestartDialog: (restartDialog) => {
++    set({ restartDialog })
++  },
++
+   setRestartRequired: (restartRequired) => {
+     set({ restartRequired })
+   },
+diff --git a/src/deltacachePersistence.ts b/src/deltacachePersistence.ts
+index 23489f6549..df657c3679 100644
+--- a/src/deltacachePersistence.ts
++++ b/src/deltacachePersistence.ts
+@@ -65,6 +65,11 @@ export interface RestoreClock {
+   restoredAtMonotonic: number
+ }
+ 
++export interface StopOptions {
++  /** Save the cached values for the next start. */
++  saveCachedValues?: boolean
++}
++
+ export function deltaCacheFilePath(configPath: string): string {
+   return join(configPath, SERVERSTATEDIRNAME, FILE_NAME)
+ }
+diff --git a/src/index.ts b/src/index.ts
+index 63cc9b6948..7300591596 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -46,7 +46,11 @@ import { ServerApp, SignalKMessageHub, WithConfig } from './app'
+ import { ConfigApp, load, sendBaseDeltas } from './config/config'
+ import { createDebug } from './debug'
+ import DeltaCache, { buildSrcToCanonicalMap } from './deltacache'
+-import { restoreDeltaCache, saveDeltaCache } from './deltacachePersistence'
++import {
++  restoreDeltaCache,
++  saveDeltaCache,
++  StopOptions
++} from './deltacachePersistence'
+ import DeltaChain from './deltachain'
+ import {
+   getToPreferredDelta,
+@@ -831,7 +835,10 @@ class Server {
+     // stop() resolves only once the plugins have stopped and the HTTP server
+     // has closed; a start() before that would lose its port and its timers to
+     // the stop still running.
+-    this.stop(undefined, { reloading: true })
++    //
++    // A reload keeps the cache in memory, and a file saved for it would be
++    // restored stale on a later start that follows a power cut.
++    this.stop(undefined, { saveCachedValues: false })
+       .catch((e) => console.error(e))
+       .then(() => this.start())
+       .catch((e) => console.error(e))
+@@ -839,7 +846,7 @@ class Server {
+     return this
+   }
+ 
+-  async stop(cb?: () => void, { reloading = false } = {}) {
++  async stop(cb?: () => void, { saveCachedValues = true }: StopOptions = {}) {
+     this.providerStatusEmitter.cancel()
+     const { connections, redirectConnections } = this
+     if (!this.app.started || !connections) {
+@@ -847,9 +854,7 @@ class Server {
+     }
+ 
+     try {
+-      // A reload keeps the cache in memory, and a file saved for it would be
+-      // restored stale on a later start that follows a power cut.
+-      if (!reloading) {
++      if (saveCachedValues) {
+         await saveDeltaCache(this.app).catch((err: Error) => {
+           console.error(`Unable to save cached values: ${err.message}`)
+         })
+@@ -989,7 +994,9 @@ let currentShutdownHandlers:
+ // stop` / `systemctl stop` waits out its grace period and ends in SIGKILL,
+ // which reports exit 137 and reads as a crash rather than the clean stop it
+ // was. Handling the signal also lets interfaces and providers close first.
+-function installShutdownHandlers(server: { stop: () => Promise<unknown> }) {
++function installShutdownHandlers(server: {
++  stop: (cb?: () => void, options?: StopOptions) => Promise<unknown>
++}) {
+   // Process-wide listeners, so the most recently constructed Server owns
+   // them: tests build several instances in one process, and a stopped
+   // instance's stop() resolves immediately, which would exit the process
+@@ -1001,7 +1008,7 @@ function installShutdownHandlers(server: { stop: () => Promise<unknown> }) {
+ 
+   let shuttingDown = false
+ 
+-  const stopAndExit = (reason: string) => {
++  const stopAndExit = (reason: string, options?: StopOptions) => {
+     shuttingDown = true
+     console.log(`${reason}, shutting down`)
+ 
+@@ -1020,7 +1027,7 @@ function installShutdownHandlers(server: { stop: () => Promise<unknown> }) {
+     forceExit.unref()
+ 
+     server
+-      .stop()
++      .stop(undefined, options)
+       .then(() => {
+         clearTimeout(forceExit)
+         process.exit(0)
+@@ -1052,9 +1059,9 @@ function installShutdownHandlers(server: { stop: () => Promise<unknown> }) {
+   // the server back, and must stop it the same way a signal does so plugins
+   // and providers get to close. Like the signal handlers, it belongs to the
+   // most recently constructed Server only.
+-  return () => {
++  return (options?: StopOptions) => {
+     if (currentShutdownHandlers === handlers && !shuttingDown) {
+-      stopAndExit('Restart requested')
++      stopAndExit('Restart requested', options)
+     }
+   }
+ }
+diff --git a/src/serverroutes.ts b/src/serverroutes.ts
+index 3009214742..34e1bfb359 100644
+--- a/src/serverroutes.ts
++++ b/src/serverroutes.ts
+@@ -82,6 +82,7 @@ import {
+   testedNodeVersions
+ } from './version'
+ import { Type } from '@sinclair/typebox'
++import type { StopOptions } from './deltacachePersistence'
+ import { Value } from '@sinclair/typebox/value'
+ import { HullTypeSchema, type HullType } from '@signalk/server-api/typebox'
+ 
+@@ -322,7 +323,7 @@ interface App
+     PluginManager,
+     WithWrappedEmitter {
+   webapps: Package[]
+-  stopAndExit: () => void
++  stopAndExit: (options?: StopOptions) => void
+   logging: {
+     clearLog: () => void
+     rememberDebug: (r: boolean) => void
+@@ -517,8 +518,9 @@ module.exports = function (
+   app.put(`${SERVERROUTESPREFIX}/restart`, (req: Request, res: Response) => {
+     if (app.securityStrategy.allowRestart(req)) {
+       res.json('Restarting...')
++      const saveCachedValues = req.body?.keepData !== false
+       setTimeout(function () {
+-        app.stopAndExit()
++        app.stopAndExit({ saveCachedValues })
+       }, 2000)
+     } else {
+       res.status(401).json('Restart not allowed')
+diff --git a/test/deltacache-persistence.ts b/test/deltacache-persistence.ts
+index 3c22cbc178..12dd8df457 100644
+--- a/test/deltacache-persistence.ts
++++ b/test/deltacache-persistence.ts
+@@ -10,7 +10,8 @@ import {
+   DeltaCachePersistenceApp,
+   deltaCacheFilePath,
+   restoreDeltaCache,
+-  saveDeltaCache
++  saveDeltaCache,
++  StopOptions
+ } from '../src/deltacachePersistence'
+ import {
+   freeport,
+@@ -533,6 +534,44 @@ describe('delta cache persistence across a server restart', function () {
+     expect(await restartedValue(false)).to.equal(undefined)
+   })
+ 
++  async function savedAfterRestartRequest(body?: object) {
++    const { server, host, sendDelta, stop } = await startServer({
++      restoreOwnData: true
++    })
++    const filePath = deltaCacheFilePath(server.app.config.configPath)
++    try {
++      await sendDelta('tanks.fuel.0.currentLevel', 0.62)
++      server.app.securityStrategy.allowRestart = () => true
++      let requested: StopOptions | undefined
++      // The real restart exits the process; stop the server in its place.
++      server.app.stopAndExit = (options: StopOptions) => {
++        requested = options
++      }
++      const res = await fetch(`${host}/skServer/restart`, {
++        method: 'PUT',
++        headers: { 'Content-Type': 'application/json' },
++        body: body && JSON.stringify(body)
++      })
++      expect(res.status).to.equal(200)
++      while (!requested) {
++        await new Promise((resolve) => setTimeout(resolve, 50))
++      }
++      await server.stop(undefined, requested)
++      return fs.existsSync(filePath)
++    } finally {
++      await stop()
++      fs.rmSync(filePath, { force: true })
++    }
++  }
++
++  it('keeps data over a restart by default', async function () {
++    expect(await savedAfterRestartRequest()).to.equal(true)
++  })
++
++  it('restarts with no data when asked', async function () {
++    expect(await savedAfterRestartRequest({ keepData: false })).to.equal(false)
++  })
++
+   it('saves nothing when settings are reloaded in-process', async function () {
+     const { server, sendDelta, stop } = await startServer({
+       restoreOwnData: true
+
+From 875c4ab3d3e41c208be7707b5b409e04ff26c3aa Mon Sep 17 00:00:00 2001
+From: KEGustafsson <ke.gustafsson@gmail.com>
+Date: Wed, 18 Nov 2026 21:07:48 +0000
+Subject: [PATCH 07/10] fix: offer both restart choices when settings fail
+
+---
+ packages/server-admin-ui/src/actions.ts       |  5 ++--
+ .../RestartDialog/RestartDialog.test.tsx      | 26 +++++++++++++++++++
+ .../RestartDialog/RestartDialog.tsx           | 16 +++++++++---
+ .../src/store/slices/appSlice.ts              |  4 +--
+ src/deltacache.ts                             |  1 -
+ src/deltacachePersistence.ts                  |  1 -
+ 6 files changed, 43 insertions(+), 10 deletions(-)
+
+diff --git a/packages/server-admin-ui/src/actions.ts b/packages/server-admin-ui/src/actions.ts
+index ac0c3aa11e..e7ee2ba59e 100644
+--- a/packages/server-admin-ui/src/actions.ts
++++ b/packages/server-admin-ui/src/actions.ts
+@@ -29,8 +29,9 @@ export async function restartAction(): Promise<void> {
+     credentials: 'include'
+   })
+     .then((res) => (res.ok ? res.json() : undefined))
+-    .then((settings) => Boolean(settings?.options?.restoreOwnData))
+-    .catch(() => false)
++    .then((settings) => settings?.options?.restoreOwnData)
++    .then((restore) => (typeof restore === 'boolean' ? restore : undefined))
++    .catch(() => undefined)
+   useStore.getState().setRestartDialog({ keepsData })
+ }
+ 
+diff --git a/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
+index 858178e4d6..20fb98f128 100644
+--- a/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
++++ b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
+@@ -59,6 +59,32 @@ describe('RestartDialog', () => {
+     )
+   })
+ 
++  it('offers both choices when the setting cannot be read', async () => {
++    vi.stubGlobal(
++      'fetch',
++      vi.fn(() => Promise.resolve(new Response('', { status: 500 })))
++    )
++    render(<RestartDialog />)
++    await restartAction()
++
++    expect(
++      await screen.findByRole('button', { name: 'Restart with no data' })
++    ).toBeDefined()
++    expect(
++      screen.getByRole('button', { name: 'Restart, keep data' })
++    ).toBeDefined()
++  })
++
++  it('names the dialog by its title', async () => {
++    mockServer(true)
++    render(<RestartDialog />)
++    await restartAction()
++
++    expect(
++      await screen.findByRole('dialog', { name: 'Restart server' })
++    ).toBeDefined()
++  })
++
+   it('asks a plain question when data is not kept', async () => {
+     const fetchMock = mockServer(false)
+     render(<RestartDialog />)
+diff --git a/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.tsx b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.tsx
+index 7529ad69dd..5aac7a360b 100644
+--- a/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.tsx
++++ b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.tsx
+@@ -3,8 +3,11 @@ import Modal from 'react-bootstrap/Modal'
+ import { useRestartDialog, useStore } from '../../store'
+ import { requestRestart } from '../../actions'
+ 
++const TITLE_ID = 'restart-dialog-title'
++
+ export default function RestartDialog() {
+   const dialog = useRestartDialog()
++  const offersNoData = dialog?.keepsData !== false
+ 
+   const close = () => useStore.getState().setRestartDialog(null)
+   const restart = (keepData: boolean) => {
+@@ -13,9 +16,14 @@ export default function RestartDialog() {
+   }
+ 
+   return (
+-    <Modal show={dialog !== null} onHide={close} centered>
++    <Modal
++      show={dialog !== null}
++      onHide={close}
++      centered
++      aria-labelledby={TITLE_ID}
++    >
+       <Modal.Header closeButton>
+-        <Modal.Title>Restart server</Modal.Title>
++        <Modal.Title id={TITLE_ID}>Restart server</Modal.Title>
+       </Modal.Header>
+       <Modal.Body>
+         {dialog?.keepsData
+@@ -26,13 +34,13 @@ export default function RestartDialog() {
+         <Button variant="secondary" onClick={close}>
+           Cancel
+         </Button>
+-        {dialog?.keepsData && (
++        {offersNoData && (
+           <Button variant="outline-danger" onClick={() => restart(false)}>
+             Restart with no data
+           </Button>
+         )}
+         <Button variant="primary" onClick={() => restart(true)}>
+-          {dialog?.keepsData ? 'Restart, keep data' : 'Restart'}
++          {offersNoData ? 'Restart, keep data' : 'Restart'}
+         </Button>
+       </Modal.Footer>
+     </Modal>
+diff --git a/packages/server-admin-ui/src/store/slices/appSlice.ts b/packages/server-admin-ui/src/store/slices/appSlice.ts
+index b5c67b8b0b..8916392004 100644
+--- a/packages/server-admin-ui/src/store/slices/appSlice.ts
++++ b/packages/server-admin-ui/src/store/slices/appSlice.ts
+@@ -45,8 +45,8 @@ export type AppstoreView = 'All' | 'Installed' | 'Updates' | 'Installing'
+  * badge on every restart.
+  */
+ export interface RestartDialogState {
+-  /** The server keeps its latest values over a restart. */
+-  keepsData: boolean
++  /** Whether the server keeps its latest values over a restart, if known. */
++  keepsData?: boolean
+ }
+ 
+ export interface HistoryProvidersState {
+diff --git a/src/deltacache.ts b/src/deltacache.ts
+index 3608aa9b33..9a29ef86fd 100644
+--- a/src/deltacache.ts
++++ b/src/deltacache.ts
+@@ -792,7 +792,6 @@ export default class DeltaCache {
+     this.restoredValues = []
+   }
+ 
+-  /** Keep the restored values and stop tracking them. */
+   forgetRestoredValues() {
+     this.restoredValues = []
+   }
+diff --git a/src/deltacachePersistence.ts b/src/deltacachePersistence.ts
+index df657c3679..85b13727ff 100644
+--- a/src/deltacachePersistence.ts
++++ b/src/deltacachePersistence.ts
+@@ -66,7 +66,6 @@ export interface RestoreClock {
+ }
+ 
+ export interface StopOptions {
+-  /** Save the cached values for the next start. */
+   saveCachedValues?: boolean
+ }
+ 
+
+From 1d1285f1ed164edf8b09c7c093bcf19290da4f6a Mon Sep 17 00:00:00 2001
+From: KEGustafsson <ke.gustafsson@gmail.com>
+Date: Thu, 19 Nov 2026 04:32:29 +0000
+Subject: [PATCH 08/10] fix: save preferred sources and skip bad entries
+
+Only the preferred source of each path is saved, so restored values
+match the priority view. Saved entries with a malformed value are
+skipped instead of stopping the restore, and an invalid maximum age
+falls back to the default.
+---
+ src/deltacachePersistence.ts   | 34 +++++++++---
+ test/deltacache-persistence.ts | 99 +++++++++++++++++++++++++++++++---
+ 2 files changed, 119 insertions(+), 14 deletions(-)
+
+diff --git a/src/deltacachePersistence.ts b/src/deltacachePersistence.ts
+index 85b13727ff..197fee6cbf 100644
+--- a/src/deltacachePersistence.ts
++++ b/src/deltacachePersistence.ts
+@@ -81,6 +81,29 @@ function readBootId(): string | undefined {
+   }
+ }
+ 
++function restoreMaxAgeMs(minutes: number | undefined): number {
++  const validMinutes =
++    typeof minutes === 'number' && Number.isFinite(minutes) && minutes > 0
++      ? minutes
++      : DEFAULT_RESTORE_MAX_AGE_MINUTES
++  return validMinutes * MS_PER_MINUTE
++}
++
++function isRestorable(delta: Delta): boolean {
++  return (
++    typeof delta?.context === 'string' &&
++    Array.isArray(delta.updates) &&
++    delta.updates.every(
++      (update) =>
++        typeof update === 'object' &&
++        update !== null &&
++        'values' in update &&
++        Array.isArray(update.values) &&
++        update.values.every((pv) => typeof pv?.path === 'string')
++    )
++  )
++}
++
+ function isSavedDeltaCache(data: unknown): data is SavedDeltaCache {
+   const saved = data as SavedDeltaCache
+   return (
+@@ -116,7 +139,7 @@ export async function saveDeltaCache(
+     ? () => true
+     : ({ context }) => context === app.selfContext
+   const deltas = app.deltaCache
+-    .getCachedDeltas(matcher, undefined, undefined, 'all', true)
++    .getCachedDeltas(matcher, undefined, undefined, 'preferred', true)
+     .filter(isWorthSaving)
+   const filePath = deltaCacheFilePath(app.config.configPath)
+   await mkdir(join(app.config.configPath, SERVERSTATEDIRNAME), {
+@@ -177,8 +200,7 @@ export function restoreDeltaCache(app: DeltaCachePersistenceApp): void {
+   }
+ 
+   const now = Date.now()
+-  const maxAgeMs =
+-    (restoreMaxAgeMinutes || DEFAULT_RESTORE_MAX_AGE_MINUTES) * MS_PER_MINUTE
++  const maxAgeMs = restoreMaxAgeMs(restoreMaxAgeMinutes)
+   const bootId = readBootId()
+   const sameBoot = bootId !== undefined && bootId === saved.bootId
+   const downtimeMs = sameBoot
+@@ -197,7 +219,7 @@ export function restoreDeltaCache(app: DeltaCachePersistenceApp): void {
+     now -
+     (pruneContextsMinutes || DEFAULT_PRUNE_CONTEXTS_MINUTES) * MS_PER_MINUTE
+   for (const delta of deltas as Delta[]) {
+-    if (typeof delta?.context !== 'string') {
++    if (!isRestorable(delta)) {
+       continue
+     }
+     const isSelf = delta.context === app.selfContext
+@@ -255,9 +277,7 @@ export function checkRestoreClock(
+   if (Math.abs(clockStepMs) < CLOCK_STEP_THRESHOLD_MS) {
+     return false
+   }
+-  const maxAgeMs =
+-    (app.config.settings.restoreMaxAgeMinutes ||
+-      DEFAULT_RESTORE_MAX_AGE_MINUTES) * MS_PER_MINUTE
++  const maxAgeMs = restoreMaxAgeMs(app.config.settings.restoreMaxAgeMinutes)
+   const downtimeMs = wallNow - sinceRestoreMs - clock.savedAt
+   if (downtimeMs > maxAgeMs) {
+     debug('Clock was set, dropping values restored after a long downtime')
+diff --git a/test/deltacache-persistence.ts b/test/deltacache-persistence.ts
+index 12dd8df457..ddbd1255e6 100644
+--- a/test/deltacache-persistence.ts
++++ b/test/deltacache-persistence.ts
+@@ -267,6 +267,75 @@ describe('delta cache persistence', function () {
+     ])
+   })
+ 
++  it('saves only the preferred source of a path', async function () {
++    const before = makeApp({ restoreOwnData: true })
++    const timestamp = new Date().toISOString()
++    before.deltaCache.ingestDelta(
++      valueDelta(SELF, 'environment.depth.belowKeel', 4.2, timestamp, 'can0.35')
++    )
++    before.deltaCache.ingestDelta(
++      valueDelta(
++        SELF,
++        'environment.depth.belowKeel',
++        4.4,
++        timestamp,
++        'nmea0.II'
++      )
++    )
++    await saveDeltaCache(before)
++
++    const after = makeApp({ restoreOwnData: true })
++    restoreDeltaCache(after)
++    expect(cachedPaths(after, SELF)).to.deep.equal([
++      { path: 'environment.depth.belowKeel', value: 4.2 }
++    ])
++  })
++
++  it('treats an invalid maximum age as the default', function () {
++    writeSaved(
++      [
++        valueDelta(
++          SELF,
++          'environment.depth.belowKeel',
++          4.2,
++          new Date().toISOString()
++        )
++      ],
++      { savedAt: Date.now() - 10 * MINUTE_MS, bootId: 'an-earlier-boot' }
++    )
++    const app = makeApp({ restoreOwnData: true, restoreMaxAgeMinutes: -5 })
++    restoreDeltaCache(app)
++    expect(cachedPaths(app, SELF)).to.deep.equal([
++      { path: 'environment.depth.belowKeel', value: 4.2 }
++    ])
++  })
++
++  it('skips a saved entry with a malformed value and restores the rest', function () {
++    const timestamp = new Date().toISOString()
++    writeSaved([
++      {
++        context: SELF,
++        updates: [
++          {
++            $source: 'can0.35',
++            timestamp,
++            values: [
++              { path: 'navigation.speedOverGround', value: 3.1 },
++              { path: 42, value: 1 }
++            ]
++          }
++        ]
++      },
++      valueDelta(SELF, 'environment.depth.belowKeel', 4.2, timestamp)
++    ])
++    const app = makeApp({ restoreOwnData: true })
++    restoreDeltaCache(app)
++    expect(cachedPaths(app, SELF)).to.deep.equal([
++      { path: 'environment.depth.belowKeel', value: 4.2 }
++    ])
++    expect(fullTreeDepth(app)).to.equal(4.2)
++  })
++
+   it('does not save base data', async function () {
+     const before = makeApp({ restoreOwnData: true })
+     before.deltaCache.ingestDelta(
+@@ -504,6 +573,19 @@ describe('delta cache persistence', function () {
+   })
+ })
+ 
++const CALLBACK_WAIT_MS = 10 * 1000
++const CALLBACK_POLL_MS = 50
++
++async function waitUntil(condition: () => boolean, what: string) {
++  const deadline = Date.now() + CALLBACK_WAIT_MS
++  while (!condition()) {
++    if (Date.now() > deadline) {
++      throw new Error(`Timed out waiting for ${what}`)
++    }
++    await new Promise((resolve) => setTimeout(resolve, CALLBACK_POLL_MS))
++  }
++}
++
+ describe('delta cache persistence across a server restart', function () {
+   this.timeout(SERVER_START_TIMEOUT)
+ 
+@@ -520,7 +602,11 @@ describe('delta cache persistence across a server restart', function () {
+       const res = await fetch(
+         `http://localhost:${port}/signalk/v1/api/vessels/self/tanks/fuel/0/currentLevel`
+       )
+-      return res.status === 200 ? (await res.json()).value : undefined
++      if (res.status === 404) {
++        return undefined
++      }
++      expect(res.status).to.equal(200)
++      return (await res.json()).value
+     } finally {
+       await second.stop()
+     }
+@@ -542,9 +628,11 @@ describe('delta cache persistence across a server restart', function () {
+     try {
+       await sendDelta('tanks.fuel.0.currentLevel', 0.62)
+       server.app.securityStrategy.allowRestart = () => true
++      let restartCalled = false
+       let requested: StopOptions | undefined
+       // The real restart exits the process; stop the server in its place.
+       server.app.stopAndExit = (options: StopOptions) => {
++        restartCalled = true
+         requested = options
+       }
+       const res = await fetch(`${host}/skServer/restart`, {
+@@ -553,9 +641,8 @@ describe('delta cache persistence across a server restart', function () {
+         body: body && JSON.stringify(body)
+       })
+       expect(res.status).to.equal(200)
+-      while (!requested) {
+-        await new Promise((resolve) => setTimeout(resolve, 50))
+-      }
++      await waitUntil(() => restartCalled, 'the restart')
++      expect(requested).to.be.an('object')
+       await server.stop(undefined, requested)
+       return fs.existsSync(filePath)
+     } finally {
+@@ -585,9 +672,7 @@ describe('delta cache persistence across a server restart', function () {
+         return restarted
+       }
+       server.reload(undefined)
+-      while (!restarted) {
+-        await new Promise((resolve) => setTimeout(resolve, 10))
+-      }
++      await waitUntil(() => restarted !== undefined, 'the reload to start')
+       await restarted
+       expect(
+         fs.existsSync(deltaCacheFilePath(server.app.config.configPath))
+
+From cdd967e4ded7636b72ac67fbd75c20e0d9f46e1a Mon Sep 17 00:00:00 2001
+From: KEGustafsson <ke.gustafsson@gmail.com>
+Date: Thu, 19 Nov 2026 04:32:29 +0000
+Subject: [PATCH 09/10] fix: open one restart dialog on repeated clicks
+
+---
+ packages/server-admin-ui/src/actions.ts          | 16 +++++++++++++---
+ .../RestartDialog/RestartDialog.test.tsx         | 16 ++++++++++++++++
+ 2 files changed, 29 insertions(+), 3 deletions(-)
+
+diff --git a/packages/server-admin-ui/src/actions.ts b/packages/server-admin-ui/src/actions.ts
+index e7ee2ba59e..203f7c332e 100644
+--- a/packages/server-admin-ui/src/actions.ts
++++ b/packages/server-admin-ui/src/actions.ts
+@@ -20,19 +20,29 @@ export async function logoutAction(): Promise<void> {
+   await fetchLoginStatus()
+ }
+ 
++// Repeated clicks while the settings load share one lookup, so a late
++// answer cannot reopen a dialog that was already cancelled.
++let pendingRestartDialog: Promise<void> | undefined
++
+ /**
+  * Ask before restarting. When the server keeps its latest values over a
+  * restart, the dialog also offers to start with no data.
+  */
+-export async function restartAction(): Promise<void> {
+-  const keepsData = await fetch(`${window.serverRoutesPrefix}/settings`, {
++export function restartAction(): Promise<void> {
++  pendingRestartDialog ??= fetch(`${window.serverRoutesPrefix}/settings`, {
+     credentials: 'include'
+   })
+     .then((res) => (res.ok ? res.json() : undefined))
+     .then((settings) => settings?.options?.restoreOwnData)
+     .then((restore) => (typeof restore === 'boolean' ? restore : undefined))
+     .catch(() => undefined)
+-  useStore.getState().setRestartDialog({ keepsData })
++    .then((keepsData) => {
++      useStore.getState().setRestartDialog({ keepsData })
++    })
++    .finally(() => {
++      pendingRestartDialog = undefined
++    })
++  return pendingRestartDialog
+ }
+ 
+ export function requestRestart(keepData: boolean): void {
+diff --git a/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
+index 20fb98f128..d342627096 100644
+--- a/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
++++ b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
+@@ -75,6 +75,22 @@ describe('RestartDialog', () => {
+     ).toBeDefined()
+   })
+ 
++  it('opens once when Restart is clicked again while settings load', async () => {
++    const fetchMock = mockServer(true)
++    render(<RestartDialog />)
++    const first = restartAction()
++    const second = restartAction()
++    await Promise.all([first, second])
++
++    fireEvent.click(await screen.findByText('Cancel'))
++    await waitFor(() => expect(useStore.getState().restartDialog).toBeNull())
++    await Promise.resolve()
++    expect(useStore.getState().restartDialog).toBeNull()
++    expect(
++      fetchMock.mock.calls.filter(([url]) => url.endsWith('/settings'))
++    ).toHaveLength(1)
++  })
++
+   it('names the dialog by its title', async () => {
+     mockServer(true)
+     render(<RestartDialog />)
+
+From 3f5463996f722bca48b822d98950231445a29210 Mon Sep 17 00:00:00 2001
+From: KEGustafsson <ke.gustafsson@gmail.com>
+Date: Thu, 19 Nov 2026 10:36:57 +0000
+Subject: [PATCH 10/10] fix: match preferred source by its canonical name
+
+preferredSources holds the canName form of the winning source, while a
+cached value may sit under its numeric alias. The preferred filter
+compared them raw and kept whichever source came first, so a saved
+snapshot and the subscription bootstrap could pick the wrong source.
+Among several aliases of the winner the newest value is kept.
+---
+ src/deltacache.ts              | 12 ++++++++++--
+ test/deltacache-persistence.ts | 26 ++++++++++++++++++++++++++
+ 2 files changed, 36 insertions(+), 2 deletions(-)
+
+diff --git a/src/deltacache.ts b/src/deltacache.ts
+index 9a29ef86fd..38fdc10872 100644
+--- a/src/deltacache.ts
++++ b/src/deltacache.ts
+@@ -1587,6 +1587,7 @@ export default class DeltaCache {
+     deltas: NormalizedDelta[]
+   ): NormalizedDelta[] {
+     const byPath = new Map<string, NormalizedDelta>()
++    const hasPreferred = new Set<string>()
+     const result: NormalizedDelta[] = []
+     for (const d of deltas) {
+       // Defensive: getCachedDeltas(key=...) can surface non-leaf branch
+@@ -1608,8 +1609,15 @@ export default class DeltaCache {
+         result.push(d)
+         continue
+       }
+-      if (preferred === d.$source) {
+-        byPath.set(key, d)
++      // preferredSources holds the canonical (canName) form, while a value
++      // may be cached under its numeric alias. Among several aliases of
++      // the winner the newest value is kept, whatever the cache order.
++      if (this.canonicaliseSourceRef(d.$source) === preferred) {
++        const kept = byPath.get(key)
++        if (!hasPreferred.has(key) || (kept && d.timestamp > kept.timestamp)) {
++          byPath.set(key, d)
++          hasPreferred.add(key)
++        }
+       } else if (!byPath.has(key)) {
+         byPath.set(key, d)
+       }
+diff --git a/test/deltacache-persistence.ts b/test/deltacache-persistence.ts
+index ddbd1255e6..037e662c0b 100644
+--- a/test/deltacache-persistence.ts
++++ b/test/deltacache-persistence.ts
+@@ -291,6 +291,32 @@ describe('delta cache persistence', function () {
+     ])
+   })
+ 
++  it('saves the preferred source when it is cached under its numeric alias', async function () {
++    const before = makeApp({ restoreOwnData: true })
++    ;(before.signalk as FullSignalK).sources = {
++      can0: { '35': { n2k: { canName: 'c0ffee' } } }
++    }
++    const timestamp = new Date().toISOString()
++    const live = (sourceRef: string, value: number) =>
++      before.deltaCache.onValue({
++        context: SELF,
++        path: 'environment.depth.belowKeel',
++        value,
++        $source: sourceRef,
++        timestamp,
++        isMeta: false
++      } as unknown as Parameters<DeltaCache['onValue']>[0])
++    live('can0.36', 4.4)
++    live('can0.35', 4.2)
++    await saveDeltaCache(before)
++
++    const after = makeApp({ restoreOwnData: true })
++    restoreDeltaCache(after)
++    expect(cachedPaths(after, SELF)).to.deep.equal([
++      { path: 'environment.depth.belowKeel', value: 4.2 }
++    ])
++  })
++
+   it('treats an invalid maximum age as the default', function () {
+     writeSaved(
+       [
