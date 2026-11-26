@@ -1,4 +1,4 @@
-From ed7b004777602a3b3056fa393e62f5652ef814f1 Mon Sep 17 00:00:00 2001
+From 8a0de0a17a8a9e48ac36021b6d002947d36ee678 Mon Sep 17 00:00:00 2001
 From: KEGustafsson <ke.gustafsson@gmail.com>
 Date: Tue, 10 Nov 2026 20:06:13 +0000
 Subject: [PATCH 01/10] feat(server-api): add FullSignalK.restoreDelta
@@ -11,10 +11,10 @@ source freshness, for values saved by an earlier run.
  2 files changed, 60 insertions(+)
 
 diff --git a/packages/server-api/src/fullsignalk.test.ts b/packages/server-api/src/fullsignalk.test.ts
-index 726ebdee10..93fb473593 100644
+index c7fd4ad7..c67ec6de 100644
 --- a/packages/server-api/src/fullsignalk.test.ts
 +++ b/packages/server-api/src/fullsignalk.test.ts
-@@ -760,4 +760,37 @@ describe('Mixed source shapes for one NMEA0183 source', function () {
+@@ -925,4 +925,37 @@ describe('Mixed source shapes for one NMEA0183 source', function () {
      expect(entry.talker).to.equal('II')
      expect(entry.sentences).to.have.property('HDM', '2016-07-28T18:18:47.000Z')
    })
@@ -53,10 +53,10 @@ index 726ebdee10..93fb473593 100644
 +  })
  })
 diff --git a/packages/server-api/src/fullsignalk.ts b/packages/server-api/src/fullsignalk.ts
-index ca15dc3499..6b1d76fd70 100644
+index 6086d0be..721a7e1b 100644
 --- a/packages/server-api/src/fullsignalk.ts
 +++ b/packages/server-api/src/fullsignalk.ts
-@@ -458,6 +458,33 @@ export class FullSignalK extends EventEmitter {
+@@ -474,6 +474,33 @@ export class FullSignalK extends EventEmitter {
      }
    }
  
@@ -90,8 +90,11 @@ index ca15dc3499..6b1d76fd70 100644
    updateLastModified(contextKey: string): void {
      this.lastModifieds[contextKey] = Date.now()
    }
+-- 
+2.43.0
 
-From e9dd2d9402ba9b4cd3623f8673542ae1de5583d7 Mon Sep 17 00:00:00 2001
+
+From 5bc5ca3f83ee47983f83268fcab14a91036d67bd Mon Sep 17 00:00:00 2001
 From: KEGustafsson <ke.gustafsson@gmail.com>
 Date: Tue, 10 Nov 2026 20:06:13 +0000
 Subject: [PATCH 02/10] feat: restore cached values after a clean restart
@@ -121,7 +124,7 @@ Refs SignalK/signalk-server#1864
  create mode 100644 test/deltacache-persistence.ts
 
 diff --git a/packages/server-admin-ui/src/views/ServerConfig/Settings.tsx b/packages/server-admin-ui/src/views/ServerConfig/Settings.tsx
-index eba2f901a5..fc02d4958d 100644
+index eba2f901..fc02d495 100644
 --- a/packages/server-admin-ui/src/views/ServerConfig/Settings.tsx
 +++ b/packages/server-admin-ui/src/views/ServerConfig/Settings.tsx
 @@ -77,6 +77,10 @@ const OptionDescriptions: Record<string, React.ReactNode> = {
@@ -165,10 +168,10 @@ index eba2f901a5..fc02d4958d 100644
                                aria-describedby={
                                  description
 diff --git a/src/config/config.ts b/src/config/config.ts
-index cb2ce7ab8a..5c7a6d7368 100644
+index 1cb45e3f..cf06d663 100644
 --- a/src/config/config.ts
 +++ b/src/config/config.ts
-@@ -113,6 +113,11 @@ export interface Config {
+@@ -114,6 +114,11 @@ export interface Config {
      proxy_ssl?: boolean
      hostname?: string
      pruneContextsMinutes?: number
@@ -181,7 +184,7 @@ index cb2ce7ab8a..5c7a6d7368 100644
      sslport?: number
      port?: number
 diff --git a/src/deltacache.ts b/src/deltacache.ts
-index de7fea9904..f5831c8c94 100644
+index 9905d559..576a21fa 100644
 --- a/src/deltacache.ts
 +++ b/src/deltacache.ts
 @@ -26,6 +26,7 @@ import { toDelta, StreamBundle } from './streambundle'
@@ -192,7 +195,7 @@ index de7fea9904..f5831c8c94 100644
    FORBIDDEN_PATH_KEYS,
    NormalizedDelta,
    SourceRef
-@@ -694,6 +695,64 @@ export default class DeltaCache {
+@@ -707,6 +708,64 @@ export default class DeltaCache {
      }
    }
  
@@ -259,7 +262,7 @@ index de7fea9904..f5831c8c94 100644
      // same canName (e.g. a device moved from address 254 to its final
 diff --git a/src/deltacachePersistence.ts b/src/deltacachePersistence.ts
 new file mode 100644
-index 0000000000..dbfc0bac15
+index 00000000..dbfc0bac
 --- /dev/null
 +++ b/src/deltacachePersistence.ts
 @@ -0,0 +1,124 @@
@@ -388,10 +391,10 @@ index 0000000000..dbfc0bac15
 +  debug('Restored %d cached values', deltas.length)
 +}
 diff --git a/src/index.ts b/src/index.ts
-index 4d26213eed..0f7b1bd5a8 100644
+index b80a4d96..9d389077 100644
 --- a/src/index.ts
 +++ b/src/index.ts
-@@ -46,6 +46,7 @@ import { ServerApp, SignalKMessageHub, WithConfig } from './app'
+@@ -48,6 +48,7 @@ import { ServerApp, SignalKMessageHub, WithConfig } from './app'
  import { ConfigApp, load, sendBaseDeltas } from './config/config'
  import { createDebug } from './debug'
  import DeltaCache, { buildSrcToCanonicalMap } from './deltacache'
@@ -399,7 +402,7 @@ index 4d26213eed..0f7b1bd5a8 100644
  import DeltaChain from './deltachain'
  import {
    getToPreferredDelta,
-@@ -628,6 +629,13 @@ class Server {
+@@ -654,6 +655,13 @@ class Server {
      )
      app.subscriptionmanager = new SubscriptionManager(app)
      app.deltaCache = new DeltaCache(app, app.streambundle)
@@ -413,7 +416,7 @@ index 4d26213eed..0f7b1bd5a8 100644
      // Re-build the engine now that the delta cache is constructed
      // and has loaded its on-disk snapshot. The first call above ran
      // before app.deltaCache existed (so seenPublishersByPath was
-@@ -839,6 +847,10 @@ class Server {
+@@ -865,6 +873,10 @@ class Server {
      }
  
      try {
@@ -425,10 +428,10 @@ index 4d26213eed..0f7b1bd5a8 100644
        // shutdown exits as soon as this method resolves: without the wait, a
        // plugin's asynchronous cleanup is cut off by process.exit.
 diff --git a/src/serverroutes.ts b/src/serverroutes.ts
-index 7bdefad03c..0cf570d2a7 100644
+index a1dd15ca..6c2bcf07 100644
 --- a/src/serverroutes.ts
 +++ b/src/serverroutes.ts
-@@ -879,7 +879,9 @@ module.exports = function (
+@@ -881,7 +881,9 @@ module.exports = function (
            app.config.settings.enablePluginLogging,
          trustProxy: app.config.settings.trustProxy || false,
          useBLEManager:
@@ -439,7 +442,7 @@ index 7bdefad03c..0cf570d2a7 100644
        },
        loggingDirectory: app.config.settings.loggingDirectory,
        pruneContextsMinutes: app.config.settings.pruneContextsMinutes || 60,
-@@ -1204,6 +1206,16 @@ module.exports = function (
+@@ -1206,6 +1208,16 @@ module.exports = function (
        }
      }
  
@@ -458,7 +461,7 @@ index 7bdefad03c..0cf570d2a7 100644
      }
 diff --git a/test/deltacache-persistence.ts b/test/deltacache-persistence.ts
 new file mode 100644
-index 0000000000..d4d9dd7f76
+index 00000000..d4d9dd7f
 --- /dev/null
 +++ b/test/deltacache-persistence.ts
 @@ -0,0 +1,303 @@
@@ -765,8 +768,11 @@ index 0000000000..d4d9dd7f76
 +    expect(await restartedValue(false)).to.equal(undefined)
 +  })
 +})
+-- 
+2.43.0
 
-From 2a1a3133de4027ef128ae0d6eb5c3ea50a10e617 Mon Sep 17 00:00:00 2001
+
+From 680b37aefe75650340d1e487b7193a795345b8f7 Mon Sep 17 00:00:00 2001
 From: KEGustafsson <ke.gustafsson@gmail.com>
 Date: Tue, 10 Nov 2026 22:11:29 +0000
 Subject: [PATCH 03/10] fix: skip reload saves and notification paths
@@ -784,7 +790,7 @@ one would lack the state the notification manager needs to clear it.
  3 files changed, 75 insertions(+), 6 deletions(-)
 
 diff --git a/src/deltacachePersistence.ts b/src/deltacachePersistence.ts
-index dbfc0bac15..e920134449 100644
+index dbfc0bac..e9201344 100644
 --- a/src/deltacachePersistence.ts
 +++ b/src/deltacachePersistence.ts
 @@ -16,6 +16,9 @@ const MS_PER_MINUTE = 60 * 1000
@@ -825,10 +831,10 @@ index dbfc0bac15..e920134449 100644
    await mkdir(join(app.config.configPath, SERVERSTATEDIRNAME), {
      recursive: true
 diff --git a/src/index.ts b/src/index.ts
-index 0f7b1bd5a8..63cc9b6948 100644
+index 9d389077..3b7dabb9 100644
 --- a/src/index.ts
 +++ b/src/index.ts
-@@ -831,7 +831,7 @@ class Server {
+@@ -857,7 +857,7 @@ class Server {
      // stop() resolves only once the plugins have stopped and the HTTP server
      // has closed; a start() before that would lose its port and its timers to
      // the stop still running.
@@ -837,7 +843,7 @@ index 0f7b1bd5a8..63cc9b6948 100644
        .catch((e) => console.error(e))
        .then(() => this.start())
        .catch((e) => console.error(e))
-@@ -839,7 +839,7 @@ class Server {
+@@ -865,7 +865,7 @@ class Server {
      return this
    }
  
@@ -846,7 +852,7 @@ index 0f7b1bd5a8..63cc9b6948 100644
      this.providerStatusEmitter.cancel()
      const { connections, redirectConnections } = this
      if (!this.app.started || !connections) {
-@@ -847,9 +847,13 @@ class Server {
+@@ -873,9 +873,13 @@ class Server {
      }
  
      try {
@@ -864,7 +870,7 @@ index 0f7b1bd5a8..63cc9b6948 100644
        // The plugins interface resolves once every plugin's stop() has, and a
        // shutdown exits as soon as this method resolves: without the wait, a
 diff --git a/test/deltacache-persistence.ts b/test/deltacache-persistence.ts
-index d4d9dd7f76..61f63b72bc 100644
+index d4d9dd7f..61f63b72 100644
 --- a/test/deltacache-persistence.ts
 +++ b/test/deltacache-persistence.ts
 @@ -228,6 +228,29 @@ describe('delta cache persistence', function () {
@@ -930,8 +936,11 @@ index d4d9dd7f76..61f63b72bc 100644
 +    }
 +  })
  })
+-- 
+2.43.0
 
-From d993c020ca590332a2488f50e7fc496aabbbc89e Mon Sep 17 00:00:00 2001
+
+From cf620e9b8b9fe57d5bfba6e25278a938241aadd3 Mon Sep 17 00:00:00 2001
 From: KEGustafsson <ke.gustafsson@gmail.com>
 Date: Wed, 11 Nov 2026 06:33:25 +0000
 Subject: [PATCH 04/10] fix: keep bad saved values from blocking pruning
@@ -947,10 +956,10 @@ time.
  3 files changed, 73 insertions(+), 17 deletions(-)
 
 diff --git a/src/deltacache.ts b/src/deltacache.ts
-index f5831c8c94..6d935e06c4 100644
+index 576a21fa..3e5b55d1 100644
 --- a/src/deltacache.ts
 +++ b/src/deltacache.ts
-@@ -699,17 +699,19 @@ export default class DeltaCache {
+@@ -712,17 +712,19 @@ export default class DeltaCache {
     * Put values saved by an earlier run back into the cache without
     * passing them through the delta chain, so plugins, the priority engine
     * and source freshness do not treat them as live data. A value that
@@ -974,7 +983,7 @@ index f5831c8c94..6d935e06c4 100644
            context: delta.context,
            source: update.source,
            $source: update.$source,
-@@ -719,17 +721,21 @@ export default class DeltaCache {
+@@ -732,17 +734,21 @@ export default class DeltaCache {
            state: pathValue.state,
            isMeta: false
          } as NormalizedDelta)
@@ -1002,7 +1011,7 @@ index f5831c8c94..6d935e06c4 100644
      }
      const leaf = getLeafObject(
        this.cache,
-@@ -737,20 +743,23 @@ export default class DeltaCache {
+@@ -750,20 +756,23 @@ export default class DeltaCache {
        true
      )
      if (!leaf) {
@@ -1030,7 +1039,7 @@ index f5831c8c94..6d935e06c4 100644
  
    setSourceDelta(key: string, delta: any) {
 diff --git a/src/deltacachePersistence.ts b/src/deltacachePersistence.ts
-index e920134449..e8bdca2c21 100644
+index e9201344..e8bdca2c 100644
 --- a/src/deltacachePersistence.ts
 +++ b/src/deltacachePersistence.ts
 @@ -129,10 +129,12 @@ export function restoreDeltaCache(app: DeltaCachePersistenceApp): void {
@@ -1051,7 +1060,7 @@ index e920134449..e8bdca2c21 100644
    debug('Restored %d cached values', deltas.length)
  }
 diff --git a/test/deltacache-persistence.ts b/test/deltacache-persistence.ts
-index 61f63b72bc..857e6cb164 100644
+index 61f63b72..857e6cb1 100644
 --- a/test/deltacache-persistence.ts
 +++ b/test/deltacache-persistence.ts
 @@ -142,6 +142,24 @@ describe('delta cache persistence', function () {
@@ -1113,8 +1122,11 @@ index 61f63b72bc..857e6cb164 100644
    it('starts empty when the saved file is broken', function () {
      fs.mkdirSync(path.dirname(deltaCacheFilePath(configPath)), {
        recursive: true
+-- 
+2.43.0
 
-From 38106bde0811bc2ac416229aeb8f030842258497 Mon Sep 17 00:00:00 2001
+
+From 24b7fab4636a2519159d76587e724d568c40afca Mon Sep 17 00:00:00 2001
 From: KEGustafsson <ke.gustafsson@gmail.com>
 Date: Wed, 18 Nov 2026 20:42:12 +0000
 Subject: [PATCH 05/10] feat: skip restoring values after a long downtime
@@ -1138,7 +1150,7 @@ values that live data has not replaced are dropped.
  6 files changed, 451 insertions(+), 84 deletions(-)
 
 diff --git a/packages/server-admin-ui/src/views/ServerConfig/Settings.tsx b/packages/server-admin-ui/src/views/ServerConfig/Settings.tsx
-index fc02d4958d..57321360bb 100644
+index fc02d495..57321360 100644
 --- a/packages/server-admin-ui/src/views/ServerConfig/Settings.tsx
 +++ b/packages/server-admin-ui/src/views/ServerConfig/Settings.tsx
 @@ -23,6 +23,7 @@ interface ServerSettingsData {
@@ -1186,10 +1198,10 @@ index fc02d4958d..57321360bb 100644
                <Col md="2">
                  <Form.Label htmlFor="loggingDirectory">
 diff --git a/src/config/config.ts b/src/config/config.ts
-index 5c7a6d7368..e07ebbafe8 100644
+index cf06d663..69f304ef 100644
 --- a/src/config/config.ts
 +++ b/src/config/config.ts
-@@ -118,6 +118,8 @@ export interface Config {
+@@ -119,6 +119,8 @@ export interface Config {
      restoreOwnData?: boolean
      /** With restoreOwnData, also save and restore other vessels. */
      restoreOtherVessels?: boolean
@@ -1199,7 +1211,7 @@ index 5c7a6d7368..e07ebbafe8 100644
      sslport?: number
      port?: number
 diff --git a/src/deltacache.ts b/src/deltacache.ts
-index 6d935e06c4..3608aa9b33 100644
+index 3e5b55d1..e26214e2 100644
 --- a/src/deltacache.ts
 +++ b/src/deltacache.ts
 @@ -146,6 +146,7 @@ export function pruneSourcesByProvider(
@@ -1210,7 +1222,7 @@ index 6d935e06c4..3608aa9b33 100644
    app: SignalKServer
    defaults: any
    sourceDeltas: StringKeyed = {}
-@@ -746,7 +747,10 @@ export default class DeltaCache {
+@@ -759,7 +760,10 @@ export default class DeltaCache {
        return false
      }
      if (msg.path.length !== 0) {
@@ -1222,7 +1234,7 @@ index 6d935e06c4..3608aa9b33 100644
        return true
      }
      if (typeof msg.value !== 'object' || msg.value === null) {
-@@ -762,6 +766,37 @@ export default class DeltaCache {
+@@ -775,6 +779,37 @@ export default class DeltaCache {
      return restored
    }
  
@@ -1260,7 +1272,7 @@ index 6d935e06c4..3608aa9b33 100644
    setSourceDelta(key: string, delta: any) {
      // Deduplicate by canName: if a different key already exists for the
      // same canName (e.g. a device moved from address 254 to its final
-@@ -1789,53 +1824,57 @@ function getLeafObject(
+@@ -1808,53 +1843,57 @@ function getLeafObject(
   * REST and WS-replay views keep serving stale values for the evicted
   * source even though the deltacache is empty.
   */
@@ -1360,7 +1372,7 @@ index 6d935e06c4..3608aa9b33 100644
        // Skip leaf-internal fields and the source-meta tree (cleaned
        // separately by removeSourceDelta and the route handler).
 diff --git a/src/deltacachePersistence.ts b/src/deltacachePersistence.ts
-index e8bdca2c21..23489f6549 100644
+index e8bdca2c..23489f65 100644
 --- a/src/deltacachePersistence.ts
 +++ b/src/deltacachePersistence.ts
 @@ -1,6 +1,8 @@
@@ -1577,10 +1589,10 @@ index e8bdca2c21..23489f6549 100644
 +  return true
  }
 diff --git a/src/serverroutes.ts b/src/serverroutes.ts
-index 0cf570d2a7..3009214742 100644
+index 6c2bcf07..34fa90d4 100644
 --- a/src/serverroutes.ts
 +++ b/src/serverroutes.ts
-@@ -885,6 +885,7 @@ module.exports = function (
+@@ -887,6 +887,7 @@ module.exports = function (
        },
        loggingDirectory: app.config.settings.loggingDirectory,
        pruneContextsMinutes: app.config.settings.pruneContextsMinutes || 60,
@@ -1588,7 +1600,7 @@ index 0cf570d2a7..3009214742 100644
        keepMostRecentLogsOnly:
          isUndefined(app.config.settings.keepMostRecentLogsOnly) ||
          app.config.settings.keepMostRecentLogsOnly,
-@@ -1234,6 +1235,12 @@ module.exports = function (
+@@ -1236,6 +1237,12 @@ module.exports = function (
        )
      }
  
@@ -1602,7 +1614,7 @@ index 0cf570d2a7..3009214742 100644
        updatedSettings.keepMostRecentLogsOnly = settings.keepMostRecentLogsOnly
      }
 diff --git a/test/deltacache-persistence.ts b/test/deltacache-persistence.ts
-index 857e6cb164..3c22cbc178 100644
+index 857e6cb1..3c22cbc1 100644
 --- a/test/deltacache-persistence.ts
 +++ b/test/deltacache-persistence.ts
 @@ -2,9 +2,11 @@ import { expect } from 'chai'
@@ -1879,8 +1891,11 @@ index 857e6cb164..3c22cbc178 100644
    it('starts empty when the saved file is broken', function () {
      fs.mkdirSync(path.dirname(deltaCacheFilePath(configPath)), {
        recursive: true
+-- 
+2.43.0
 
-From 19e98250e25115e34700c2e9b4cd50e16fd36183 Mon Sep 17 00:00:00 2001
+
+From b6d401279912acb1b6a4e6539b2d0c927a6e620c Mon Sep 17 00:00:00 2001
 From: KEGustafsson <ke.gustafsson@gmail.com>
 Date: Wed, 18 Nov 2026 20:42:19 +0000
 Subject: [PATCH 06/10] feat: offer restart with no data
@@ -1907,11 +1922,11 @@ as before.
  create mode 100644 packages/server-admin-ui/src/components/RestartDialog/RestartDialog.tsx
 
 diff --git a/packages/server-admin-ui/src/actions.ts b/packages/server-admin-ui/src/actions.ts
-index 7a51f7f5fa..ac0c3aa11e 100644
+index 0242d41e..57107d98 100644
 --- a/packages/server-admin-ui/src/actions.ts
 +++ b/packages/server-admin-ui/src/actions.ts
-@@ -20,15 +20,29 @@ export async function logoutAction(): Promise<void> {
-   await fetchLoginStatus()
+@@ -27,15 +27,29 @@ export async function logoutAction(): Promise<void> {
+   await fetchAppStore()
  }
  
 -export function restartAction(): void {
@@ -1950,7 +1965,7 @@ index 7a51f7f5fa..ac0c3aa11e 100644
  
  export async function loginAction(
 diff --git a/packages/server-admin-ui/src/components/Header/Header.tsx b/packages/server-admin-ui/src/components/Header/Header.tsx
-index 844013922f..aa21c9a4a2 100644
+index 84401392..aa21c9a4 100644
 --- a/packages/server-admin-ui/src/components/Header/Header.tsx
 +++ b/packages/server-admin-ui/src/components/Header/Header.tsx
 @@ -15,6 +15,7 @@ import {
@@ -1971,7 +1986,7 @@ index 844013922f..aa21c9a4a2 100644
  }
 diff --git a/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
 new file mode 100644
-index 0000000000..858178e4d6
+index 00000000..858178e4
 --- /dev/null
 +++ b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
 @@ -0,0 +1,75 @@
@@ -2052,7 +2067,7 @@ index 0000000000..858178e4d6
 +})
 diff --git a/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.tsx b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.tsx
 new file mode 100644
-index 0000000000..7529ad69dd
+index 00000000..7529ad69
 --- /dev/null
 +++ b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.tsx
 @@ -0,0 +1,40 @@
@@ -2097,10 +2112,10 @@ index 0000000000..7529ad69dd
 +  )
 +}
 diff --git a/packages/server-admin-ui/src/store/index.ts b/packages/server-admin-ui/src/store/index.ts
-index f651b942aa..08731748e1 100644
+index 46859f67..46eb5ea0 100644
 --- a/packages/server-admin-ui/src/store/index.ts
 +++ b/packages/server-admin-ui/src/store/index.ts
-@@ -235,6 +235,10 @@ export function useRestarting() {
+@@ -239,6 +239,10 @@ export function useRestarting() {
    return useStore((s) => s.restarting)
  }
  
@@ -2112,7 +2127,7 @@ index f651b942aa..08731748e1 100644
    return useStore((s) => s.restartRequired)
  }
 diff --git a/packages/server-admin-ui/src/store/slices/appSlice.ts b/packages/server-admin-ui/src/store/slices/appSlice.ts
-index 420b2bee5c..b5c67b8b0b 100644
+index 974db4d0..25c4d3b1 100644
 --- a/packages/server-admin-ui/src/store/slices/appSlice.ts
 +++ b/packages/server-admin-ui/src/store/slices/appSlice.ts
 @@ -44,6 +44,11 @@ export type AppstoreView = 'All' | 'Installed' | 'Updates' | 'Installing'
@@ -2143,7 +2158,7 @@ index 420b2bee5c..b5c67b8b0b 100644
    setRestartRequired: (restartRequired: boolean) => void
    setAccessRequests: (requests: AccessRequest[]) => void
    setDevices: (devices: DeviceInfo[]) => void
-@@ -231,6 +238,7 @@ const initialAppState: AppSliceState = {
+@@ -247,6 +254,7 @@ const initialAppState: AppSliceState = {
    serverSpecification: {},
    restarting: false,
    restartRequired: false,
@@ -2151,7 +2166,7 @@ index 420b2bee5c..b5c67b8b0b 100644
    accessRequests: [],
    devices: [],
    discoveredProviders: [],
-@@ -318,6 +326,10 @@ export const createAppSlice: StateCreator<AppSlice, [], [], AppSlice> = (
+@@ -345,6 +353,10 @@ export const createAppSlice: StateCreator<AppSlice, [], [], AppSlice> = (
      set({ restarting })
    },
  
@@ -2163,7 +2178,7 @@ index 420b2bee5c..b5c67b8b0b 100644
      set({ restartRequired })
    },
 diff --git a/src/deltacachePersistence.ts b/src/deltacachePersistence.ts
-index 23489f6549..df657c3679 100644
+index 23489f65..df657c36 100644
 --- a/src/deltacachePersistence.ts
 +++ b/src/deltacachePersistence.ts
 @@ -65,6 +65,11 @@ export interface RestoreClock {
@@ -2179,10 +2194,10 @@ index 23489f6549..df657c3679 100644
    return join(configPath, SERVERSTATEDIRNAME, FILE_NAME)
  }
 diff --git a/src/index.ts b/src/index.ts
-index 63cc9b6948..7300591596 100644
+index 3b7dabb9..4520a9b5 100644
 --- a/src/index.ts
 +++ b/src/index.ts
-@@ -46,7 +46,11 @@ import { ServerApp, SignalKMessageHub, WithConfig } from './app'
+@@ -48,7 +48,11 @@ import { ServerApp, SignalKMessageHub, WithConfig } from './app'
  import { ConfigApp, load, sendBaseDeltas } from './config/config'
  import { createDebug } from './debug'
  import DeltaCache, { buildSrcToCanonicalMap } from './deltacache'
@@ -2195,7 +2210,7 @@ index 63cc9b6948..7300591596 100644
  import DeltaChain from './deltachain'
  import {
    getToPreferredDelta,
-@@ -831,7 +835,10 @@ class Server {
+@@ -857,7 +861,10 @@ class Server {
      // stop() resolves only once the plugins have stopped and the HTTP server
      // has closed; a start() before that would lose its port and its timers to
      // the stop still running.
@@ -2207,7 +2222,7 @@ index 63cc9b6948..7300591596 100644
        .catch((e) => console.error(e))
        .then(() => this.start())
        .catch((e) => console.error(e))
-@@ -839,7 +846,7 @@ class Server {
+@@ -865,7 +872,7 @@ class Server {
      return this
    }
  
@@ -2216,7 +2231,7 @@ index 63cc9b6948..7300591596 100644
      this.providerStatusEmitter.cancel()
      const { connections, redirectConnections } = this
      if (!this.app.started || !connections) {
-@@ -847,9 +854,7 @@ class Server {
+@@ -873,9 +880,7 @@ class Server {
      }
  
      try {
@@ -2227,7 +2242,7 @@ index 63cc9b6948..7300591596 100644
          await saveDeltaCache(this.app).catch((err: Error) => {
            console.error(`Unable to save cached values: ${err.message}`)
          })
-@@ -989,7 +994,9 @@ let currentShutdownHandlers:
+@@ -1015,7 +1020,9 @@ let currentShutdownHandlers:
  // stop` / `systemctl stop` waits out its grace period and ends in SIGKILL,
  // which reports exit 137 and reads as a crash rather than the clean stop it
  // was. Handling the signal also lets interfaces and providers close first.
@@ -2238,7 +2253,7 @@ index 63cc9b6948..7300591596 100644
    // Process-wide listeners, so the most recently constructed Server owns
    // them: tests build several instances in one process, and a stopped
    // instance's stop() resolves immediately, which would exit the process
-@@ -1001,7 +1008,7 @@ function installShutdownHandlers(server: { stop: () => Promise<unknown> }) {
+@@ -1027,7 +1034,7 @@ function installShutdownHandlers(server: { stop: () => Promise<unknown> }) {
  
    let shuttingDown = false
  
@@ -2247,7 +2262,7 @@ index 63cc9b6948..7300591596 100644
      shuttingDown = true
      console.log(`${reason}, shutting down`)
  
-@@ -1020,7 +1027,7 @@ function installShutdownHandlers(server: { stop: () => Promise<unknown> }) {
+@@ -1046,7 +1053,7 @@ function installShutdownHandlers(server: { stop: () => Promise<unknown> }) {
      forceExit.unref()
  
      server
@@ -2256,7 +2271,7 @@ index 63cc9b6948..7300591596 100644
        .then(() => {
          clearTimeout(forceExit)
          process.exit(0)
-@@ -1052,9 +1059,9 @@ function installShutdownHandlers(server: { stop: () => Promise<unknown> }) {
+@@ -1078,9 +1085,9 @@ function installShutdownHandlers(server: { stop: () => Promise<unknown> }) {
    // the server back, and must stop it the same way a signal does so plugins
    // and providers get to close. Like the signal handlers, it belongs to the
    // most recently constructed Server only.
@@ -2269,18 +2284,18 @@ index 63cc9b6948..7300591596 100644
    }
  }
 diff --git a/src/serverroutes.ts b/src/serverroutes.ts
-index 3009214742..34e1bfb359 100644
+index 34fa90d4..fc72c544 100644
 --- a/src/serverroutes.ts
 +++ b/src/serverroutes.ts
-@@ -82,6 +82,7 @@ import {
+@@ -83,6 +83,7 @@ import {
    testedNodeVersions
  } from './version'
  import { Type } from '@sinclair/typebox'
 +import type { StopOptions } from './deltacachePersistence'
  import { Value } from '@sinclair/typebox/value'
  import { HullTypeSchema, type HullType } from '@signalk/server-api/typebox'
- 
-@@ -322,7 +323,7 @@ interface App
+ import { ManufacturerCodeValues } from '@canboat/ts-pgns'
+@@ -324,7 +325,7 @@ interface App
      PluginManager,
      WithWrappedEmitter {
    webapps: Package[]
@@ -2289,7 +2304,7 @@ index 3009214742..34e1bfb359 100644
    logging: {
      clearLog: () => void
      rememberDebug: (r: boolean) => void
-@@ -517,8 +518,9 @@ module.exports = function (
+@@ -519,8 +520,9 @@ module.exports = function (
    app.put(`${SERVERROUTESPREFIX}/restart`, (req: Request, res: Response) => {
      if (app.securityStrategy.allowRestart(req)) {
        res.json('Restarting...')
@@ -2301,7 +2316,7 @@ index 3009214742..34e1bfb359 100644
      } else {
        res.status(401).json('Restart not allowed')
 diff --git a/test/deltacache-persistence.ts b/test/deltacache-persistence.ts
-index 3c22cbc178..12dd8df457 100644
+index 3c22cbc1..12dd8df4 100644
 --- a/test/deltacache-persistence.ts
 +++ b/test/deltacache-persistence.ts
 @@ -10,7 +10,8 @@ import {
@@ -2359,8 +2374,11 @@ index 3c22cbc178..12dd8df457 100644
    it('saves nothing when settings are reloaded in-process', async function () {
      const { server, sendDelta, stop } = await startServer({
        restoreOwnData: true
+-- 
+2.43.0
 
-From 875c4ab3d3e41c208be7707b5b409e04ff26c3aa Mon Sep 17 00:00:00 2001
+
+From 7872318a46ac20aaa4d27411c848ae105c2eeec7 Mon Sep 17 00:00:00 2001
 From: KEGustafsson <ke.gustafsson@gmail.com>
 Date: Wed, 18 Nov 2026 21:07:48 +0000
 Subject: [PATCH 07/10] fix: offer both restart choices when settings fail
@@ -2375,10 +2393,10 @@ Subject: [PATCH 07/10] fix: offer both restart choices when settings fail
  6 files changed, 43 insertions(+), 10 deletions(-)
 
 diff --git a/packages/server-admin-ui/src/actions.ts b/packages/server-admin-ui/src/actions.ts
-index ac0c3aa11e..e7ee2ba59e 100644
+index 57107d98..e36bf071 100644
 --- a/packages/server-admin-ui/src/actions.ts
 +++ b/packages/server-admin-ui/src/actions.ts
-@@ -29,8 +29,9 @@ export async function restartAction(): Promise<void> {
+@@ -36,8 +36,9 @@ export async function restartAction(): Promise<void> {
      credentials: 'include'
    })
      .then((res) => (res.ok ? res.json() : undefined))
@@ -2391,7 +2409,7 @@ index ac0c3aa11e..e7ee2ba59e 100644
  }
  
 diff --git a/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
-index 858178e4d6..20fb98f128 100644
+index 858178e4..20fb98f1 100644
 --- a/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
 +++ b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
 @@ -59,6 +59,32 @@ describe('RestartDialog', () => {
@@ -2428,7 +2446,7 @@ index 858178e4d6..20fb98f128 100644
      const fetchMock = mockServer(false)
      render(<RestartDialog />)
 diff --git a/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.tsx b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.tsx
-index 7529ad69dd..5aac7a360b 100644
+index 7529ad69..5aac7a36 100644
 --- a/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.tsx
 +++ b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.tsx
 @@ -3,8 +3,11 @@ import Modal from 'react-bootstrap/Modal'
@@ -2477,7 +2495,7 @@ index 7529ad69dd..5aac7a360b 100644
        </Modal.Footer>
      </Modal>
 diff --git a/packages/server-admin-ui/src/store/slices/appSlice.ts b/packages/server-admin-ui/src/store/slices/appSlice.ts
-index b5c67b8b0b..8916392004 100644
+index 25c4d3b1..d5fa3ae3 100644
 --- a/packages/server-admin-ui/src/store/slices/appSlice.ts
 +++ b/packages/server-admin-ui/src/store/slices/appSlice.ts
 @@ -45,8 +45,8 @@ export type AppstoreView = 'All' | 'Installed' | 'Updates' | 'Installing'
@@ -2492,10 +2510,10 @@ index b5c67b8b0b..8916392004 100644
  
  export interface HistoryProvidersState {
 diff --git a/src/deltacache.ts b/src/deltacache.ts
-index 3608aa9b33..9a29ef86fd 100644
+index e26214e2..fa167cec 100644
 --- a/src/deltacache.ts
 +++ b/src/deltacache.ts
-@@ -792,7 +792,6 @@ export default class DeltaCache {
+@@ -805,7 +805,6 @@ export default class DeltaCache {
      this.restoredValues = []
    }
  
@@ -2504,7 +2522,7 @@ index 3608aa9b33..9a29ef86fd 100644
      this.restoredValues = []
    }
 diff --git a/src/deltacachePersistence.ts b/src/deltacachePersistence.ts
-index df657c3679..85b13727ff 100644
+index df657c36..85b13727 100644
 --- a/src/deltacachePersistence.ts
 +++ b/src/deltacachePersistence.ts
 @@ -66,7 +66,6 @@ export interface RestoreClock {
@@ -2515,8 +2533,11 @@ index df657c3679..85b13727ff 100644
    saveCachedValues?: boolean
  }
  
+-- 
+2.43.0
 
-From 1d1285f1ed164edf8b09c7c093bcf19290da4f6a Mon Sep 17 00:00:00 2001
+
+From d3f39437b20ee0ea45b3d8a11c8c1711e6cccd65 Mon Sep 17 00:00:00 2001
 From: KEGustafsson <ke.gustafsson@gmail.com>
 Date: Thu, 19 Nov 2026 04:32:29 +0000
 Subject: [PATCH 08/10] fix: save preferred sources and skip bad entries
@@ -2531,7 +2552,7 @@ falls back to the default.
  2 files changed, 119 insertions(+), 14 deletions(-)
 
 diff --git a/src/deltacachePersistence.ts b/src/deltacachePersistence.ts
-index 85b13727ff..197fee6cbf 100644
+index 85b13727..197fee6c 100644
 --- a/src/deltacachePersistence.ts
 +++ b/src/deltacachePersistence.ts
 @@ -81,6 +81,29 @@ function readBootId(): string | undefined {
@@ -2604,7 +2625,7 @@ index 85b13727ff..197fee6cbf 100644
    if (downtimeMs > maxAgeMs) {
      debug('Clock was set, dropping values restored after a long downtime')
 diff --git a/test/deltacache-persistence.ts b/test/deltacache-persistence.ts
-index 12dd8df457..ddbd1255e6 100644
+index 12dd8df4..ddbd1255 100644
 --- a/test/deltacache-persistence.ts
 +++ b/test/deltacache-persistence.ts
 @@ -267,6 +267,75 @@ describe('delta cache persistence', function () {
@@ -2751,8 +2772,11 @@ index 12dd8df457..ddbd1255e6 100644
        await restarted
        expect(
          fs.existsSync(deltaCacheFilePath(server.app.config.configPath))
+-- 
+2.43.0
 
-From cdd967e4ded7636b72ac67fbd75c20e0d9f46e1a Mon Sep 17 00:00:00 2001
+
+From 7e5bf58b82dd8b1516af1d5a1d3ee54bafb66f83 Mon Sep 17 00:00:00 2001
 From: KEGustafsson <ke.gustafsson@gmail.com>
 Date: Thu, 19 Nov 2026 04:32:29 +0000
 Subject: [PATCH 09/10] fix: open one restart dialog on repeated clicks
@@ -2763,11 +2787,11 @@ Subject: [PATCH 09/10] fix: open one restart dialog on repeated clicks
  2 files changed, 29 insertions(+), 3 deletions(-)
 
 diff --git a/packages/server-admin-ui/src/actions.ts b/packages/server-admin-ui/src/actions.ts
-index e7ee2ba59e..203f7c332e 100644
+index e36bf071..94a8db26 100644
 --- a/packages/server-admin-ui/src/actions.ts
 +++ b/packages/server-admin-ui/src/actions.ts
-@@ -20,19 +20,29 @@ export async function logoutAction(): Promise<void> {
-   await fetchLoginStatus()
+@@ -27,19 +27,29 @@ export async function logoutAction(): Promise<void> {
+   await fetchAppStore()
  }
  
 +// Repeated clicks while the settings load share one lookup, so a late
@@ -2800,7 +2824,7 @@ index e7ee2ba59e..203f7c332e 100644
  
  export function requestRestart(keepData: boolean): void {
 diff --git a/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
-index 20fb98f128..d342627096 100644
+index 20fb98f1..d3426270 100644
 --- a/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
 +++ b/packages/server-admin-ui/src/components/RestartDialog/RestartDialog.test.tsx
 @@ -75,6 +75,22 @@ describe('RestartDialog', () => {
@@ -2826,8 +2850,11 @@ index 20fb98f128..d342627096 100644
    it('names the dialog by its title', async () => {
      mockServer(true)
      render(<RestartDialog />)
+-- 
+2.43.0
 
-From 3f5463996f722bca48b822d98950231445a29210 Mon Sep 17 00:00:00 2001
+
+From 97fe2c85744994874f7b2d78897abfe09b84e9ba Mon Sep 17 00:00:00 2001
 From: KEGustafsson <ke.gustafsson@gmail.com>
 Date: Thu, 19 Nov 2026 10:36:57 +0000
 Subject: [PATCH 10/10] fix: match preferred source by its canonical name
@@ -2843,10 +2870,10 @@ Among several aliases of the winner the newest value is kept.
  2 files changed, 36 insertions(+), 2 deletions(-)
 
 diff --git a/src/deltacache.ts b/src/deltacache.ts
-index 9a29ef86fd..38fdc10872 100644
+index fa167cec..e1cf7162 100644
 --- a/src/deltacache.ts
 +++ b/src/deltacache.ts
-@@ -1587,6 +1587,7 @@ export default class DeltaCache {
+@@ -1604,6 +1604,7 @@ export default class DeltaCache {
      deltas: NormalizedDelta[]
    ): NormalizedDelta[] {
      const byPath = new Map<string, NormalizedDelta>()
@@ -2854,7 +2881,7 @@ index 9a29ef86fd..38fdc10872 100644
      const result: NormalizedDelta[] = []
      for (const d of deltas) {
        // Defensive: getCachedDeltas(key=...) can surface non-leaf branch
-@@ -1608,8 +1609,15 @@ export default class DeltaCache {
+@@ -1625,8 +1626,15 @@ export default class DeltaCache {
          result.push(d)
          continue
        }
@@ -2873,7 +2900,7 @@ index 9a29ef86fd..38fdc10872 100644
          byPath.set(key, d)
        }
 diff --git a/test/deltacache-persistence.ts b/test/deltacache-persistence.ts
-index ddbd1255e6..037e662c0b 100644
+index ddbd1255..037e662c 100644
 --- a/test/deltacache-persistence.ts
 +++ b/test/deltacache-persistence.ts
 @@ -291,6 +291,32 @@ describe('delta cache persistence', function () {
@@ -2909,3 +2936,6 @@ index ddbd1255e6..037e662c0b 100644
    it('treats an invalid maximum age as the default', function () {
      writeSaved(
        [
+-- 
+2.43.0
+
